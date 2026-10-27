@@ -13,7 +13,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "db:types": "supabase gen types typescript --local --schema public > packages/db/src/types.ts",
+    "db:types": "supabase gen types typescript --local --schema public > packages/db/src/types.ts && prettier --write packages/db/src/types.ts",
     "test:integration": "pnpm --filter @tiffin/integration-tests test",
     "format": "prettier --write ."
   },
