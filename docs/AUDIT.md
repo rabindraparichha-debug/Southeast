@@ -2,6 +2,8 @@
 
 Date: 2026-10-25 · Auditor: Claude Code (lead engineer) · Scope: step 1 of the build prompt (audit only; no code written)
 
+> **Status (2026-10-27):** The owner said to start the work, so M1 was built using the recommended defaults for every open question. Each one is recorded as ⏳ PENDING in `docs/DECISIONS.md`. Current status is in `docs/PLAN.md`.
+
 ---
 
 ## 1. What exists
