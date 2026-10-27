@@ -1,0 +1,26 @@
+node_modules/
+.pnpm-store/
+.turbo/
+.next/
+out/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+
+# env
+.env
+.env.*
+!.env.example
+
+# expo
+.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.jks
+*.keystore
+
+# supabase
+supabase/.branches/
+supabase/.temp/

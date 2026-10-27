@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tests/*"
+onlyBuiltDependencies:
+  - supabase
+  - esbuild
+  - sharp
+  - unrs-resolver
