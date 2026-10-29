@@ -28,6 +28,7 @@ function RootStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="customer/new" options={{ title: t('customer.new'), presentation: 'modal' }} />
         <Stack.Screen name="customer/[id]" options={{ title: '' }} />
+        <Stack.Screen name="sheet" options={{ title: '' }} />
       </Stack.Protected>
     </Stack>
   );

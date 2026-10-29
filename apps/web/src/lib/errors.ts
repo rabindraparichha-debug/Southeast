@@ -15,6 +15,14 @@ const MESSAGES: Record<string, string> = {
   has_live_subscription: 'Cancel this customer’s subscriptions before deleting their data.',
   invalid_initial_status: 'New subscriptions can only start as Trial or Active.',
   too_many_rows: 'Import at most 2,000 rows at a time.',
+  date_in_past: 'Choose today or a later date.',
+  date_required: 'Choose a date.',
+  invalid_range: 'The end date must be on or after the start date.',
+  range_too_long: 'Choose a range of 90 days or less.',
+  slot_not_in_plan: 'This plan does not include that meal.',
+  slot_not_allowed: 'Cancellation applies to all meals.',
+  invalid_address: 'Choose one of this customer’s addresses.',
+  subscription_cancelled: 'This subscription is already cancelled.',
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

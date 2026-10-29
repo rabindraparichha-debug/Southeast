@@ -8,7 +8,11 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const role = session.kitchen.role;
 
   const items: NavItem[] = [{ href: '/', label: 'Today', icon: '📋' }];
-  if (role === 'owner' || role === 'staff') items.push({ href: '/customers', label: 'Customers', icon: '👥' });
+  if (role === 'owner' || role === 'staff') {
+    items.push({ href: '/customers', label: 'Customers', icon: '👥' });
+    items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
+    items.push({ href: '/menu', label: 'Menu', icon: '📅' });
+  }
   if (role === 'owner') {
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });
@@ -18,7 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
 
   return (
     <div className="min-h-screen md:flex">
-      <aside className="border-b border-ink-200 bg-white p-3 md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0 md:p-4">
+      <aside className="border-b border-ink-200 bg-white p-3 print:hidden md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0 md:p-4">
         <div className="mb-3 flex items-center gap-2 md:mb-6">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">🍱</span>
           <div className="min-w-0 flex-1">
@@ -40,7 +44,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           <button className="text-sm text-ink-500 hover:text-ink-800">Log out</button>
         </form>
       </aside>
-      <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
+      <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
     </div>
   );
 }
