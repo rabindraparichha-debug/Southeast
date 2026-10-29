@@ -60,7 +60,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00013 | Rider, kitchen B |
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
-| 90000 00101, 90000 00102 | Spare |
+| 90000 00101, 90000 00102 | Spare (used by the M1 and M3 integration tests; test files run in parallel, so each suite needs its own number) |
 
 ## Conventions (follow these in every change)
 
@@ -97,6 +97,20 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Use `private.now()` / `private.ist_today()` in SQL, never `now()`, so tests can set `app.now`.
 - pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST).
 
+**Money (M3)**
+- Every recharge, refund, credit and adjustment is one `balance_entries` row.
+  - Recharges come only from `private.post_recharge()` (idempotent on the payment id).
+  - Refunds come only from `private.create_refund()` (FIFO value).
+- After any balance change, call `private.sync_balance_status()`. Never set `low_balance` or `suspended` by hand.
+- Provider events enter only through `public.razorpay_process_event()` (service role), deduplicated on `webhook_events(provider, event_id)`.
+- Edge Functions live in `supabase/functions`.
+  - Shared code in `_shared/` uses no external imports, so it's unit-testable from Node.
+  - Secrets go in `supabase/functions/.env` locally (see `.env.example`) and `supabase secrets set` in hosted projects.
+- **Razorpay is test/mock only.** `loadConfig()` refuses live keys unless `RAZORPAY_ALLOW_LIVE=true`. Never set that without the owner's explicit approval.
+- Hosted setup:
+  - Webhook URL: `https://<project>.functions.supabase.co/razorpay-webhook`.
+  - Events: `payment_link.paid`, `payment.captured`, `payment.failed`, `payment_link.expired`, `payment_link.cancelled`, `refund.processed`, `refund.failed`.
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -126,7 +140,17 @@ Every variable is documented in the root `.env.example`.
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | apps/mobile | `apps/mobile/.env.local` |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | tests/integration | Optional; defaults to `supabase status` |
 
-Later milestones add Razorpay (test keys only), WhatsApp Cloud API, Anthropic, Sentry and PostHog variables. They're listed, commented out, in `.env.example`.
+Edge Function secrets (`supabase/functions/.env`):
+
+| Variable | Notes |
+|---|---|
+| `RAZORPAY_MODE` | `mock` (default without keys) or `test` |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | `rzp_test_…` only |
+| `RAZORPAY_WEBHOOK_SECRET` | Must match the webhook secret set in Razorpay |
+| `PUBLIC_FUNCTIONS_URL` | Browser-reachable functions URL, used for mock payment pages |
+| `RAZORPAY_ALLOW_LIVE` | Unset. Only the owner may approve live mode |
+
+Later milestones add WhatsApp Cloud API, Anthropic, Sentry and PostHog variables. They're listed, commented out, in `.env.example`.
 
 ## Secrets
 - Never commit secrets. `.env*` files are gitignored except `.env.example`.

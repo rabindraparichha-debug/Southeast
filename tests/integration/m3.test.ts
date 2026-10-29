@@ -37,7 +37,7 @@ describe('M3: payments, webhooks and refunds through the Edge Functions', () => 
   const run = Date.now().toString(36);
 
   beforeAll(async () => {
-    owner = await loginAs('+919000000101');
+    owner = await loginAs('+919000000102'); // own spare number: test files run in parallel
     const { data: kitchen, error } = await owner.client.rpc('create_kitchen', { p_name: `Money IT ${run}`, p_area: 'Nayapalli' });
     expect(error).toBeNull();
     const kitchenId = (kitchen as { id: string }).id;

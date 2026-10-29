@@ -129,6 +129,24 @@ describe('validateImportRows', () => {
     ]);
   });
 
+  it('validates the opening balance column (whole meals, -200 to 1000)', () => {
+    expect(
+      validateImportRows(
+        [
+          { name: 'A', phone: '9861000001', balance: '24' },
+          { name: 'B', phone: '9861000002', balance: '-3' },
+          { name: 'C', phone: '9861000003', balance: '2.5' },
+          { name: 'D', phone: '9861000004', balance: '5000' },
+        ],
+        [],
+      ),
+    ).toEqual([
+      { row: 3, errors: ['invalid_balance'] },
+      { row: 4, errors: ['invalid_balance'] },
+    ]);
+    expect(guessMapping(['Name', 'Mobile', 'Meals left']).balance).toBe(2);
+  });
+
   it('checks plan, date, qty, diet, language and location', () => {
     const issues = validateImportRows(
       [

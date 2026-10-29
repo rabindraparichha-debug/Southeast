@@ -16,6 +16,10 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-033 | Trial subscriptions get no meals | ⏳ PENDING | M2, M7 |
 | D-035 | Cancellation defaults to today + notice days | ⏳ PENDING | M2, M3 |
 | D-029 – D-042 | Daily-engine defaults (M2) | Decided | — |
+| D-048 | When subscriptions go low balance, suspended, or cancelled after the grace period | ⏳ PENDING | M3 |
+| D-049 | How often low-balance and dues reminders go out | ⏳ PENDING | M3, M4 |
+| D-056 | New customers start at zero balance, so onboarding needs opening balances | ⏳ PENDING | M3 |
+| D-043 – D-055 | Money defaults (M3) | Decided | — |
 
 ---
 
@@ -222,3 +226,89 @@ Following the spec literally, meals are generated only for Active and Low balanc
   - Orders cover 7 days ahead.
   - They're created immediately when a subscription, plan or kitchen schedule changes (triggers), plus nightly at 00:30 IST.
   - Reconciliation never touches a frozen (date, slot).
+
+---
+
+## Money (M3)
+
+D-002 was still unanswered, so M3 uses its recommended answers:
+- the meal balance is the source of truth;
+- refunds are valued FIFO;
+- no monthly postpaid billing, only the credit limit.
+
+### D-043 Who can take money, and how
+- **Online (Payment Links):** only when the kitchen has a verified Razorpay Route linked account. The whole amount transfers to that account, so we hold nothing.
+- **Owner-entered:** cash, UPI to the vendor's own number, or bank transfer, with an optional receipt photo stored in the private `receipts` bucket, one folder per kitchen.
+- **Rider cash at the door:** recorded against a meal order and *pending* until the owner confirms or marks it "not received".
+
+### D-044 How many meals a payment buys
+- **Payment links:** always N meals × the plan price.
+- **Manual entries:** default to amount ÷ plan price, rounded down. The owner can type the meal count instead.
+- Each purchase lot is valued at what was actually paid (amount ÷ meals), so nothing is lost when the customer is refunded.
+
+### D-045 How refunds are valued
+- Meals are used up oldest purchase first.
+- Unused meals are valued at the price of the lots they come from. Partial refunds take the oldest remaining meals, so later valuations stay consistent.
+- Credits (free meals) are worth ₹0.
+- An opening balance or positive adjustment is valued at the plan price.
+- A `seq` column breaks ties when several entries share a timestamp.
+
+### D-046 Refund on cancellation
+- When a customer's **last** live subscription is cancelled, a pending refund for all unused meals is created automatically. The meals leave the balance at once.
+- Meals already past their cutoff are locked (charged) first, so they're never both refunded and charged.
+- The owner pays the refund out in cash, by UPI, or online.
+
+### D-047 Which payment an online refund goes back to
+- The most recent online payment that still has enough un-refunded amount to cover the refund. Route transfers are reversed (`reverse_all`).
+- One refund is never split across several payments. If no single payment covers it, it's paid in cash or UPI.
+
+### D-048 Balance-driven statuses ⏳ PENDING (policy)
+| Change | When |
+|---|---|
+| Active → Low balance | Balance at or below `low_balance_meals` (3) |
+| → Suspended | Balance at or below −`credit_limit_meals` (0) |
+| Back to Active (or Low balance) | On recharge |
+| Trial → Active | On first payment |
+| Suspended → Cancelled | After `grace_days` (7) with no recharge |
+| Unpaid trial → Cancelled | Once `start_date + grace_days` has passed |
+
+Statuses are re-checked after every lock, payment, credit and refund, and nightly.
+
+**Your call:** are 7 grace days, and the trial rule, right for pilots?
+
+### D-049 Reminder cadence ⏳ PENDING
+- **Low balance:** one reminder a day while the subscription is low.
+- **Dues:** on day 1, 3 and 7 after the balance went negative.
+
+Both are queued for WhatsApp, which arrives in M4. **Your call:** is a daily low-balance reminder too frequent?
+
+### D-050 Razorpay modes
+- `mock`: local only, no network. The mock pay page sends correctly signed events through the real webhook.
+- `test`: needs `rzp_test_` keys.
+- `live`: refused unless `RAZORPAY_ALLOW_LIVE=true`, which you approve explicitly.
+
+### D-051 Setting up a kitchen's payout account
+For now, KYC happens in the Razorpay dashboard and an admin pastes the `acc_…` id and KYC status (admin page). Creating linked accounts through the API comes with M8 onboarding.
+
+### D-052 UPI Autopay is not built yet
+Subscriptions with 24-hour pre-debit notices depend on the Route + Subscriptions answer (D-003). The "on autopay" metric reads 0% until then.
+
+### D-053 Receipts
+- A printable receipt page (`/print/receipt/[id]`).
+- WhatsApp receipt, refund notice and refund receipt are queued in the outbox.
+
+### D-054 Add-ons
+Still deferred (see D-038).
+
+### D-055 Payment links
+- Links expire after 7 days.
+- Razorpay's own SMS/email notifications are off. The vendor shares the link on WhatsApp (their own app now, the platform number from M4).
+- The message wording is a draft (D-012).
+
+### D-056 Opening balances are needed at onboarding ⏳ PENDING
+- With a credit limit of 0, a customer with no balance is suspended at their first lock.
+- Vendors enter existing customers' remaining meals through:
+  - the import's "Opening balance (meals)" column;
+  - "Credit / adjust → Opening balance" on the customer page;
+  - or by recording a payment.
+- **Your call:** should new kitchens default to a small credit limit (e.g. 2 meals) during the pilot instead?

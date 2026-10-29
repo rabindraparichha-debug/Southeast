@@ -50,15 +50,38 @@ Known gaps carried forward:
 - WhatsApp image/PDF of the sheet and the 10 pm summary are delivered in M4. The push notification at cutoff needs expo-notifications plus an EAS project (M4).
 - Trial subscriptions generate no meals, as the spec says (D-033).
 
-### M3: Money ⬜ (needs D-002 and D-003; ledger table and meal entries already exist)
+### M3: Money ✅ (built 2026-10-30, waiting for your test pass)
 
-| Pkg | Scope | Status |
-|---|---|---|
-| 1.6 | Ledger, Razorpay links, webhooks, linked accounts (test mode) | ⬜ |
-| 1.7 | Cash, dues, refunds, collections report | ⬜ |
-| 1.8 | Offline-customer quick actions, printed sheets | ⬜ |
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 1.6 | Ledger, Razorpay links, webhooks, linked accounts | ✅ (test/mock mode) | `supabase/migrations/20261029000200_money.sql`, `supabase/functions/razorpay-*` |
+| 1.7 | Cash, dues, refunds, collections report | ✅ | Customer Money panel, `/money`, receipts |
+| 1.8 | Offline-customer quick actions and printed sheets | ✅ | Two-tap cash and links (mobile), `/print/register`, `/print/receipt/[id]` |
 
-Tests: a ₹2,000 test payment creates exactly one recharge even if the webhook fires twice. Cancelling with 9 meals left gives the correct refund, visible to both sides.
+Acceptance tests:
+- ✅ **A ₹2,000 test payment creates exactly one recharge, even if the webhook fires twice.**
+  - `supabase/tests/04_money.test.sql`: the same event id, plus a second event type for the same payment.
+  - `tests/integration/m3.test.ts`: real HTTP through the webhook Edge Function, with signature check.
+- ✅ **Cancelling with 9 meals left gives the correct refund, visible to both sides.**
+  - pgTAP: 30 meals prepaid at ₹70, 21 eaten through real locks, cancel → ₹630 refund. The vendor sees it on the customer page and Money page; the customer gets a refund notice and a receipt (queued for WhatsApp).
+  - Integration: the same flow over the API, refunded online through `razorpay-refund` and closed by the refund webhook.
+- Also covered:
+  - FIFO valuation across price changes, and partial refunds;
+  - meals already past cutoff are charged before a refund is valued;
+  - balance-driven states (low balance, suspended, back to active; trial → active on payment; grace-period and unpaid-trial cancellation);
+  - credit limit;
+  - dues reminders on day 1, 3 and 7;
+  - collections report;
+  - permissions for staff, rider, other kitchen, admin and anon;
+  - live-key guard and signature verification (unit tests).
+
+Known gaps carried forward:
+- **No real Razorpay call has been made.** Everything ran in mock mode with correctly signed events, since there are no keys yet. Test-mode keys plus the Route answer (D-003) are needed to try the real API.
+- **UPI Autopay** (Razorpay Subscriptions, 24-hour pre-debit notices) is not built; it's blocked on D-003. The autopay share shows 0%.
+- **Linked-account onboarding through the API** is manual for now: an admin pastes the Route account id after KYC in the Razorpay dashboard. M8 automates it.
+- **Messages:** receipts, refund notices, low-balance and dues reminders are queued in `notifications_outbox`; WhatsApp delivery comes in M4.
+- **Add-ons** (D-038) are still deferred.
+- **Refunds:** one online refund can't be split across several payments; if no single payment covers it, it's paid in cash or UPI.
 
 ## P2: WhatsApp and riders (M4–M5)
 
