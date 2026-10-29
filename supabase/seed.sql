@@ -141,3 +141,71 @@ begin
       current_date - 10, r.status::public.subscription_status);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- A week of meals (M2). Runs the real engine with a simulated clock (app.now):
+-- each past day is generated the evening before, a few customers skip, then the
+-- day's slots are locked. Ends with today's real-time refresh and lock.
+-- ---------------------------------------------------------------------------
+
+-- Opening balances (until recharges exist in M3): 40 meals for every active subscription.
+insert into public.balance_entries (kitchen_id, customer_id, type, meals, amount_paise, note, created_at)
+select s.kitchen_id, s.customer_id, 'adjust', 40, 40 * p.price_per_meal_paise, 'Opening balance (seed)',
+       now() - interval '8 days'
+from public.subscriptions s
+join public.plans p on p.id = s.plan_id
+where s.status = 'active';
+
+do $$
+declare
+  v_today date := (now() at time zone 'Asia/Kolkata')::date;
+  d date;
+  r record;
+begin
+  for d in select g::date from generate_series(v_today - 7, v_today, interval '1 day') g loop
+    perform set_config('app.now', (((d - 1) + time '18:00') at time zone 'Asia/Kolkata')::text, true);
+    perform private.refresh_orders(null, null, 2);
+
+    -- Three customers per day skip by WhatsApp before the cutoff (deterministic pick).
+    for r in select s.id from public.subscriptions s where s.status = 'active'
+             order by md5(s.id::text || d::text) limit 3 loop
+      perform private.apply_change(r.id, 'skip', d, d, null, null, 'whatsapp', false, null, false, null);
+    end loop;
+
+    if d < v_today then
+      perform set_config('app.now', ((d + time '13:00') at time zone 'Asia/Kolkata')::text, true);
+      perform private.run_due_locks();
+    end if;
+  end loop;
+
+  -- Today's 00:30 nightly run (generates the next 7 days before any of their cutoffs).
+  perform set_config('app.now', ((v_today + time '00:30') at time zone 'Asia/Kolkata')::text, true);
+  perform private.nightly();
+
+  -- Back to the real clock: lock whatever is already past its cutoff.
+  perform set_config('app.now', '', true);
+  perform private.refresh_orders(null, null, 7);
+  perform private.run_due_locks();
+
+  -- Messages queued by the simulated history are not real; keep the outbox clean.
+  update public.notifications_outbox set status = 'cancelled', last_error = 'seed history';
+end $$;
+
+-- Menus for the next 7 days.
+insert into public.menus (kitchen_id, service_date, slot, dishes, published)
+select k.id, (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
+       case sl.slot
+         when 'lunch' then string_to_array((array[
+           'Rice|Dalma|Aloo bhaja|Saga|Salad',
+           'Rice|Dal|Besara|Pampada|Khatta',
+           'Rice|Dal|Santula|Roti|Curd',
+           'Jeera rice|Dal fry|Paneer curry|Roti|Salad',
+           'Rice|Dalma|Potala rasa|Bhaja|Pickle',
+           'Pakhala|Badi chura|Aloo bharta|Saga bhaja',
+           'Rice|Dal|Mixed veg|Roti|Kheer'])[1 + (g % 7)], '|')
+         else array['Roti', 'Sabzi', 'Dal', 'Salad']
+       end,
+       true
+from public.kitchens k
+cross join generate_series(0, 6) g
+cross join unnest(enum_range(null::public.meal_slot)) as sl(slot);
