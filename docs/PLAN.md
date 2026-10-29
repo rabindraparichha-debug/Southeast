@@ -213,13 +213,33 @@ Known gaps carried forward:
 - **Calls** are entered by the team in the admin console; there is no telephony (IVR) integration.
 - **Review moderation** has its RPCs (`admin_reviews`, `admin_hide_review`); the admin page for it comes with the M8 admin console.
 
-### M8: Admin and hardening ⬜
+### M8: Admin and hardening ✅ (built 2026-10-30; Play Store build waits on your accounts)
 
-| Pkg | Scope | Status |
-|---|---|---|
-| 4.5 | Admin console and funnel (lead/vendor parts done in M7; kitchen list and status control exist) | 🟡 |
-| 4.6 | Backups, restore drill, Sentry, load test, security review | ⬜ |
-| 4.7 | Play Store build | ⬜ |
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 4.5 | Admin console: platform metrics vs the P2/P4 goals, kitchens (KYC, status, FSSAI correction, checklist), leads, funnel, demand gaps, vendor applications, audit log, review moderation | ✅ | web `/admin/*`, `platform_metrics()`, `admin_kitchens()`, `admin_audit_log()`, `admin_reviews()` |
+| 4.6 | Backups and restore drill, error monitoring (Sentry envelopes), analytics (PostHog, opt-in), load test, security review | ✅ | `scripts/backup.sh`, `scripts/restore-drill.sh`, `supabase/perf/lock_load.sql`, `supabase/tests/09_security.test.sql`, `_shared/monitor.ts`, docs/SECURITY.md, docs/OPERATIONS.md |
+| 4.7 | Play Store build | 🟡 configured | `apps/mobile/eas.json`, `app.json`, docs/RELEASE.md. A build needs your Expo and Play accounts (D-094) |
+| — | Privacy policy and terms (drafts) | ✅ | web `/privacy`, `/terms` |
+
+Acceptance tests:
+- ✅ **The 21:00 lock for 5,000 subscriptions finishes in under 60 seconds.** `pnpm db:loadtest`: 50 kitchens × 100 subscriptions with addresses, recipes and menus. Everything the lock does is included: snapshot, 5,000 meal charges, 5,000 delivery stops, 200 ingredient deductions.
+  - First-ever lock, when every route is built and optimised from scratch: 9–12 s.
+  - A normal day: 1.8 s.
+  - The load test found a quadratic first route build (31 s), fixed in `20261103000200_route_build_speed.sql`.
+- ✅ **A restored backup matches the counts.** `pnpm db:restore-drill` dumps `public`, `private` and `auth`, restores into a scratch database, and compares all 51 tables' row counts plus the ledger totals (meal balance and money, stock, payments, locked meals). Passed.
+- Also covered:
+  - automated security review (RLS everywhere, definer hygiene, anon allowlist, no direct ledger writes, append-only triggers, private buckets, encrypted phones);
+  - FSSAI lock for live kitchens (finding #1 in docs/SECURITY.md);
+  - admin RPCs refused to owners (`tests/integration/m8.test.ts`);
+  - phone masking in error reports (`monitor.test.ts`).
+
+Known gaps carried forward:
+- **No Play Store build yet:** needs your Expo account, a Google Play developer account and the store listing (docs/RELEASE.md).
+- **Monitoring is configured but unused** until DSNs/keys are set. No Sentry or PostHog account exists yet.
+- **Legal pages are drafts** for a lawyer to review; the operator's name and address are placeholders.
+- **Load numbers come from the build sandbox's Docker database**, not a hosted Supabase instance. Re-run `pnpm db:loadtest` against staging before launch.
+- **CAPTCHA** on the public forms is recommended before running paid ads (docs/SECURITY.md #4).
 
 ## P5 / P6: design-for only
 Schema room already left:

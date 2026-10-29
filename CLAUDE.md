@@ -10,7 +10,7 @@ A free operating system for small tiffin vendors in Bhubaneswar.
 | `docs/AUDIT.md` | Initial audit |
 
 **Working rules from the product owner:**
-- Build one milestone at a time, then stop for review.
+- Build one milestone at a time, then stop for review. (During M5 the owner asked to build through to the end without stopping; see D-077.)
 - Never delete or rewrite existing work without asking.
 - Razorpay stays in test mode until the owner explicitly approves live keys.
 
