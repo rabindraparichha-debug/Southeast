@@ -16,6 +16,7 @@ export const IMPORT_FIELDS = [
   { key: 'plan', label: 'Plan', required: false, aliases: ['plan', 'plan name', 'package', 'subscription'] },
   { key: 'start_date', label: 'Start date', required: false, aliases: ['start date', 'start', 'from', 'joining date', 'date'] },
   { key: 'qty', label: 'Tiffins per meal', required: false, aliases: ['qty', 'quantity', 'tiffins', 'count'] },
+  { key: 'balance', label: 'Opening balance (meals)', required: false, aliases: ['balance', 'opening balance', 'meals left', 'advance meals', 'remaining meals'] },
   { key: 'lat', label: 'Latitude', required: false, aliases: ['lat', 'latitude'] },
   { key: 'lng', label: 'Longitude', required: false, aliases: ['lng', 'lon', 'long', 'longitude'] },
 ] as const;
@@ -35,6 +36,7 @@ export type ImportErrorCode =
   | 'invalid_date'
   | 'start_date_requires_plan'
   | 'invalid_qty'
+  | 'invalid_balance'
   | 'invalid_location';
 
 export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
@@ -48,6 +50,7 @@ export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   invalid_date: 'Start date is not a valid date',
   start_date_requires_plan: 'Start date given without a plan',
   invalid_qty: 'Tiffins per meal must be a number from 1 to 20',
+  invalid_balance: 'Opening balance must be a whole number of meals (-200 to 1000)',
   invalid_location: 'Latitude and longitude must both be numbers',
 };
 
@@ -174,6 +177,7 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
       if (!r.plan?.trim()) errors.push('start_date_requires_plan');
     }
     if (r.qty && !(/^\d{1,2}$/.test(r.qty) && Number(r.qty) >= 1 && Number(r.qty) <= 20)) errors.push('invalid_qty');
+    if (r.balance && !(/^-?\d{1,4}$/.test(r.balance) && Number(r.balance) >= -200 && Number(r.balance) <= 1000)) errors.push('invalid_balance');
     const num = /^-?\d+(\.\d+)?$/;
     if (Boolean(r.lat) !== Boolean(r.lng) || (r.lat && !(num.test(r.lat) && num.test(r.lng ?? '')))) {
       errors.push('invalid_location');
@@ -189,5 +193,5 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
 /** Template the vendor can download and fill in. */
 export const IMPORT_TEMPLATE_HEADERS = [
   'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan',
-  'Start date', 'Tiffins per meal',
+  'Start date', 'Tiffins per meal', 'Opening balance (meals)',
 ];

@@ -1,5 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["*.ts"]
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "*.ts",
+    "../../supabase/functions/_shared/*.ts",
+    "../../supabase/functions/razorpay-webhook/handler.ts"
+  ]
 }

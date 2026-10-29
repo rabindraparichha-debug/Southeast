@@ -122,6 +122,7 @@ export type Database = {
           note: string | null;
           ref_id: string | null;
           ref_type: string | null;
+          seq: number;
           type: Database['public']['Enums']['balance_entry_type'];
         };
         ComputedFields: never;
@@ -136,6 +137,7 @@ export type Database = {
           note?: string | null;
           ref_id?: string | null;
           ref_type?: string | null;
+          seq?: never;
           type: Database['public']['Enums']['balance_entry_type'];
         };
         Update: {
@@ -149,6 +151,7 @@ export type Database = {
           note?: string | null;
           ref_id?: string | null;
           ref_type?: string | null;
+          seq?: never;
           type?: Database['public']['Enums']['balance_entry_type'];
         };
         Relationships: [
@@ -895,6 +898,110 @@ export type Database = {
           },
         ];
       };
+      payments: {
+        Row: {
+          amount_paise: number;
+          collected_by: string | null;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          customer_id: string;
+          description: string | null;
+          expires_at: string | null;
+          id: string;
+          kitchen_id: string;
+          meal_order_id: string | null;
+          meals: number;
+          method: Database['public']['Enums']['payment_method'];
+          note: string | null;
+          paid_at: string | null;
+          razorpay_order_id: string | null;
+          razorpay_payment_id: string | null;
+          razorpay_payment_link_id: string | null;
+          receipt_photo_path: string | null;
+          settled_to_account: string | null;
+          short_url: string | null;
+          status: Database['public']['Enums']['payment_status'];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount_paise: number;
+          collected_by?: string | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          customer_id: string;
+          description?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          kitchen_id: string;
+          meal_order_id?: string | null;
+          meals: number;
+          method: Database['public']['Enums']['payment_method'];
+          note?: string | null;
+          paid_at?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_payment_link_id?: string | null;
+          receipt_photo_path?: string | null;
+          settled_to_account?: string | null;
+          short_url?: string | null;
+          status: Database['public']['Enums']['payment_status'];
+          updated_at?: string;
+        };
+        Update: {
+          amount_paise?: number;
+          collected_by?: string | null;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          customer_id?: string;
+          description?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          meal_order_id?: string | null;
+          meals?: number;
+          method?: Database['public']['Enums']['payment_method'];
+          note?: string | null;
+          paid_at?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_payment_link_id?: string | null;
+          receipt_photo_path?: string | null;
+          settled_to_account?: string | null;
+          short_url?: string | null;
+          status?: Database['public']['Enums']['payment_status'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'payments_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'payments_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'payments_meal_order_id_kitchen_id_fkey';
+            columns: ['meal_order_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'meal_orders';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       plans: {
         Row: {
           active: boolean;
@@ -964,6 +1071,96 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      refunds: {
+        Row: {
+          amount_paise: number;
+          created_at: string;
+          created_by: string | null;
+          customer_id: string;
+          id: string;
+          kitchen_id: string;
+          meals: number;
+          method: Database['public']['Enums']['refund_method'] | null;
+          note: string | null;
+          payment_id: string | null;
+          processed_at: string | null;
+          processed_by: string | null;
+          razorpay_refund_id: string | null;
+          reason: string;
+          status: Database['public']['Enums']['refund_status'];
+          subscription_id: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount_paise: number;
+          created_at?: string;
+          created_by?: string | null;
+          customer_id: string;
+          id?: string;
+          kitchen_id: string;
+          meals: number;
+          method?: Database['public']['Enums']['refund_method'] | null;
+          note?: string | null;
+          payment_id?: string | null;
+          processed_at?: string | null;
+          processed_by?: string | null;
+          razorpay_refund_id?: string | null;
+          reason: string;
+          status?: Database['public']['Enums']['refund_status'];
+          subscription_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          amount_paise?: number;
+          created_at?: string;
+          created_by?: string | null;
+          customer_id?: string;
+          id?: string;
+          kitchen_id?: string;
+          meals?: number;
+          method?: Database['public']['Enums']['refund_method'] | null;
+          note?: string | null;
+          payment_id?: string | null;
+          processed_at?: string | null;
+          processed_by?: string | null;
+          razorpay_refund_id?: string | null;
+          reason?: string;
+          status?: Database['public']['Enums']['refund_status'];
+          subscription_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'refunds_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'refunds_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'refunds_payment_id_kitchen_id_fkey';
+            columns: ['payment_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'payments';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'refunds_subscription_id_kitchen_id_fkey';
+            columns: ['subscription_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'subscriptions';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
       };
       schedule_changes: {
         Row: {
@@ -1088,6 +1285,7 @@ export type Database = {
           qty: number;
           start_date: string;
           status: Database['public']['Enums']['subscription_status'];
+          status_changed_at: string;
           updated_at: string;
         };
         ComputedFields: never;
@@ -1104,6 +1302,7 @@ export type Database = {
           qty?: number;
           start_date: string;
           status?: Database['public']['Enums']['subscription_status'];
+          status_changed_at?: string;
           updated_at?: string;
         };
         Update: {
@@ -1119,6 +1318,7 @@ export type Database = {
           qty?: number;
           start_date?: string;
           status?: Database['public']['Enums']['subscription_status'];
+          status_changed_at?: string;
           updated_at?: string;
         };
         Relationships: [
@@ -1158,6 +1358,40 @@ export type Database = {
             referencedColumns: ['id', 'kitchen_id'];
           },
         ];
+      };
+      webhook_events: {
+        Row: {
+          event_id: string;
+          event_type: string | null;
+          id: number;
+          payload: NonNullable<Json>;
+          processed_at: string | null;
+          provider: string;
+          received_at: string;
+          result: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          event_id: string;
+          event_type?: string | null;
+          id?: never;
+          payload: NonNullable<Json>;
+          processed_at?: string | null;
+          provider: string;
+          received_at?: string;
+          result?: string | null;
+        };
+        Update: {
+          event_id?: string;
+          event_type?: string | null;
+          id?: never;
+          payload?: NonNullable<Json>;
+          processed_at?: string | null;
+          provider?: string;
+          received_at?: string;
+          result?: string | null;
+        };
+        Relationships: [];
       };
     };
     Views: {
@@ -1223,6 +1457,19 @@ export type Database = {
       };
     };
     Functions: {
+      add_balance_entry: {
+        Args: {
+          p_customer: string;
+          p_meals: number;
+          p_reason: string;
+          p_type: Database['public']['Enums']['balance_entry_type'];
+        };
+        Returns: string;
+      };
+      attach_payment_link: {
+        Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
+        Returns: undefined;
+      };
       change_feed: {
         Args: { p_kitchen: string; p_limit?: number; p_since?: string };
         Returns: {
@@ -1241,6 +1488,7 @@ export type Database = {
         }[];
       };
       claim_invites: { Args: Record<PropertyKey, never>; Returns: number };
+      confirm_payment: { Args: { p_meals?: number; p_payment: string }; Returns: undefined };
       create_customer: {
         Args: {
           p_address?: Json;
@@ -1296,7 +1544,21 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_payment_link_record: {
+        Args: { p_customer: string; p_description?: string; p_meals: number };
+        Returns: Json;
+      };
       customer_phone: { Args: { p_customer: string }; Returns: string };
+      dues_list: {
+        Args: { p_kitchen: string };
+        Returns: {
+          amount_owed_paise: number;
+          customer_id: string;
+          customer_name: string;
+          meals_owed: number;
+          since: string;
+        }[];
+      };
       erase_customer: { Args: { p_customer: string }; Returns: undefined };
       import_customers: {
         Args: { p_consent: boolean; p_file_name?: string; p_kitchen: string; p_rows: Json };
@@ -1311,6 +1573,19 @@ export type Database = {
         };
         Returns: Json;
       };
+      mark_refund_paid: {
+        Args: {
+          p_method: Database['public']['Enums']['refund_method'];
+          p_note?: string;
+          p_refund: string;
+        };
+        Returns: undefined;
+      };
+      mark_refund_submitted: {
+        Args: { p_razorpay_refund_id: string; p_refund: string };
+        Returns: undefined;
+      };
+      money_report: { Args: { p_from: string; p_kitchen: string; p_to: string }; Returns: Json };
       packing_list: {
         Args: {
           p_date: string;
@@ -1333,6 +1608,28 @@ export type Database = {
           stop_seq: number;
         }[];
       };
+      razorpay_process_event: { Args: { p_event_id: string; p_payload: Json }; Returns: string };
+      record_cash_at_door: {
+        Args: { p_amount_paise: number; p_meal_order: string; p_note?: string };
+        Returns: string;
+      };
+      record_payment: {
+        Args: {
+          p_amount_paise: number;
+          p_customer: string;
+          p_meals?: number;
+          p_method: Database['public']['Enums']['payment_method'];
+          p_note?: string;
+          p_receipt_photo_path?: string;
+        };
+        Returns: string;
+      };
+      refund_for_gateway: { Args: { p_refund: string }; Returns: Json };
+      refund_unused_meals: {
+        Args: { p_customer: string; p_meals?: number; p_reason?: string };
+        Returns: string;
+      };
+      reject_payment: { Args: { p_payment: string; p_reason: string }; Returns: undefined };
       remove_member: { Args: { p_member: string }; Returns: undefined };
       request_schedule_change: {
         Args: {
@@ -1390,6 +1687,10 @@ export type Database = {
         Args: { p_member: string; p_role: Database['public']['Enums']['member_role'] };
         Returns: undefined;
       };
+      set_payout_account: {
+        Args: { p_account_id: string; p_kitchen: string; p_kyc_status: string };
+        Returns: undefined;
+      };
       slot_summary: {
         Args: {
           p_date: string;
@@ -1398,6 +1699,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      unused_meals_value: { Args: { p_customer: string }; Returns: Json };
       update_customer: { Args: { p_customer: string; p_patch: Json }; Returns: undefined };
     };
     Enums: {
@@ -1412,6 +1714,12 @@ export type Database = {
       member_role: 'owner' | 'staff' | 'rider';
       order_status:
         'scheduled' | 'locked' | 'prepared' | 'out' | 'delivered' | 'failed' | 'skipped';
+      payment_method:
+        'razorpay_link' | 'razorpay_autopay' | 'cash' | 'upi_manual' | 'bank_transfer';
+      payment_status:
+        'created' | 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled' | 'review';
+      refund_method: 'razorpay' | 'cash' | 'upi_manual' | 'bank_transfer';
+      refund_status: 'pending' | 'processing' | 'processed' | 'failed';
       subscription_status:
         'trial' | 'active' | 'paused' | 'low_balance' | 'suspended' | 'cancelled';
     };
@@ -1535,6 +1843,10 @@ export const Constants = {
       meal_slot: ['lunch', 'dinner'],
       member_role: ['owner', 'staff', 'rider'],
       order_status: ['scheduled', 'locked', 'prepared', 'out', 'delivered', 'failed', 'skipped'],
+      payment_method: ['razorpay_link', 'razorpay_autopay', 'cash', 'upi_manual', 'bank_transfer'],
+      payment_status: ['created', 'pending', 'paid', 'failed', 'expired', 'cancelled', 'review'],
+      refund_method: ['razorpay', 'cash', 'upi_manual', 'bank_transfer'],
+      refund_status: ['pending', 'processing', 'processed', 'failed'],
       subscription_status: ['trial', 'active', 'paused', 'low_balance', 'suspended', 'cancelled'],
     },
   },

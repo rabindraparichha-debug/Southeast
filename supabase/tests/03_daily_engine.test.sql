@@ -47,6 +47,10 @@ begin
   end loop;
 end $$;
 
+-- Prepaid balances (M3 suspends subscriptions that run out of meals).
+insert into public.balance_entries (kitchen_id, customer_id, type, meals, amount_paise, note)
+select '30000000-0000-4000-c000-000000000001', cust, 'adjust', 40, 280000, 'Opening balance (test)' from t;
+
 -- ===========================================================================
 -- Generation
 -- ===========================================================================

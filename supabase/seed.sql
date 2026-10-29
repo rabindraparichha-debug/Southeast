@@ -61,8 +61,10 @@ insert into public.members (kitchen_id, user_id, role, display_name) values
 
 insert into public.kitchen_settings (kitchen_id) values
   ('10000000-0000-4000-a000-00000000000a'), ('10000000-0000-4000-a000-00000000000b');
-insert into public.kitchen_payout_accounts (kitchen_id) values
-  ('10000000-0000-4000-a000-00000000000a'), ('10000000-0000-4000-a000-00000000000b');
+-- Kitchen A has a (test) Route linked account so payment links work; B has not finished KYC.
+insert into public.kitchen_payout_accounts (kitchen_id, razorpay_linked_account_id, kyc_status) values
+  ('10000000-0000-4000-a000-00000000000a', 'acc_TestMaaTarini01', 'verified'),
+  ('10000000-0000-4000-a000-00000000000b', null, 'pending');
 
 insert into public.member_invites (kitchen_id, phone_e164, role, display_name, invited_by) values
   ('10000000-0000-4000-a000-00000000000a', '+919000000100', 'rider', 'Sanju (new rider)',
@@ -138,7 +140,7 @@ begin
     insert into public.subscriptions (kitchen_id, customer_id, plan_id, address_id, start_date, status)
     values (('10000000-0000-4000-a000-00000000000' || r.k)::uuid, v_customer,
       ('20000000-0000-4000-a000-0000000000' || r.plan)::uuid, v_address,
-      current_date - 10, r.status::public.subscription_status);
+      case when r.status = 'trial' then current_date - 1 else current_date - 10 end, r.status::public.subscription_status);
   end loop;
 end $$;
 

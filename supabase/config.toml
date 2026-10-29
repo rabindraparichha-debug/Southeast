@@ -387,8 +387,8 @@ authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = false
 
 [edge_runtime]
-# Turned on in M3/M4 when webhooks arrive.
-enabled = false
+# Webhooks (Razorpay from M3, WhatsApp from M4) run as Edge Functions.
+enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
 # `per_worker` (default) — enables hot reload during local development.
 # `oneshot` — fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
@@ -428,3 +428,11 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Edge Functions. Razorpay authenticates its webhook with an HMAC signature, not a user JWT.
+[functions.razorpay-webhook]
+verify_jwt = false
+
+# Local mock payment page (refuses to run unless RAZORPAY_MODE=mock).
+[functions.razorpay-mock]
+verify_jwt = false
