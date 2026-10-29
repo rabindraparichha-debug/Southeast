@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { SLOT_LABEL, addDays, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
+import { SLOT_LABEL, addDays, formatPaise, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
 import type { ChangeResult, ChangeType, MealSlot, View as DbView } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
@@ -11,8 +11,9 @@ import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
 type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; skip_reason: string | null; locked_at: string | null };
-type Sub = { id: string; status: string; plan: { name: string } | null };
+type Sub = { id: string; status: string; plan: { name: string; price_per_meal_paise: number } | null };
 type Pending = { label: string; type: ChangeType; subscriptionId: string; from: string; to?: string; slot?: MealSlot; preview: ChangeResult };
+type CashProposal = { meals: number; amount: number };
 
 export default function CustomerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,6 +27,8 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cash, setCash] = useState<CashProposal | null>(null);
+  const [link, setLink] = useState<{ url: string; amount: number; meals: number } | null>(null);
   const today = istDate();
 
   const load = useCallback(async () => {
@@ -33,7 +36,7 @@ export default function CustomerDetail() {
       supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
       supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
         .eq('customer_id', id).gte('service_date', today).lte('service_date', addDays(today, 7)).order('service_date').order('slot'),
-      isOwner ? supabase.from('subscriptions').select('id, status, plan:plans(name)').eq('customer_id', id).in('status', ['active', 'low_balance', 'paused'])
+      isOwner ? supabase.from('subscriptions').select('id, status, plan:plans(name, price_per_meal_paise)').eq('customer_id', id).in('status', ['active', 'low_balance', 'paused', 'suspended', 'trial'])
               : Promise.resolve({ data: [] }),
       isOwner ? supabase.from('customer_balances').select('meals').eq('customer_id', id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
@@ -70,8 +73,34 @@ export default function CustomerDetail() {
     await load();
   }
 
+  async function recordCash() {
+    if (!cash) return;
+    setBusy(true);
+    setError('');
+    const { error } = await supabase.rpc('record_payment', { p_customer: id, p_amount_paise: cash.amount, p_method: 'cash', p_meals: cash.meals });
+    setBusy(false);
+    if (error) return setError(friendlyError(error));
+    setSaved(t('money.recorded'));
+    setCash(null);
+    await load();
+  }
+
+  async function sendLink(meals: number) {
+    setBusy(true);
+    setError('');
+    const { data, error } = await supabase.functions.invoke('razorpay-payment-link', { body: { customer_id: id, meals } });
+    setBusy(false);
+    if (error) {
+      const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      return setError(friendlyError({ message: body?.error ?? error.message }));
+    }
+    const res = data as { short_url: string; amount_paise: number; meals: number };
+    setLink({ url: res.short_url, amount: res.amount_paise, meals: res.meals });
+  }
+
   if (!c) return null;
   const canCall = isOwner && c.phone && !c.phone.includes('•');
+  const price = subs[0]?.plan?.price_per_meal_paise ?? null;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -87,7 +116,42 @@ export default function CustomerDetail() {
         {canCall && <Button title={`📞 ${t('customer.call')}`} onPress={() => Linking.openURL(`tel:${c.phone}`)} variant="secondary" />}
       </Card>
 
-      {isOwner && subs.map((s) => {
+      {isOwner && price && (
+        <Card>
+          <Label>{t('money.title')}{balance !== null && balance < 0 ? ` · ${t('money.owes', { n: -balance })}` : ''}</Label>
+          {!cash && !link && (
+            <View style={styles.chips}>
+              {[10, 26, 30].map((n) => (
+                <Chip key={n} label={t('money.cash', { meals: n, amount: formatPaise(n * price) })} selected={false} onPress={() => setCash({ meals: n, amount: n * price })} />
+              ))}
+              <Chip label={t('money.link', { meals: 26 })} selected={false} onPress={() => sendLink(26)} />
+            </View>
+          )}
+          {cash && (
+            <View style={styles.confirm}>
+              <Text style={styles.confirmTitle}>{t('money.recordCash', { amount: formatPaise(cash.amount), meals: cash.meals })}</Text>
+              <Button title={t('actions.confirm')} onPress={recordCash} busy={busy} />
+              <Button title={t('actions.back')} onPress={() => setCash(null)} variant="secondary" />
+            </View>
+          )}
+          {link && (
+            <View style={styles.confirm}>
+              <Text style={styles.confirmTitle}>{t('money.linkReady', { amount: formatPaise(link.amount) })}</Text>
+              <Muted>{link.url}</Muted>
+              <Button
+                title={t('money.openWhatsapp')}
+                onPress={() =>
+                  Linking.openURL(`https://wa.me/${(c.phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(
+                    t('money.linkMessage', { name: c.name ?? '', amount: formatPaise(link.amount), meals: link.meals, kitchen: kitchen.kitchenName, url: link.url }))}`)
+                }
+              />
+              <Button title={t('actions.back')} onPress={() => setLink(null)} variant="secondary" />
+            </View>
+          )}
+        </Card>
+      )}
+
+      {isOwner && subs.filter((s) => s.status !== 'trial' && s.status !== 'suspended').map((s) => {
         const mine = meals.filter((m) => m.subscription_id === s.id);
         const next = mine.find((m) => m.status === 'scheduled' && !m.locked_at);
         const openDays = [...new Set(mine.filter((m) => !m.locked_at && m.status === 'scheduled').map((m) => m.service_date))].slice(0, 2);

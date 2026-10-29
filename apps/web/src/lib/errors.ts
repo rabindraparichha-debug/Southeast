@@ -23,6 +23,21 @@ const MESSAGES: Record<string, string> = {
   slot_not_allowed: 'Cancellation applies to all meals.',
   invalid_address: 'Choose one of this customer’s addresses.',
   subscription_cancelled: 'This subscription is already cancelled.',
+  payout_account_not_verified: 'Online payments start once your Razorpay payout account is verified. Record cash or UPI meanwhile.',
+  invalid_meals: 'Enter a valid number of meals.',
+  invalid_amount: 'Enter a valid amount.',
+  invalid_method: 'Choose cash, UPI or bank transfer.',
+  no_plan: 'Add a subscription first so the price per meal is known.',
+  not_pending: 'This was already handled.',
+  nothing_to_refund: 'There are no unused meals to refund.',
+  refund_exceeds_balance: 'That is more meals than the customer has left.',
+  no_online_payment: 'This refund cannot go back online (no matching online payment). Pay it in cash or UPI.',
+  refund_exceeds_payment: 'The online payment is smaller than this refund. Pay it in cash or UPI.',
+  reason_required: 'Please give a reason.',
+  invalid_type: 'Choose credit or adjustment.',
+  gateway_error: 'The payment gateway did not respond. Try again in a minute.',
+  invalid_account_id: 'Razorpay account ids look like acc_XXXXXXXX.',
+  live_keys_not_approved: 'Razorpay live mode is not approved yet.',
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

@@ -55,6 +55,15 @@ export const en = {
   'actions.back': 'Back',
   'actions.saved': 'Saved',
   'balance.title': 'Meal balance',
+  'money.title': 'Money',
+  'money.owes': 'Owes {n} meals',
+  'money.cash': 'Cash · {meals} meals · {amount}',
+  'money.recordCash': 'Record cash {amount} for {meals} meals',
+  'money.link': 'Send payment link ({meals} meals)',
+  'money.linkReady': 'Link ready: {amount}',
+  'money.openWhatsapp': 'Send on WhatsApp',
+  'money.linkMessage': 'Namaskar {name}, please pay {amount} for {meals} meals at {kitchen}: {url}',
+  'money.recorded': 'Payment recorded',
   'balance.meals': '{n} meals',
   'customers.search': 'Search name, last 4 digits, area',
   'customers.searchOwner': 'Search name, phone, area',
@@ -97,6 +106,9 @@ export const en = {
   'errors.date_in_past': 'Choose today or a later date.',
   'errors.subscription_cancelled': 'This subscription is already cancelled.',
   'errors.slot_not_in_plan': 'This plan does not include that meal.',
+  'errors.payout_account_not_verified': 'Online payments start once your payout account is verified. Record cash meanwhile.',
+  'errors.no_plan': 'Add a subscription first.',
+  'errors.gateway_error': 'Payment gateway did not respond. Try again.',
 } as const;
 
 export type MessageKey = keyof typeof en;

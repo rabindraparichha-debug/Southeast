@@ -8,6 +8,7 @@ import { EditCustomer } from './edit-customer';
 import { AddSubscription } from './add-subscription';
 import { EraseCustomer } from './erase-customer';
 import { SubscriptionActions } from './subscription-actions';
+import { MoneyPanel } from './money-panel';
 
 const formatDate = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -36,7 +37,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
     .order('service_date')
     .order('slot');
 
-  const [{ data: subscriptions }, { data: plans }, { data: k }, { data: balance }, { data: entries }, { data: settings }] = isOwner
+  const [{ data: subscriptions }, { data: plans }, { data: k }, { data: balance }, { data: entries }, { data: settings }, { data: payments }, { data: refunds }, { data: payout }, { data: value }] = isOwner
     ? await Promise.all([
         supabase.from('subscriptions').select('id, status, qty, start_date, end_date, plan:plans(name, slots, price_per_meal_paise)').eq('customer_id', id).order('created_at', { ascending: false }),
         supabase.from('plans').select('id, name, price_per_meal_paise, slots, diet').eq('kitchen_id', kitchen.kitchenId).eq('active', true).order('name'),
@@ -44,8 +45,13 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
         supabase.from('customer_balances').select('meals, amount_paise').eq('customer_id', id).maybeSingle(),
         supabase.from('balance_entries').select('id, type, meals, amount_paise, note, created_at, ref_id').eq('customer_id', id).order('created_at', { ascending: false }).limit(8),
         supabase.from('kitchen_settings').select('notice_days').eq('kitchen_id', kitchen.kitchenId).single(),
+        supabase.from('payments').select('id, method, status, amount_paise, meals, short_url, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('refunds').select('id, meals, amount_paise, status, method, payment_id, created_at').eq('customer_id', id).order('created_at', { ascending: false }),
+        supabase.from('kitchen_payout_accounts').select('kyc_status, razorpay_linked_account_id').eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
+        supabase.rpc('unused_meals_value', { p_customer: id }),
       ])
-    : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
+    : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
+  const livePlan = (subscriptions ?? []).find((s) => s.status !== 'cancelled')?.plan ?? subscriptions?.[0]?.plan ?? null;
 
   return (
     <>
@@ -105,14 +111,28 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
         </Card>
 
         {isOwner && (
-          <Card title="Meal balance">
-            <div className="text-3xl font-semibold">{balance?.meals ?? 0} <span className="text-base font-normal text-ink-500">meals</span></div>
-            <p className="text-sm text-ink-500">{formatPaise(balance?.amount_paise ?? 0)} prepaid value</p>
-            <ul className="mt-4 divide-y divide-ink-100 text-sm">
+          <MoneyPanel
+            kitchenId={kitchen.kitchenId}
+            kitchenName={kitchen.kitchenName}
+            customerId={c.id!}
+            customerName={c.name!}
+            customerPhone={c.phone}
+            balanceMeals={balance?.meals ?? 0}
+            valuePaise={(value as { amount_paise?: number } | null)?.amount_paise ?? 0}
+            unitPricePaise={livePlan?.price_per_meal_paise ?? null}
+            onlineEnabled={payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
+            payments={payments ?? []}
+            refunds={refunds ?? []}
+          />
+        )}
+
+        {isOwner && (
+          <Card title="Balance history">
+            <ul className="divide-y divide-ink-100 text-sm">
               {(entries ?? []).map((e) => (
                 <li key={e.id} className="flex justify-between gap-3 py-1.5">
                   <span>
-                    {e.type === 'meal' ? 'Meal' : e.note ?? e.type}{' '}
+                    {e.type === 'meal' ? 'Meal' : e.type === 'recharge' ? 'Payment' : e.type === 'refund' ? 'Refund' : e.note ?? e.type}{' '}
                     <span className="text-ink-500">
                       {(() => {
                         const m = e.type === 'meal' ? meals?.find((x) => x.id === e.ref_id) : undefined;
@@ -126,7 +146,6 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-ink-500">Recharges, cash entry and refunds arrive in the money milestone.</p>
           </Card>
         )}
 
@@ -162,7 +181,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
               {subscriptions?.length === 0 && <li className="py-3 text-sm text-ink-500">No subscriptions yet.</li>}
             </ul>
             <AddSubscription kitchenId={kitchen.kitchenId} customerId={c.id!} diet={c.diet!} plans={plans ?? []} addresses={addresses ?? []} />
-            <p className="mt-3 text-xs text-ink-500">Trial subscriptions start getting meals once they become active (payments milestone).</p>
+            <p className="mt-3 text-xs text-ink-500">Trial subscriptions get meals once the customer pays. Suspended ones restart when the balance is recharged.</p>
           </Card>
         )}
 

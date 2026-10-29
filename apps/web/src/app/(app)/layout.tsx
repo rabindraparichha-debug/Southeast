@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/menu', label: 'Menu', icon: '📅' });
   }
   if (role === 'owner') {
+    items.push({ href: '/money', label: 'Money', icon: '💰' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });
     items.push({ href: '/team', label: 'Team', icon: '🧑‍🍳' });
