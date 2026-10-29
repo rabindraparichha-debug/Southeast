@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase/env';
 
-const PUBLIC_PATHS = ['/login', '/c'];
+// Public website (M7): lead form, kitchen pages, directory and the vendor sign-up need no login.
+const PUBLIC_PATHS = ['/login', '/c', '/find', '/k', '/kitchens', '/vendors'];
 
 // Refreshes the Supabase session cookie on every request and sends signed-out
 // users to /login. Authorization itself is enforced by RLS, not here.

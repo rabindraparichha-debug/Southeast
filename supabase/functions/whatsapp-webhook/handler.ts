@@ -1,5 +1,6 @@
 // WhatsApp Cloud API webhook: verification handshake (GET) and inbound messages/statuses (POST).
-import { chooseKitchenReply, handleMessage, mainMenu, unknownNumberReply, type BotDeps } from '../_shared/bot.ts';
+import { chooseKitchenReply, handleMessage, mainMenu, type BotDeps } from '../_shared/bot.ts';
+import { handleLeadMessage, handleVendorMessage, parseEntry, type Lead, type VendorState } from '../_shared/lead-bot.ts';
 import { t, type Lang } from '../_shared/bot-i18n.ts';
 import type { Complete } from '../_shared/ai.ts';
 import { parseWebhook, previewOf, verifyMetaSignature, type Out, type ParsedMessage, type WaConfig } from '../_shared/whatsapp.ts';
@@ -19,6 +20,8 @@ export type WebhookDeps = {
 const ERROR_TEXT: Record<string, string> = {
   payout_account_not_verified: 'Online payment is not set up for this kitchen yet. Please pay them directly (cash or UPI).',
   no_plan: 'You do not have an active plan yet. Tap "Talk to kitchen".',
+  kitchen_not_available: 'That kitchen is no longer available. Reply CHANGE to see kitchens again.',
+  already_customer: 'You are already a customer of that kitchen. Send "hi" to reach them.',
   date_in_past: 'That date has passed.',
   subscription_cancelled: 'This subscription has ended.',
 };
@@ -82,8 +85,32 @@ async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<stri
       return 'choose_kitchen';
     }
     if (received.status === 'unknown') {
-      await say(unknownNumberReply(), 'bot', 'unknown_number');
-      return 'unknown';
+      // Not a customer anywhere yet: a new-customer lead, or a kitchen owner signing up.
+      const conv = await deps.rpc<Json>('wa_platform_conversation', { p_conversation: conversation });
+      const entry = m.input.kind === 'text' ? parseEntry(m.input.text) : { vendor: false, campaign: null, source: 'whatsapp' };
+      const vendorState = conv?.state?.flow === 'vendor' ? (conv.state as VendorState) : null;
+      if (vendorState || entry.vendor) {
+        const r = await handleVendorMessage(m.input, vendorState, (conv?.language ?? 'en') as Lang, {
+          setState: (state) => deps.rpc('wa_update_conversation', { p_conversation: conversation, p_state: state }),
+          apply: (a) => deps.rpc('wa_vendor_apply', {
+            p_phone: m.from, p_name: m.contactName ?? null, p_kitchen_name: a.kitchen_name, p_area: a.area,
+            p_subscribers: a.subscribers, p_campaign: a.campaign,
+          }),
+          signupUrl: `${deps.cfg.publicWebUrl}/login`,
+        }, { contactName: m.contactName, campaign: entry.campaign });
+        for (const out of r.replies) await say(out, 'bot', r.intent);
+        return r.intent;
+      }
+      const lead = await deps.rpc<Lead>('wa_lead_get', {
+        p_phone: m.from, p_campaign: entry.campaign, p_source: entry.source, p_name: m.contactName ?? null,
+      });
+      const r = await handleLeadMessage(m.input, lead, {
+        update: (fields, step) => deps.rpc<Lead>('wa_lead_update', { p_lead: lead.id, p_fields: fields, p_step: step }),
+        choose: (kitchenId) => deps.rpc('wa_lead_choose', { p_lead: lead.id, p_kitchen: kitchenId }),
+        today: new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10),
+      }, { contactName: m.contactName });
+      for (const out of r.replies) await say(out, 'bot', r.intent);
+      return r.intent;
     }
 
     const ctx = await deps.rpc<Json>('wa_context', { p_conversation: conversation });

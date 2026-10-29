@@ -35,6 +35,7 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
   const [confirm, setConfirm] = useState<{ meal: Meal } | null>(null);
   const [addr, setAddr] = useState({ line1: '', area: '', landmark: '', notes: '' });
   const [complaint, setComplaint] = useState({ category: 'quality', text: '' });
+  const [review, setReview] = useState({ rating: 0, comment: '', sent: false });
   const t = (k: Key, v?: Record<string, string | number>) => tr(lang, k, v);
   const live = p.subscriptions.filter((s) => ['active', 'low_balance', 'paused'].includes(s.status));
   const price = live[0]?.price_paise ?? p.subscriptions[0]?.price_paise;
@@ -107,6 +108,15 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
   async function sendComplaint(category = complaint.category, text = complaint.text) {
     await run(() => supabase.rpc('portal_complaint', { p_token: token, p_category: category, p_description: text }), t('done'));
     setComplaint({ category: 'quality', text: '' });
+  }
+
+  async function sendReview() {
+    setBusy(true);
+    setMsg('');
+    const { error } = await supabase.rpc('portal_review', { p_token: token, p_rating: review.rating, p_comment: review.comment.trim() || undefined });
+    setBusy(false);
+    if (error) return setMsg(error.message === 'invalid_link' ? 'This link has expired. Send “my page” on WhatsApp for a new one.' : 'Sorry, that did not work. Please try again.');
+    setReview({ ...review, sent: true });
   }
 
   async function changeLanguage(l: Lang) {
@@ -235,6 +245,31 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
         </select>
         <textarea value={complaint.text} onChange={(e) => setComplaint({ ...complaint, text: e.target.value })} rows={2} className="mt-2 w-full rounded-lg px-3 py-2 text-sm ring-1 ring-ink-200" />
         <button className={`${btn} mt-2`} disabled={busy} onClick={() => sendComplaint()}>{t('complaint_send')}</button>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-2 text-sm font-semibold">{t('rate_title')}</h2>
+        {review.sent ? (
+          <p className="text-sm text-green-800">{t('rate_thanks')}</p>
+        ) : (
+          <>
+            <div className="flex gap-1" role="radiogroup" aria-label={t('rate_title')}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} type="button" role="radio" aria-checked={review.rating === n} aria-label={`${n}/5`}
+                  onClick={() => setReview({ ...review, rating: n })}
+                  className={`text-3xl leading-none ${n <= review.rating ? 'text-amber-500' : 'text-ink-200'}`}>★</button>
+              ))}
+            </div>
+            {review.rating > 0 && (
+              <>
+                <textarea value={review.comment} onChange={(e) => setReview({ ...review, comment: e.target.value })} rows={2} maxLength={500}
+                  placeholder={t('rate_comment')} className="mt-2 w-full rounded-lg px-3 py-2 text-sm ring-1 ring-ink-200" />
+                <p className="text-xs text-ink-500">{t('rate_note')}</p>
+                <button className={`${btn} mt-2`} disabled={busy} onClick={sendReview}>{t('rate_send')}</button>
+              </>
+            )}
+          </>
+        )}
       </section>
 
       <section className={card}>

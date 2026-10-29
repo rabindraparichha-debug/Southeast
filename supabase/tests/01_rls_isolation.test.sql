@@ -109,7 +109,7 @@ select is((select count(*) from public.customers_v where kitchen_id = '10000000-
 -- Platform admin
 -- ===========================================================================
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
-select is((select count(*) from public.customers_v), 30::bigint, 'admin sees all kitchens');
+select is((select count(*) from public.customers_v), 31::bigint, 'admin sees all kitchens (A 20, B 10, C 1 platform customer)');
 select ok((select bool_and(phone like '+91 ••••••%') from public.customers_v), 'admin sees masked phones by default');
 select is(public.reveal_customer_phone((select id from public.customers where name = 'Ankit Das')), '+919861000002',
   'admin can reveal a phone number');

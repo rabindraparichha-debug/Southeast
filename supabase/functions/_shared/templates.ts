@@ -12,6 +12,19 @@ const rupees = (paise: unknown) => `₹${(Number(paise ?? 0) / 100).toLocaleStri
 const day = (d: unknown) =>
   new Date(`${String(d)}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+const VENDOR_STEP: Record<string, string> = {
+  signup: 'log in with this WhatsApp number and create your kitchen',
+  profile: 'add a short description and a photo of your food',
+  location: 'set your kitchen location',
+  fssai: 'add your FSSAI number (needed to receive customers from us)',
+  plans: 'add your meal plans and prices',
+  menu: "publish this week's menu",
+  payout: 'finish payout KYC so customers can pay you online',
+  customers: 'import your existing customers (Excel or contacts)',
+  rider: 'invite your delivery rider',
+  live: 'ask us to list your kitchen',
+};
+
 type Def = {
   name: string;
   category: 'UTILITY' | 'MARKETING';
@@ -111,7 +124,60 @@ export const TEMPLATES: Record<string, Def> = {
     },
     params: (p, k) => [k, p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date), String(p.meals ?? 1)],
   },
+  trial_followup: {
+    name: 'trial_followup_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: hope you are enjoying your trial meals! Continue with {{2}}: {{3}} meals for {{4}}. Pay here: {{5}}',
+      hi: '{{1}}: उम्मीद है ट्रायल खाना पसंद आ रहा है! {{2}} जारी रखें: {{3}} खाने {{4}} में। यहाँ भुगतान करें: {{5}}',
+      or: '{{1}}: ଆଶା କରୁ ଟ୍ରାଏଲ୍ ଖାଇବା ଭଲ ଲାଗୁଛି! {{2}} ଜାରି ରଖନ୍ତୁ: {{3}}ଟି ଖାଇବା {{4}}ରେ। ଏଠାରେ ପେମେଣ୍ଟ କରନ୍ତୁ: {{5}}',
+    },
+    params: (p, k) => [k, String(p.plan_name ?? ''), String(p.meals ?? ''), rupees(p.amount_paise), String(p.url ?? '')],
+  },
+  // Platform messages to people who are not a kitchen's customer yet (leads, vendor applicants).
+  lead_welcome: {
+    name: 'lead_welcome_v1', category: 'UTILITY',
+    text: {
+      en: 'Namaskar {{1}}! Thanks for your tiffin enquiry. Tap below and we will show you home kitchens near you with space.',
+      hi: 'नमस्कार {{1}}! टिफिन पूछताछ के लिए धन्यवाद। नीचे दबाएँ, हम आपके पास के खाली किचन दिखाएँगे।',
+      or: 'ନମସ୍କାର {{1}}! ଟିଫିନ୍ ପଚାରିଥିବାରୁ ଧନ୍ୟବାଦ। ତଳେ ଦବାନ୍ତୁ, ଆମେ ଆପଣଙ୍କ ପାଖର ଖାଲି କିଚେନ୍ ଦେଖାଇବୁ।',
+    },
+    params: (p) => [String(p.name ?? 'there')],
+    quickReplies: () => [{ payload: 'lead_start', title: { en: 'Find my tiffin', hi: 'टिफिन ढूँढें', or: 'ଟିଫିନ୍ ଖୋଜନ୍ତୁ' } }],
+  },
+  lead_reminder: {
+    name: 'lead_reminder_v1', category: 'UTILITY',
+    text: {
+      en: 'Namaskar! The kitchens we found near you still have space: {{1}}. Tap below to see them again.',
+      hi: 'नमस्कार! आपके पास के किचन में अभी भी जगह है: {{1}}। फिर से देखने के लिए नीचे दबाएँ।',
+      or: 'ନମସ୍କାର! ଆପଣଙ୍କ ପାଖ କିଚେନ୍‌ରେ ଏବେ ବି ଜାଗା ଅଛି: {{1}}। ପୁଣି ଦେଖିବାକୁ ତଳେ ଦବାନ୍ତୁ।',
+    },
+    params: (p) => [((p.kitchens as { name: string }[] | undefined) ?? []).map((k) => k.name).join(', ') || 'see the list'],
+    quickReplies: () => [{ payload: 'l_show', title: { en: 'Show kitchens', hi: 'किचन दिखाएँ', or: 'କିଚେନ୍ ଦେଖାନ୍ତୁ' } }],
+  },
+  vendor_welcome: {
+    name: 'vendor_welcome_v1', category: 'UTILITY',
+    text: {
+      en: 'Namaskar {{1}}! Thank you for joining Tiffin OS. It is free. Log in with this number to set up your kitchen: {{2}}',
+      hi: 'नमस्कार {{1}}! Tiffin OS से जुड़ने के लिए धन्यवाद। यह मुफ़्त है। किचन सेट करने के लिए इसी नंबर से लॉग इन करें: {{2}}',
+      or: 'ନମସ୍କାର {{1}}! Tiffin OSରେ ଯୋଗ ଦେଇଥିବାରୁ ଧନ୍ୟବାଦ। ଏହା ମାଗଣା। କିଚେନ୍ ସେଟ୍ କରିବାକୁ ଏହି ନମ୍ବରରେ ଲଗଇନ୍ କରନ୍ତୁ: {{2}}',
+    },
+    params: (p) => [String(p.name ?? ''), String(p.url ?? '')],
+  },
+  vendor_nudge: {
+    name: 'vendor_nudge_v1', category: 'UTILITY',
+    text: {
+      en: 'Namaskar {{1}}! Your next step on Tiffin OS: {{2}}. Open: {{3}}',
+      hi: 'नमस्कार {{1}}! Tiffin OS पर आपका अगला कदम: {{2}}। खोलें: {{3}}',
+      or: 'ନମସ୍କାର {{1}}! Tiffin OSରେ ଆପଣଙ୍କ ପରବର୍ତ୍ତୀ ପଦକ୍ଷେପ: {{2}}। ଖୋଲନ୍ତୁ: {{3}}',
+    },
+    params: (p) => [String(p.name ?? ''), VENDOR_STEP[String(p.next_step)] ?? 'finish setting up your kitchen', String(p.url ?? '')],
+  },
   // To the kitchen owner (English).
+  new_platform_customer: {
+    name: 'new_platform_customer_v1', category: 'UTILITY',
+    text: { en: '{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.' },
+    params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.plan_name ?? ''), String(p.trial_meals ?? '')],
+  },
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',
     text: { en: '{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}.' },

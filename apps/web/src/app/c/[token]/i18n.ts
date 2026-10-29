@@ -36,6 +36,12 @@ const en = {
   delete_data: 'Ask to delete my data',
   done: 'Done',
   stopping: 'To stop your tiffin, message your kitchen; unused meals are refunded at the price you paid.',
+  // M7: verified kitchen reviews
+  rate_title: 'Rate your kitchen',
+  rate_comment: 'Anything to add? (optional)',
+  rate_send: 'Send rating',
+  rate_thanks: 'Thank you! Your rating helps other customers choose.',
+  rate_note: 'Shown on the kitchen’s public page with your first name.',
 };
 export type Key = keyof typeof en;
 
@@ -50,6 +56,10 @@ const hi: Partial<Record<Key, string>> = {
   complaint: 'समस्या बताएँ', complaint_send: 'किचन को भेजें', history: 'भुगतान और रिफंड', language: 'भाषा',
   grievance: 'शिकायत अधिकारी', delete_data: 'मेरा डेटा हटाने का अनुरोध', done: 'हो गया',
   stopping: 'टिफिन बंद करने के लिए किचन को संदेश भेजें; बचे खानों का पैसा उसी दाम पर वापस मिलता है।',
+  // M7 drafts (pending native review)
+  rate_title: 'अपने किचन को रेटिंग दें', rate_comment: 'कुछ और कहना है? (वैकल्पिक)', rate_send: 'रेटिंग भेजें',
+  rate_thanks: 'धन्यवाद! आपकी रेटिंग से दूसरे ग्राहकों को चुनने में मदद मिलती है।',
+  rate_note: 'किचन के सार्वजनिक पेज पर आपके पहले नाम के साथ दिखेगी।',
 };
 const or: Partial<Record<Key, string>> = {
   balance: 'ବାକି ଖାଇବା', owes: 'ଆପଣଙ୍କ ଉପରେ {n}ଟି ଖାଇବା ବାକି', prepaid: '{v} ପ୍ରିପେଡ୍', pay: 'ଖାଇବା ପାଇଁ ପେମେଣ୍ଟ',
@@ -62,6 +72,10 @@ const or: Partial<Record<Key, string>> = {
   complaint: 'ସମସ୍ୟା ଜଣାନ୍ତୁ', complaint_send: 'କିଚେନକୁ ପଠାନ୍ତୁ', history: 'ପେମେଣ୍ଟ ଓ ରିଫଣ୍ଡ', language: 'ଭାଷା',
   grievance: 'ଅଭିଯୋଗ ଅଧିକାରୀ', delete_data: 'ମୋ ଡାଟା ହଟାଇବା ଅନୁରୋଧ', done: 'ହୋଇଗଲା',
   stopping: 'ଟିଫିନ ବନ୍ଦ କରିବାକୁ କିଚେନକୁ ମେସେଜ୍ କରନ୍ତୁ; ବାକି ଖାଇବାର ଟଙ୍କା ସେହି ଦରରେ ଫେରସ୍ତ।',
+  // M7 drafts (pending native review)
+  rate_title: 'ଆପଣଙ୍କ କିଚେନକୁ ରେଟିଂ ଦିଅନ୍ତୁ', rate_comment: 'ଆଉ କିଛି କହିବେ? (ଇଚ୍ଛାଧୀନ)', rate_send: 'ରେଟିଂ ପଠାନ୍ତୁ',
+  rate_thanks: 'ଧନ୍ୟବାଦ! ଆପଣଙ୍କ ରେଟିଂ ଅନ୍ୟ ଗ୍ରାହକଙ୍କୁ ବାଛିବାରେ ସାହାଯ୍ୟ କରେ।',
+  rate_note: 'କିଚେନର ସାର୍ବଜନୀନ ପେଜରେ ଆପଣଙ୍କ ପ୍ରଥମ ନାମ ସହ ଦେଖାଯିବ।',
 };
 const dict: Record<Lang, Partial<Record<Key, string>>> = { en, hi, or };
 

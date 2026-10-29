@@ -30,6 +30,10 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-070 | Delivery code in the "on the way" message | ⏳ PENDING (Meta category) | M5 |
 | D-071 – D-076 | Rider-mode defaults (M5) | Decided | — |
 | D-077 | Build through all milestones without stopping | Your instruction | M5+ |
+| D-078 | Matching rules and ranking weights | ⏳ PENDING | M7 |
+| D-079 | Paid trial: per-kitchen trial meals at plan price | ⏳ PENDING | M7 |
+| D-081 | WhatsApp leads count as opted in for follow-ups | ⏳ PENDING | M7 |
+| D-080, D-082 – D-086 | Acquisition defaults (M7) | Decided | — |
 
 ---
 
@@ -346,7 +350,7 @@ Still deferred (see D-038).
 ### D-059 One platform number, routing
 - Customers are recognised by the hash of their phone number.
 - A number that is a customer at several kitchens is asked which kitchen. The choice sticks for 12 hours, or comes from an invite code ("Hi maa-tarini-tiffin").
-- Unknown numbers get a polite generic reply. Lead intake for them is M7.
+- Unknown numbers ~~get a polite generic reply~~ start the new-customer bot, or the vendor sign-up bot when they say they run a kitchen (M7, D-083).
 
 ### D-060 The inbox is owner-only ⏳ PENDING
 - Conversations include balances and payments, and staff have no money access, so only owners see the inbox.
@@ -393,6 +397,7 @@ Still deferred (see D-038).
 ### D-067 Route optimisation ⏳ PENDING (VROOM hosting)
 - **Always available:** a built-in optimiser in Postgres (`private.tsp_order`: nearest neighbour, then 2-opt until no move improves). It runs in milliseconds for a kitchen's stops, needs no server, and is what the acceptance test checks.
 - **VROOM (optional):** set `VROOM_URL` (Edge Function secret). "Optimise" on a route then asks VROOM and saves its order. By default we send VROOM a travel-time matrix computed from straight-line distances, so VROOM needs no OSRM road-routing server (heavy: it needs the Odisha road map). With `VROOM_USE_ROUTING=true` VROOM gets coordinates and uses its own router. If VROOM fails or times out, the built-in optimiser is used.
+- **Never worse:** "Optimise" also improves the current saved order with 2-opt and keeps the shorter of the two results, so it can't make a route longer (fix found by the integration tests, migration `20261101000200`).
 - **Not tested against a real VROOM server**: the image couldn't be pulled in this sandbox.
 - **Your call:** run VROOM (plus OSRM if you want road distances) on your VPS now, or stay on the built-in optimiser for the pilot? With 10–80 stops in 3 km the difference is small.
 
@@ -442,3 +447,57 @@ Still deferred (see D-038).
 ### D-077 Building without stopping
 - Your instruction during M5: "continue till the all finish also complete automate about getting the new customers and food vendor in parallel as well". So I'm building M5 → M8 without pausing for review between milestones, and adding automated acquisition of both new customers and new vendors (lead intake and matching, vendor sign-up and onboarding).
 - I still commit and push each milestone separately with its tests, and log every default here.
+
+---
+
+## Acquisition (M7)
+
+### D-078 Matching ⏳ PENDING (weights)
+- **Who can be offered:** kitchens that are active (which needs an FSSAI number, D-005) and taking platform leads (owner setting), with the lead inside the kitchen's own service radius (default 3 km), an active plan covering the requested meals and the exact diet, and a free place for every requested slot.
+- **Free places** = capacity minus the busiest day's counted meals over the 7 days from the start date, minus trials waiting for payment (each holds a place).
+- **Ranking:** 60% verified rating, 40% price fit (how close the plan price is to the budget), then distance. Ratings use a prior of 4.0 worth 3 reviews, so a single 5★ review doesn't top the list and new kitchens aren't buried.
+- **Plan offered:** per kitchen, a plan with exactly the requested meals first (a lunch-only lead gets a lunch plan, not a cheaper lunch + dinner one), then the price closest to the budget.
+- **Shortlist:** the top 3, from which the customer picks (spec: "2–3 kitchen profiles").
+- **Your call:** are the 60/40 weights right? Should distance count more?
+
+### D-079 Paid trial and funnel ⏳ PENDING
+- Each kitchen sets its trial length (`trial_meals`, default 2, max 7). The trial is paid at the plan price, online or in cash, through the normal payment paths. The money goes to the kitchen; we hold nothing.
+- The customer is created at the kitchen when they pick it (trial subscription). Meals start once the trial is paid (D-033).
+- **Funnel stages come from real events:** first payment = trial (or straight to converted if it buys more than the trial), next payment = converted (plan), a payment 25+ days after conversion = month-2 renewal. The team can only set new/qualifying/waitlist/lost by hand.
+- **Day-2 follow-up:** about 20 hours after the trial payment, the customer gets `trial_followup_v1` offering a month of the plan (plan days × 4 weeks) with a payment link.
+- **Known overlap:** a 2-meal balance is "low balance" under the M3 rules, so the low-balance reminder can also go out. **Your call:** keep both, or suppress the low-balance reminder during a trial?
+
+### D-080 Areas without geocoding
+- 31 Bhubaneswar areas with approximate centres and common spellings ("csp" → Chandrasekharpur, "kiit" → KIIT Square) let a typed area be matched without a maps API key (D-068). The bot always asks for a shared location first, which is precise. Unknown areas are asked again.
+
+### D-081 Consent for leads ⏳ PENDING
+- **Website and vendor forms:** consent to be contacted is required; WhatsApp updates are a separate, optional tick.
+- **Google Ads forms:** WhatsApp only if the form has a WhatsApp question answered yes; otherwise the team calls.
+- **Justdial:** never opted in (they don't collect it); the team calls.
+- **People who message us on WhatsApp** are treated as opted in for follow-ups about their enquiry (the 24 h reminder, the trial offer). **Your call:** is this acceptable, or should the bot ask an explicit opt-in question?
+
+### D-082 Platform-sourced customers
+- Created only by the platform (website pick, WhatsApp pick, or the team placing a lead), with `source = platform` and `platform_sourced = true`, which nobody can clear (database trigger) and vendors can't set or change.
+- A person who is already that kitchen's customer can't be claimed (`already_customer`), so commission can never be charged on a vendor's own customers.
+- The vendor is told on WhatsApp (`new_platform_customer_v1`) and sees a "Platform" badge.
+
+### D-083 Bringing in new vendors
+- **Entry points:** the `/vendors` page, WhatsApp ("Hi VENDOR", or "I run a mess"), Instagram/Google campaign codes, and the team.
+- **Applications** are linked automatically to the kitchen created with the same phone number (onboarding) and closed when it goes live.
+- **Nudges:** on day 1, 3 and 7 the applicant gets `vendor_nudge_v1` naming their next step (sign up, profile, FSSAI, plans, menu, payout KYC, customers, rider).
+- **Where to recruit:** the funnel page's demand gaps list areas where leads are waitlisted (no kitchen with space), the nearest live kitchen and open applications there. Applications show how much waiting demand is within 3 km.
+- Going live still needs an FSSAI number and an admin (D-005).
+
+### D-084 Public pages
+- `/find`, `/kitchens`, `/k/<slug>` and `/vendors` need no login. Profiles show only active kitchens and never phone numbers.
+- **Abuse guard:** at most 5 website enquiries per phone per day.
+- **Ratings** count only when the reviewer has received meals from the kitchen (verified). Admins can hide a review.
+- Refund and cancellation terms are shown before payment (consumer protection).
+
+### D-085 Lead intake endpoints
+- `lead-intake?source=google_ads`: Google's lead-form webhook, authenticated by the `google_key` field (`GOOGLE_ADS_LEAD_KEY`).
+- `lead-intake?source=justdial|instagram|website|referral|other&key=…`: Justdial's push and a generic JSON format, authenticated by `LEAD_INTAKE_KEY`.
+- Idempotent on (source, external id), matched immediately, and welcomed on WhatsApp only when opted in.
+
+### D-086 Funnel log
+- `lead_events` (append-only) records created, enquiry, qualified, matched/waitlist, chose_kitchen, trial_paid, trial_followup, reminded, converted, renewed, status changes and phone reveals. Bot answers are not events.

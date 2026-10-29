@@ -54,11 +54,32 @@ const MESSAGES: Record<string, string> = {
   invalid_photo: 'This photo could not be used. Take it again.',
   otp_locked: 'Too many wrong codes. Use a photo as proof instead.',
   note_required: 'Please add a short note.',
+  // Acquisition (M7)
+  invalid_source: 'This enquiry source is not allowed.',
+  too_many_requests: 'Too many tries from this number today. Please try again tomorrow or WhatsApp us.',
+  kitchen_not_available: 'This kitchen is not available any more. Please pick another one.',
+  already_converted: 'This enquiry has already been placed with a kitchen.',
+  already_customer: 'This person is already a customer of that kitchen.',
+  invalid_fssai: 'FSSAI numbers have 14 digits.',
+  invalid_rating: 'Choose 1 to 5 stars.',
+  invalid_status: 'That status can’t be set by hand.',
 };
 
 // Codes whose meaning depends on the screen.
 const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   route: { already_exists: 'A route with this name already exists for this meal.' },
+  // Public website forms (customers and kitchen owners, not logged in).
+  public: {
+    consent_required: 'Please tick the box to agree to be contacted.',
+    invalid_link: 'Your search has expired. Please fill in the form again.',
+    already_converted: 'You have already picked a kitchen. Check WhatsApp for your customer page link.',
+    already_customer: 'You are already a customer of this kitchen. Message them on WhatsApp to restart.',
+    no_plan: 'This kitchen has no plan for your meal times right now. Please pick another one.',
+  },
+  admin: {
+    consent_required: 'The caller must agree to be contacted.',
+    no_plan: 'That kitchen has no active plan for these meal times.',
+  },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */

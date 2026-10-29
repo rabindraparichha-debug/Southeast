@@ -17,6 +17,7 @@ export default function Today() {
   const kitchen = useKitchen();
   const [slots, setSlots] = useState<SlotSummary[]>([]);
   const [changes, setChanges] = useState<Change[]>([]);
+  const [todo, setTodo] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -29,6 +30,11 @@ export default function Today() {
     ]);
     setSlots(results.map((r) => r.data as unknown as SlotSummary).filter(Boolean));
     setChanges(feed.data ?? []);
+    if (kitchen.role === 'owner') {
+      // Onboarding: what is left before the kitchen can take customers from the platform.
+      const { data } = await supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId });
+      setTodo(((data ?? []) as { key: string; done: boolean }[]).filter((i) => !i.done).map((i) => i.key));
+    }
   }, [kitchen]);
 
   useFocusEffect(useCallback(() => void load(), [load]));
@@ -41,6 +47,13 @@ export default function Today() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Title>{kitchen.kitchenName}</Title>
+      {todo.length > 0 && (
+        <Card>
+          <Text style={styles.cardTitle}>{t('checklist.title')}</Text>
+          {todo.map((key) => <Muted key={key}>• {t(`checklist.${key}`)}</Muted>)}
+          <Muted>{t('checklist.web')}</Muted>
+        </Card>
+      )}
       <View style={styles.grid}>
         {slots.map((s) => (
           <SlotCard key={`${s.service_date}-${s.slot}`} s={s} onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })} />

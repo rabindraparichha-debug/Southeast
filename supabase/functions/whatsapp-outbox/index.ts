@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
         counts.skipped++;
         continue;
       }
-      if (r.recipient_type === 'customer' && !r.in_window && !r.opted_in) {
+      if (r.recipient_type !== 'member' && !r.in_window && !r.opted_in) {
         await complete(false, null, 'not_opted_in', null, true);
         counts.skipped++;
         continue;

@@ -54,7 +54,7 @@ export default function Customers() {
           <Link href={{ pathname: '/customer/[id]', params: { id: item.id! } }} asChild>
             <Pressable style={styles.item}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.name}</Text>
+                <Text style={styles.name}>{item.name}{item.platform_sourced ? <Text style={styles.platform}>  {t('customers.platform')}</Text> : null}</Text>
                 <Text style={styles.sub} numberOfLines={1}>
                   {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}
                 </Text>
@@ -72,6 +72,7 @@ export default function Customers() {
 }
 
 const styles = StyleSheet.create({
+  platform: { fontSize: 12, fontWeight: '600', color: colors.brand },
   wrap: { flex: 1, backgroundColor: colors.bg },
   searchRow: { flexDirection: 'row', gap: space(2), padding: space(3) },
   add: { backgroundColor: colors.brand, borderRadius: radius, paddingHorizontal: space(4), justifyContent: 'center' },

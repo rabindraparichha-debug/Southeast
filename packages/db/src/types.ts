@@ -70,6 +70,34 @@ export type Database = {
           },
         ];
       };
+      areas: {
+        Row: {
+          aliases: string[];
+          city: string;
+          id: string;
+          lat: number;
+          lng: number;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          aliases?: string[];
+          city?: string;
+          id?: string;
+          lat: number;
+          lng: number;
+          name: string;
+        };
+        Update: {
+          aliases?: string[];
+          city?: string;
+          id?: string;
+          lat?: number;
+          lng?: number;
+          name?: string;
+        };
+        Relationships: [];
+      };
       audit_log: {
         Row: {
           action: string;
@@ -984,6 +1012,65 @@ export type Database = {
           },
         ];
       };
+      kitchen_reviews: {
+        Row: {
+          comment: string | null;
+          created_at: string;
+          customer_id: string;
+          hidden: boolean;
+          id: string;
+          kitchen_id: string;
+          rating: number;
+          updated_at: string;
+          verified: boolean;
+        };
+        ComputedFields: never;
+        Insert: {
+          comment?: string | null;
+          created_at?: string;
+          customer_id: string;
+          hidden?: boolean;
+          id?: string;
+          kitchen_id: string;
+          rating: number;
+          updated_at?: string;
+          verified?: boolean;
+        };
+        Update: {
+          comment?: string | null;
+          created_at?: string;
+          customer_id?: string;
+          hidden?: boolean;
+          id?: string;
+          kitchen_id?: string;
+          rating?: number;
+          updated_at?: string;
+          verified?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kitchen_reviews_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'kitchen_reviews_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'kitchen_reviews_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       kitchen_settings: {
         Row: {
           broadcast_cap_monthly: number;
@@ -1028,16 +1115,19 @@ export type Database = {
       };
       kitchens: {
         Row: {
+          accepts_platform_leads: boolean;
           address: string | null;
           area: string | null;
           capacity_dinner: number;
           capacity_lunch: number;
           city: string;
           created_at: string;
+          cuisine_tags: string[];
           cutoff_dinner: string;
           cutoff_dinner_prev_day: boolean;
           cutoff_lunch: string;
           cutoff_lunch_prev_day: boolean;
+          description: string | null;
           fssai_no: string | null;
           geo_point: unknown;
           id: string;
@@ -1045,24 +1135,29 @@ export type Database = {
           lng: number | null;
           name: string;
           owner_id: string;
+          photo_paths: string[];
           service_radius_km: number;
           slug: string;
           status: Database['public']['Enums']['kitchen_status'];
+          trial_meals: number;
           updated_at: string;
           weekly_off: number[];
         };
         ComputedFields: never;
         Insert: {
+          accepts_platform_leads?: boolean;
           address?: string | null;
           area?: string | null;
           capacity_dinner?: number;
           capacity_lunch?: number;
           city?: string;
           created_at?: string;
+          cuisine_tags?: string[];
           cutoff_dinner?: string;
           cutoff_dinner_prev_day?: boolean;
           cutoff_lunch?: string;
           cutoff_lunch_prev_day?: boolean;
+          description?: string | null;
           fssai_no?: string | null;
           geo_point?: never;
           id?: string;
@@ -1070,23 +1165,28 @@ export type Database = {
           lng?: number | null;
           name: string;
           owner_id: string;
+          photo_paths?: string[];
           service_radius_km?: number;
           slug: string;
           status?: Database['public']['Enums']['kitchen_status'];
+          trial_meals?: number;
           updated_at?: string;
           weekly_off?: number[];
         };
         Update: {
+          accepts_platform_leads?: boolean;
           address?: string | null;
           area?: string | null;
           capacity_dinner?: number;
           capacity_lunch?: number;
           city?: string;
           created_at?: string;
+          cuisine_tags?: string[];
           cutoff_dinner?: string;
           cutoff_dinner_prev_day?: boolean;
           cutoff_lunch?: string;
           cutoff_lunch_prev_day?: boolean;
+          description?: string | null;
           fssai_no?: string | null;
           geo_point?: never;
           id?: string;
@@ -1094,13 +1194,266 @@ export type Database = {
           lng?: number | null;
           name?: string;
           owner_id?: string;
+          photo_paths?: string[];
           service_radius_km?: number;
           slug?: string;
           status?: Database['public']['Enums']['kitchen_status'];
+          trial_meals?: number;
           updated_at?: string;
           weekly_off?: number[];
         };
         Relationships: [];
+      };
+      lead_events: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          detail: NonNullable<Json>;
+          event: string;
+          id: number;
+          lead_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          detail?: NonNullable<Json>;
+          event: string;
+          id?: never;
+          lead_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          detail?: NonNullable<Json>;
+          event?: string;
+          id?: never;
+          lead_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_events_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      lead_matches: {
+        Row: {
+          created_at: string;
+          distance_km: number;
+          kitchen_id: string;
+          lead_id: string;
+          plan_id: string;
+          price_per_meal_paise: number;
+          rank: number;
+          rating: number | null;
+          reviews: number;
+          score: number;
+          spare: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          distance_km: number;
+          kitchen_id: string;
+          lead_id: string;
+          plan_id: string;
+          price_per_meal_paise: number;
+          rank: number;
+          rating?: number | null;
+          reviews?: number;
+          score: number;
+          spare: number;
+        };
+        Update: {
+          created_at?: string;
+          distance_km?: number;
+          kitchen_id?: string;
+          lead_id?: string;
+          plan_id?: string;
+          price_per_meal_paise?: number;
+          rank?: number;
+          rating?: number | null;
+          reviews?: number;
+          score?: number;
+          spare?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'lead_matches_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_matches_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'lead_matches_plan_id_fkey';
+            columns: ['plan_id'];
+            isOneToOne: false;
+            referencedRelation: 'plans';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      leads: {
+        Row: {
+          address_text: string | null;
+          area: string | null;
+          area_id: string | null;
+          bot_step: string | null;
+          budget_per_meal_paise: number | null;
+          campaign: string | null;
+          chosen_kitchen_id: string | null;
+          consent_at: string | null;
+          converted_at: string | null;
+          created_at: string;
+          customer_id: string | null;
+          diet: Database['public']['Enums']['diet_type'] | null;
+          external_id: string | null;
+          followed_up_at: string | null;
+          geo_point: unknown;
+          id: string;
+          language: Database['public']['Enums']['language_code'];
+          lat: number | null;
+          lng: number | null;
+          lost_reason: string | null;
+          matched_at: string | null;
+          name: string | null;
+          notes: string | null;
+          phone_enc: string | null;
+          phone_hash: string | null;
+          phone_last4: string | null;
+          qualified_at: string | null;
+          reminded_at: string | null;
+          renewed_at: string | null;
+          slots: Database['public']['Enums']['meal_slot'][] | null;
+          source: Database['public']['Enums']['lead_source'];
+          start_date: string | null;
+          status: Database['public']['Enums']['lead_status'];
+          token_hash: string | null;
+          trial_at: string | null;
+          updated_at: string;
+          whatsapp_opt_in: boolean;
+        };
+        ComputedFields: never;
+        Insert: {
+          address_text?: string | null;
+          area?: string | null;
+          area_id?: string | null;
+          bot_step?: string | null;
+          budget_per_meal_paise?: number | null;
+          campaign?: string | null;
+          chosen_kitchen_id?: string | null;
+          consent_at?: string | null;
+          converted_at?: string | null;
+          created_at?: string;
+          customer_id?: string | null;
+          diet?: Database['public']['Enums']['diet_type'] | null;
+          external_id?: string | null;
+          followed_up_at?: string | null;
+          geo_point?: never;
+          id?: string;
+          language?: Database['public']['Enums']['language_code'];
+          lat?: number | null;
+          lng?: number | null;
+          lost_reason?: string | null;
+          matched_at?: string | null;
+          name?: string | null;
+          notes?: string | null;
+          phone_enc?: string | null;
+          phone_hash?: string | null;
+          phone_last4?: string | null;
+          qualified_at?: string | null;
+          reminded_at?: string | null;
+          renewed_at?: string | null;
+          slots?: Database['public']['Enums']['meal_slot'][] | null;
+          source: Database['public']['Enums']['lead_source'];
+          start_date?: string | null;
+          status?: Database['public']['Enums']['lead_status'];
+          token_hash?: string | null;
+          trial_at?: string | null;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean;
+        };
+        Update: {
+          address_text?: string | null;
+          area?: string | null;
+          area_id?: string | null;
+          bot_step?: string | null;
+          budget_per_meal_paise?: number | null;
+          campaign?: string | null;
+          chosen_kitchen_id?: string | null;
+          consent_at?: string | null;
+          converted_at?: string | null;
+          created_at?: string;
+          customer_id?: string | null;
+          diet?: Database['public']['Enums']['diet_type'] | null;
+          external_id?: string | null;
+          followed_up_at?: string | null;
+          geo_point?: never;
+          id?: string;
+          language?: Database['public']['Enums']['language_code'];
+          lat?: number | null;
+          lng?: number | null;
+          lost_reason?: string | null;
+          matched_at?: string | null;
+          name?: string | null;
+          notes?: string | null;
+          phone_enc?: string | null;
+          phone_hash?: string | null;
+          phone_last4?: string | null;
+          qualified_at?: string | null;
+          reminded_at?: string | null;
+          renewed_at?: string | null;
+          slots?: Database['public']['Enums']['meal_slot'][] | null;
+          source?: Database['public']['Enums']['lead_source'];
+          start_date?: string | null;
+          status?: Database['public']['Enums']['lead_status'];
+          token_hash?: string | null;
+          trial_at?: string | null;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'leads_area_id_fkey';
+            columns: ['area_id'];
+            isOneToOne: false;
+            referencedRelation: 'areas';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'leads_chosen_kitchen_id_fkey';
+            columns: ['chosen_kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'leads_customer_id_fkey';
+            columns: ['customer_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'leads_customer_id_fkey';
+            columns: ['customer_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       meal_orders: {
         Row: {
@@ -2050,6 +2403,93 @@ export type Database = {
           },
         ];
       };
+      vendor_applications: {
+        Row: {
+          area: string | null;
+          bot_step: string | null;
+          campaign: string | null;
+          consent_at: string;
+          created_at: string;
+          fssai_no: string | null;
+          id: string;
+          kitchen_id: string | null;
+          kitchen_name: string | null;
+          last_nudged_at: string | null;
+          lat: number | null;
+          lng: number | null;
+          name: string;
+          notes: string | null;
+          nudges: number;
+          phone_enc: string;
+          phone_hash: string;
+          phone_last4: string;
+          source: Database['public']['Enums']['lead_source'];
+          status: Database['public']['Enums']['vendor_app_status'];
+          subscribers_estimate: number | null;
+          updated_at: string;
+          whatsapp_opt_in: boolean;
+        };
+        ComputedFields: never;
+        Insert: {
+          area?: string | null;
+          bot_step?: string | null;
+          campaign?: string | null;
+          consent_at: string;
+          created_at?: string;
+          fssai_no?: string | null;
+          id?: string;
+          kitchen_id?: string | null;
+          kitchen_name?: string | null;
+          last_nudged_at?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          name: string;
+          notes?: string | null;
+          nudges?: number;
+          phone_enc: string;
+          phone_hash: string;
+          phone_last4: string;
+          source?: Database['public']['Enums']['lead_source'];
+          status?: Database['public']['Enums']['vendor_app_status'];
+          subscribers_estimate?: number | null;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean;
+        };
+        Update: {
+          area?: string | null;
+          bot_step?: string | null;
+          campaign?: string | null;
+          consent_at?: string;
+          created_at?: string;
+          fssai_no?: string | null;
+          id?: string;
+          kitchen_id?: string | null;
+          kitchen_name?: string | null;
+          last_nudged_at?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          name?: string;
+          notes?: string | null;
+          nudges?: number;
+          phone_enc?: string;
+          phone_hash?: string;
+          phone_last4?: string;
+          source?: Database['public']['Enums']['lead_source'];
+          status?: Database['public']['Enums']['vendor_app_status'];
+          subscribers_estimate?: number | null;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'vendor_applications_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       webhook_events: {
         Row: {
           event_id: string;
@@ -2157,6 +2597,61 @@ export type Database = {
         };
         Returns: string;
       };
+      admin_assign_lead: {
+        Args: { p_kitchen: string; p_lead: string; p_plan?: string };
+        Returns: Json;
+      };
+      admin_create_lead: {
+        Args: {
+          p_area?: string;
+          p_budget_paise?: number;
+          p_campaign?: string;
+          p_diet?: Database['public']['Enums']['diet_type'];
+          p_name: string;
+          p_notes?: string;
+          p_phone: string;
+          p_slots?: Database['public']['Enums']['meal_slot'][];
+          p_source?: Database['public']['Enums']['lead_source'];
+          p_start?: string;
+          p_whatsapp_opt_in?: boolean;
+        };
+        Returns: Json;
+      };
+      admin_hide_review: { Args: { p_hidden: boolean; p_review: string }; Returns: undefined };
+      admin_lead_detail: { Args: { p_lead: string }; Returns: Json };
+      admin_leads: {
+        Args: {
+          p_limit?: number;
+          p_search?: string;
+          p_source?: Database['public']['Enums']['lead_source'];
+          p_status?: Database['public']['Enums']['lead_status'];
+        };
+        Returns: Json;
+      };
+      admin_match_lead: { Args: { p_lead: string }; Returns: Json };
+      admin_reveal_lead_phone: { Args: { p_lead: string }; Returns: string };
+      admin_reveal_vendor_phone: { Args: { p_id: string }; Returns: string };
+      admin_reviews: { Args: { p_kitchen?: string; p_limit?: number }; Returns: Json };
+      admin_set_lead_status: {
+        Args: {
+          p_lead: string;
+          p_reason?: string;
+          p_status: Database['public']['Enums']['lead_status'];
+        };
+        Returns: undefined;
+      };
+      admin_update_vendor_application: {
+        Args: {
+          p_id: string;
+          p_notes?: string;
+          p_status?: Database['public']['Enums']['vendor_app_status'];
+        };
+        Returns: undefined;
+      };
+      admin_vendor_applications: {
+        Args: { p_status?: Database['public']['Enums']['vendor_app_status'] };
+        Returns: Json;
+      };
       assign_run: { Args: { p_rider?: string; p_run: string }; Returns: undefined };
       attach_payment_link: {
         Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
@@ -2225,16 +2720,19 @@ export type Database = {
           p_slug?: string;
         };
         Returns: {
+          accepts_platform_leads: boolean;
           address: string | null;
           area: string | null;
           capacity_dinner: number;
           capacity_lunch: number;
           city: string;
           created_at: string;
+          cuisine_tags: string[];
           cutoff_dinner: string;
           cutoff_dinner_prev_day: boolean;
           cutoff_lunch: string;
           cutoff_lunch_prev_day: boolean;
+          description: string | null;
           fssai_no: string | null;
           geo_point: unknown;
           id: string;
@@ -2242,9 +2740,11 @@ export type Database = {
           lng: number | null;
           name: string;
           owner_id: string;
+          photo_paths: string[];
           service_radius_km: number;
           slug: string;
           status: Database['public']['Enums']['kitchen_status'];
+          trial_meals: number;
           updated_at: string;
           weekly_off: number[];
         };
@@ -2270,6 +2770,18 @@ export type Database = {
       };
       customer_page_link: { Args: { p_customer: string }; Returns: string };
       customer_phone: { Args: { p_customer: string }; Returns: string };
+      demand_gaps: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          area: string;
+          dinner: number;
+          lunch: number;
+          nearest_kitchen: string;
+          nearest_km: number;
+          open_applications: number;
+          waiting: number;
+        }[];
+      };
       dues_list: {
         Args: { p_kitchen: string };
         Returns: {
@@ -2309,6 +2821,40 @@ export type Database = {
         };
         Returns: Json;
       };
+      kitchen_checklist: { Args: { p_kitchen: string }; Returns: Json };
+      kitchen_directory: { Args: { p_area?: string }; Returns: Json };
+      kitchen_profile: { Args: { p_slug: string }; Returns: Json };
+      lead_choose: { Args: { p_kitchen: string; p_token: string }; Returns: Json };
+      lead_funnel: {
+        Args: { p_from?: string; p_to?: string };
+        Returns: {
+          campaign: string;
+          chose: number;
+          converted: number;
+          leads: number;
+          lost: number;
+          matched: number;
+          qualified: number;
+          renewed: number;
+          source: Database['public']['Enums']['lead_source'];
+          trial: number;
+          waitlist: number;
+        }[];
+      };
+      lead_ingest: {
+        Args: {
+          p_area?: string;
+          p_campaign?: string;
+          p_external_id: string;
+          p_extra?: Json;
+          p_name: string;
+          p_phone: string;
+          p_source: Database['public']['Enums']['lead_source'];
+          p_whatsapp_opt_in?: boolean;
+        };
+        Returns: Json;
+      };
+      list_areas: { Args: Record<PropertyKey, never>; Returns: Json };
       live_board: {
         Args: {
           p_date: string;
@@ -2394,6 +2940,10 @@ export type Database = {
       };
       portal_get: { Args: { p_token: string }; Returns: Json };
       portal_payment_link_record: { Args: { p_meals: number; p_token: string }; Returns: Json };
+      portal_review: {
+        Args: { p_comment?: string; p_rating: number; p_token: string };
+        Returns: undefined;
+      };
       portal_set_language: {
         Args: { p_language: Database['public']['Enums']['language_code']; p_token: string };
         Returns: undefined;
@@ -2523,6 +3073,41 @@ export type Database = {
         Returns: Json;
       };
       start_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
+      submit_lead: {
+        Args: {
+          p_address?: string;
+          p_area?: string;
+          p_budget_paise?: number;
+          p_campaign?: string;
+          p_consent?: boolean;
+          p_diet?: Database['public']['Enums']['diet_type'];
+          p_language?: Database['public']['Enums']['language_code'];
+          p_lat?: number;
+          p_lng?: number;
+          p_name: string;
+          p_phone: string;
+          p_slots?: Database['public']['Enums']['meal_slot'][];
+          p_source?: Database['public']['Enums']['lead_source'];
+          p_start?: string;
+          p_whatsapp_opt_in?: boolean;
+        };
+        Returns: Json;
+      };
+      submit_vendor_application: {
+        Args: {
+          p_area?: string;
+          p_campaign?: string;
+          p_consent?: boolean;
+          p_fssai?: string;
+          p_kitchen_name?: string;
+          p_name: string;
+          p_phone: string;
+          p_source?: Database['public']['Enums']['lead_source'];
+          p_subscribers?: number;
+          p_whatsapp_opt_in?: boolean;
+        };
+        Returns: string;
+      };
       tiffin_balances: {
         Args: { p_kitchen: string };
         Returns: {
@@ -2603,6 +3188,17 @@ export type Database = {
         Returns: string;
       };
       wa_handoff: { Args: { p_conversation: string; p_reason: string }; Returns: undefined };
+      wa_lead_choose: { Args: { p_kitchen: string; p_lead: string }; Returns: Json };
+      wa_lead_get: {
+        Args: {
+          p_campaign?: string;
+          p_name?: string;
+          p_phone: string;
+          p_source?: Database['public']['Enums']['lead_source'];
+        };
+        Returns: Json;
+      };
+      wa_lead_update: { Args: { p_fields: Json; p_lead: string; p_step?: string }; Returns: Json };
       wa_log_outbound: {
         Args: {
           p_body: string;
@@ -2621,6 +3217,7 @@ export type Database = {
         Returns: undefined;
       };
       wa_payment_link_record: { Args: { p_conversation: string; p_meals: number }; Returns: Json };
+      wa_platform_conversation: { Args: { p_conversation: string }; Returns: Json };
       wa_receive: {
         Args: {
           p_body: string;
@@ -2642,6 +3239,17 @@ export type Database = {
         };
         Returns: undefined;
       };
+      wa_vendor_apply: {
+        Args: {
+          p_area: string;
+          p_campaign?: string;
+          p_kitchen_name: string;
+          p_name: string;
+          p_phone: string;
+          p_subscribers: number;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       balance_entry_type: 'recharge' | 'meal' | 'credit' | 'refund' | 'adjust';
@@ -2661,6 +3269,25 @@ export type Database = {
         | 'other';
       kitchen_status: 'draft' | 'active' | 'suspended';
       language_code: 'en' | 'or' | 'hi';
+      lead_source:
+        | 'whatsapp'
+        | 'website'
+        | 'google_ads'
+        | 'instagram'
+        | 'justdial'
+        | 'call'
+        | 'referral'
+        | 'other';
+      lead_status:
+        | 'new'
+        | 'qualifying'
+        | 'qualified'
+        | 'matched'
+        | 'trial'
+        | 'converted'
+        | 'renewed'
+        | 'waitlist'
+        | 'lost';
       meal_slot: 'lunch' | 'dinner';
       member_role: 'owner' | 'staff' | 'rider';
       order_status:
@@ -2676,6 +3303,7 @@ export type Database = {
       stop_status: 'pending' | 'delivered' | 'failed';
       subscription_status:
         'trial' | 'active' | 'paused' | 'low_balance' | 'suspended' | 'cancelled';
+      vendor_app_status: 'new' | 'contacted' | 'onboarding' | 'live' | 'rejected';
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -2805,6 +3433,27 @@ export const Constants = {
       ],
       kitchen_status: ['draft', 'active', 'suspended'],
       language_code: ['en', 'or', 'hi'],
+      lead_source: [
+        'whatsapp',
+        'website',
+        'google_ads',
+        'instagram',
+        'justdial',
+        'call',
+        'referral',
+        'other',
+      ],
+      lead_status: [
+        'new',
+        'qualifying',
+        'qualified',
+        'matched',
+        'trial',
+        'converted',
+        'renewed',
+        'waitlist',
+        'lost',
+      ],
       meal_slot: ['lunch', 'dinner'],
       member_role: ['owner', 'staff', 'rider'],
       order_status: ['scheduled', 'locked', 'prepared', 'out', 'delivered', 'failed', 'skipped'],
@@ -2816,6 +3465,7 @@ export const Constants = {
       run_status: ['planned', 'out', 'done'],
       stop_status: ['pending', 'delivered', 'failed'],
       subscription_status: ['trial', 'active', 'paused', 'low_balance', 'suspended', 'cancelled'],
+      vendor_app_status: ['new', 'contacted', 'onboarding', 'live', 'rejected'],
     },
   },
 } as const;

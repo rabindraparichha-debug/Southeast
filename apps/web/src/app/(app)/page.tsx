@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, LinkButton, PageHeader, Stat } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
 import { ChangeFeed } from '@/components/change-feed';
+import { OnboardingChecklist } from '@/components/onboarding-checklist';
+import { checklistItems } from '@/lib/checklist';
 
 export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
@@ -30,8 +32,13 @@ export default async function TodayPage() {
 
   let active = 0;
   let paused = 0;
+  let checklist: ReturnType<typeof checklistItems> = [];
   if (isOwner) {
-    const { data: subs } = await supabase.from('subscriptions').select('status').eq('kitchen_id', kitchen.kitchenId);
+    const [{ data: subs }, { data: list }] = await Promise.all([
+      supabase.from('subscriptions').select('status').eq('kitchen_id', kitchen.kitchenId),
+      supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId }),
+    ]);
+    checklist = checklistItems(list);
     active = (subs ?? []).filter((s) => s.status === 'active' || s.status === 'low_balance').length;
     paused = (subs ?? []).filter((s) => s.status === 'paused').length;
   }
@@ -43,6 +50,8 @@ export default async function TodayPage() {
         subtitle={new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' })}
         actions={<LinkButton href="/menu" variant="secondary">Menu</LinkButton>}
       />
+
+      {isOwner && <OnboardingChecklist items={checklist} />}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaries.map((r, i) => r.data && <SlotCard key={i} s={r.data as unknown as SlotSummary} />)}

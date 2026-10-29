@@ -60,7 +60,8 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00013 | Rider, kitchen B |
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
-| 90000 00101, 90000 00102 | Spare (used by the M1 and M3 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
+| 90000 00101, 90000 00102, 90000 00103 | Spare (used by the M1, M3 and M7 integration tests; test files run in parallel, so each suite needs its own number) |
 
 ## Conventions (follow these in every change)
 
@@ -126,6 +127,14 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
 
+**Acquisition (M7)**
+- Leads and vendor applications belong to the platform: admin-only RLS; vendors see a customer only once the lead picks their kitchen.
+- All lead writes go through `private.upsert_lead()` (one open lead per phone) and `private.convert_lead()` (the only place that creates `platform_sourced` customers). Funnel stages after matching are set only by real events (the recharge trigger), never by hand.
+- Matching is `private.match_kitchens()`; change its rules there and in `docs/DECISIONS.md` D-078.
+- Unknown WhatsApp numbers go to `_shared/lead-bot.ts` (customer qualification, or vendor sign-up); unit-test flows in `tests/integration/lead-bot.test.ts`.
+- Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers.
+- Public anon RPCs (`submit_lead`, `lead_choose`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves.
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -177,6 +186,10 @@ WhatsApp and AI Edge Function secrets (same file):
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+
+Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
+
+Vault also needs `public_web_url` (links in messages, e.g. `https://app.example.in`).
 
 Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the built-in optimiser is used) and `VROOM_USE_ROUTING` (`true` only if the VROOM server has its own OSRM/ORS).
 

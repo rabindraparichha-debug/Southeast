@@ -263,3 +263,107 @@ update public.customers set whatsapp_opt_in = true
 where kitchen_id = '10000000-0000-4000-a000-00000000000a' and phone_last4::int % 2 = 1;
 insert into public.consents (kitchen_id, customer_id, purpose, basis, channel)
 select kitchen_id, id, 'whatsapp', 'customer', 'whatsapp' from public.customers where whatsapp_opt_in;
+
+-- ---------------------------------------------------------------------------
+-- Acquisition (M7), local only
+-- ---------------------------------------------------------------------------
+select vault.create_secret('http://localhost:3000', 'public_web_url');
+
+-- Kitchen A goes live on the platform (it has an FSSAI number); B stays private until it adds one.
+update public.kitchens set status = 'active',
+  description = 'Home-style Odia meals cooked fresh every morning by Sunita and her family. Dalma, saga, besara and a sweet on Sundays. Steel tiffins, delivered hot around Patia and KIIT.',
+  cuisine_tags = '{Odia,Home-style,Veg,Fish curry}'
+where id = '10000000-0000-4000-a000-00000000000a';
+
+-- A third kitchen near Infocity (applied through the website, then signed up and went live).
+insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at, raw_app_meta_data,
+  raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token, email_change_token_new,
+  email_change, email_change_token_current, reauthentication_token, phone_change, phone_change_token)
+values ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-a000-000000000021', 'authenticated', 'authenticated',
+  '919000000021', now(), '{"provider":"phone","providers":["phone"]}', '{"name":"Lopamudra Swain"}', now(), now(),
+  '', '', '', '', '', '', '', '');
+insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
+values (gen_random_uuid(), '00000000-0000-4000-a000-000000000021', '00000000-0000-4000-a000-000000000021', 'phone',
+  '{"sub":"00000000-0000-4000-a000-000000000021","phone":"919000000021","phone_verified":true}', now(), now(), now());
+
+select public.submit_vendor_application('Lopamudra Swain', '+919000000021', 'Infocity Home Kitchen', 'Infocity', 15,
+  null, 'instagram', 'ig-vendors-oct', true, true);
+select public.submit_vendor_application('Kabita Nayak', '+919861000951', 'Kabita''s Rasoi', 'Khandagiri', 25,
+  null, 'website', null, true, true);
+
+insert into public.kitchens (id, name, slug, owner_id, address, area, lat, lng, service_radius_km, fssai_no,
+  capacity_lunch, capacity_dinner, weekly_off, description, cuisine_tags, trial_meals)
+values ('10000000-0000-4000-a000-00000000000c', 'Infocity Home Kitchen', 'infocity-home-kitchen',
+  '00000000-0000-4000-a000-000000000021', 'Plot 88, Infocity Road', 'Infocity', 20.3470, 85.8085, 3, '12026001000456',
+  40, 30, '{7}', 'Simple, light North Indian and Odia veg thalis for office-goers in Infocity. Less oil, more vegetables.',
+  '{Veg,North Indian,Odia,Less oil}', 3);
+insert into public.members (kitchen_id, user_id, role, display_name)
+values ('10000000-0000-4000-a000-00000000000c', '00000000-0000-4000-a000-000000000021', 'owner', 'Lopamudra Swain');
+insert into public.kitchen_settings (kitchen_id) values ('10000000-0000-4000-a000-00000000000c');
+insert into public.kitchen_payout_accounts (kitchen_id, kyc_status) values ('10000000-0000-4000-a000-00000000000c', 'pending');
+insert into public.plans (kitchen_id, name, slots, diet, days_of_week, price_per_meal_paise, description) values
+  ('10000000-0000-4000-a000-00000000000c', 'Home Veg Lunch', '{lunch}', 'veg', '{1,2,3,4,5,6}', 6500, 'Rice, dal, sabzi, 3 roti, salad'),
+  ('10000000-0000-4000-a000-00000000000c', 'Lunch + Dinner Combo', '{lunch,dinner}', 'veg', '{1,2,3,4,5,6}', 6000, 'Two veg meals a day'),
+  ('10000000-0000-4000-a000-00000000000c', 'Chicken Lunch', '{lunch}', 'nonveg', '{1,2,3,4,5,6}', 8500, 'Chicken curry, rice, roti');
+update public.kitchens set status = 'active' where id = '10000000-0000-4000-a000-00000000000c';
+insert into public.menus (kitchen_id, service_date, slot, dishes, published)
+select '10000000-0000-4000-a000-00000000000c', (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
+       case sl.slot when 'lunch' then array['Jeera rice', 'Dal tadka', 'Seasonal sabzi', 'Roti', 'Salad']
+                    else array['Roti', 'Paneer bhurji', 'Dal', 'Salad'] end, true
+from generate_series(0, 6) g cross join unnest(enum_range(null::public.meal_slot)) as sl(slot);
+
+-- Verified reviews from kitchen A customers who have eaten there.
+insert into public.kitchen_reviews (kitchen_id, customer_id, rating, comment, verified, created_at)
+select c.kitchen_id, c.id, r.rating, r.comment, true, now() - (r.n || ' days')::interval
+from (values
+  (1, 'Subhashree Mohanty', 5, 'Tastes like home. The dalma is the best in Patia.'),
+  (2, 'Ankit Das', 4, 'Always on time at the office gate.'),
+  (3, 'Priyanka Sahoo', 5, null),
+  (4, 'Rakesh Nayak', 4, 'Good food, sometimes a little salty.'),
+  (5, 'Pooja Mohapatra', 5, 'Fresh and hot every day.'),
+  (6, 'Sambit Behera', 3, 'Portions could be bigger.')
+) as r(n, name, rating, comment)
+join public.customers c on c.name = r.name and c.kitchen_id = '10000000-0000-4000-a000-00000000000a';
+
+-- Leads in every funnel stage.
+do $$
+declare
+  v_lead uuid;
+  v_conv jsonb;
+  v_pay uuid;
+begin
+  -- Website → matched → chose Infocity Home Kitchen → paid a 3-meal cash trial (trial stage).
+  v_lead := private.upsert_lead('+919861000901', 'website', 'web-home', null,
+    '{"name":"Ritika Panda","area":"Patia","slots":["lunch"],"diet":"veg","budget_per_meal_paise":7000}', true, true);
+  perform private.refresh_lead_matches(v_lead);
+  v_conv := private.convert_lead(v_lead, '10000000-0000-4000-a000-00000000000c', null, 'web');
+  insert into public.payments (kitchen_id, customer_id, method, status, amount_paise, meals, note, paid_at, created_at)
+  values ('10000000-0000-4000-a000-00000000000c', (v_conv ->> 'customer_id')::uuid, 'cash', 'paid', 19500, 3,
+          'Trial paid at the door', now() - interval '1 day', now() - interval '1 day')
+  returning id into v_pay;
+  perform private.post_recharge(v_pay);
+
+  -- WhatsApp (Instagram campaign link) → qualified and shown kitchens, hasn't picked yet.
+  v_lead := private.upsert_lead('+919861000902', 'instagram', 'ig-oct-reel', null,
+    '{"name":"Amit Kar","area":"Infocity","slots":["lunch","dinner"],"diet":"veg","budget_per_meal_paise":6500}', true, true);
+  perform private.refresh_lead_matches(v_lead);
+
+  -- Google Ads form from Khandagiri: no kitchen there yet (a demand gap for vendor recruitment).
+  perform public.lead_ingest('google_ads', 'gads-lead-1001', 'Sneha Mallick', '+919861000903', 'Khandagiri', 'gads-bbsr-tiffin', false,
+    '{"slots":["lunch"],"diet":"veg"}');
+  perform public.lead_ingest('google_ads', 'gads-lead-1002', 'Deepak Rath', '+919861000905', 'Khandagiri', 'gads-bbsr-tiffin', false,
+    '{"slots":["lunch","dinner"],"diet":"nonveg"}');
+  -- Justdial enquiry from Old Town: waitlist.
+  perform public.lead_ingest('justdial', 'jd-77881', 'Rajesh Sahoo', '+919861000904', 'Old Town', null, false,
+    '{"slots":["dinner"]}');
+  -- Instagram DM, only the area so far (still qualifying).
+  perform private.upsert_lead('+919861000906', 'instagram', 'ig-oct-reel', null, '{"name":"Ananya Das","area":"Saheed Nagar"}', true, true);
+  -- A call that didn't work out.
+  v_lead := private.upsert_lead('+919861000907', 'call', null, null,
+    '{"name":"Manoj Behera","area":"Jaydev Vihar","slots":["lunch"],"diet":"veg","budget_per_meal_paise":4000}', true, false);
+  update public.leads set status = 'lost', lost_reason = 'Budget ₹40 per meal is below every kitchen nearby' where id = v_lead;
+
+  -- Messages queued by seeding are not real.
+  update public.notifications_outbox set status = 'cancelled', last_error = 'seed'
+  where status = 'pending' and template in ('payment_receipt', 'new_platform_customer', 'vendor_welcome', 'lead_welcome', 'low_balance_reminder');
+end $$;

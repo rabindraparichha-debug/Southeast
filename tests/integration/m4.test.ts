@@ -106,9 +106,9 @@ describe('M4: WhatsApp through the webhook', () => {
     expect(bad.error?.message).toBe('invalid_link');
   });
 
-  it('unknown numbers get the partner-kitchen reply; forged webhooks are rejected', async () => {
+  it('unknown numbers start the new-customer bot (M7); forged webhooks are rejected', async () => {
     const res = await whatsapp('919999888777', text('hello'));
-    expect(res.body.processed).toEqual(['unknown']);
+    expect(res.body.processed).toEqual(['lead_greet']);
     const forged = await whatsapp(ANKIT, text('hi'), 'sha256=deadbeef');
     expect(forged.status).toBe(401);
   });

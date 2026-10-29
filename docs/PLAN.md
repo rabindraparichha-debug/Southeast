@@ -161,14 +161,46 @@ Known gaps carried forward:
 | 3.4 | Cost per meal | ⬜ |
 
 ## P4: Growth and launch (M7–M8)
+**Goal:** 30 vendors live and the first platform-sourced customers paid.
+
+### M7: Acquisition ✅ (built 2026-10-30; customers *and* vendors, as you asked)
+
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 4.1 | Lead intake: website form, WhatsApp (incl. Instagram/Google click-to-chat codes), Google Ads lead forms, Justdial, calls, generic JSON (Zapier/Make for Meta lead ads); source + campaign on every lead | ✅ | `supabase/migrations/20261101000100_acquisition.sql`, `supabase/functions/lead-intake`, `_shared/leads.ts`, web `/find` |
+| 4.2 | Qualification (location, meal times, diet, budget, start date) and matching (radius, capacity, plan/diet, ranked by verified rating and price fit; 2–3 kitchens) | ✅ | `private.match_kitchens`, `_shared/lead-bot.ts` |
+| 4.3 | Public kitchen profile pages (photos, plans, menu, FSSAI number, verified ratings), directory | ✅ | web `/k/[slug]`, `/kitchens`, `kitchen_profile()`, `kitchen_reviews` |
+| 4.4 | Paid trial → day-2 plan offer → plan → month-2 renewal; `platform_sourced` permanent | ✅ | `convert_lead`, `lead_funnel_on_recharge`, `growth_tick` (hourly) |
+| — | **Vendor acquisition**: sign-up page and WhatsApp "Hi VENDOR" flow, auto-link to the kitchen created with the same number, onboarding checklist, nudges on day 1/3/7, demand gaps showing where to recruit | ✅ | `vendor_applications`, web `/vendors`, `/admin/vendors`, `/admin/funnel` |
+| 4.5 (part) | Admin: lead console (routing, reveal logged), funnel per source/campaign, demand gaps, vendor applications | ✅ | web `/admin/leads`, `/admin/funnel`, `/admin/vendors` |
+
+Acceptance tests:
+- ✅ **A Patia lead matches only kitchens within 3 km that have capacity.**
+  - `supabase/tests/07_acquisition.test.sql`: eight kitchens around Patia. Only the two that are active (FSSAI), taking leads, in range, with a veg lunch plan and a free place are offered. A full kitchen, one whose last place is held by an unpaid trial, a 5 km one, a draft one, an opted-out one and a non-veg-only one are not. A kitchen that fills up drops out. Ranking: a 5★ kitchen at the budget beats a closer, pricier one.
+- ✅ **A converted lead keeps `platform_sourced = true`, and the vendor can't change it.**
+  - pgTAP: website lead → pick → paid trial → day-2 plan offer → plan bought (converted) → recharge 30 days later (renewed), every step logged. The owner can't update the flag through the API or create platform-sourced customers; even with full database rights the flag can't be cleared; an existing customer of the kitchen can't be claimed by the platform.
+  - `tests/integration/m7.test.ts`: the same over HTTP, with the trial paid online through the payment-link function and the Razorpay webhook; the vendor's update is refused.
+- Also covered:
+  - the WhatsApp lead bot end to end through the webhook (location → meal times → diet → budget → start → shortlist → pick); afterwards the number reaches the kitchen's own bot;
+  - a kitchen owner signing up on WhatsApp ("Hi VENDOR <campaign>");
+  - Google Ads lead forms through `lead-intake` (key checked, idempotent on the lead id), Justdial and generic parsers;
+  - waitlist and demand gaps, the 24 h reminder, vendor nudges, verified-only ratings (hidden reviews drop out), public profile without phone numbers;
+  - permissions: leads are admin-only (vendors and anon see none), admin phone reveals are logged.
+
+Known gaps carried forward:
+- **No real ad accounts connected.** Google Ads, Justdial and Meta lead ads have only been tested with their documented payloads; each needs its webhook URL and key configured on their side (see CLAUDE.md).
+- **Instagram/Facebook lead ads** come in through click-to-chat codes ("Hi TIFFIN ig-…") or a Zapier/Make hook to the generic endpoint, not a direct Meta Lead Ads integration (it needs a Meta app review).
+- **Area matching** uses 31 approximate area centres for typed areas; a shared location is precise (D-080).
+- **Kitchen photos** are uploaded by owners; the seed has none, so profile pages show a placeholder.
+- **A 2-meal trial is a "low balance"** under the M3 rules, so the customer may also get the low-balance reminder that evening, as well as the day-2 plan offer (D-079).
+- **Calls** are entered by the team in the admin console; there is no telephony (IVR) integration.
+- **Review moderation** has its RPCs (`admin_reviews`, `admin_hide_review`); the admin page for it comes with the M8 admin console.
+
+### M8: Admin and hardening ⬜
 
 | Pkg | Scope | Status |
 |---|---|---|
-| 4.1 | Lead intake | ⬜ |
-| 4.2 | Qualification and matching (PostGIS columns and indexes already in place) | ⬜ |
-| 4.3 | Kitchen profile pages | ⬜ |
-| 4.4 | Trial and conversion, `platform_sourced` (guard trigger and tests already in place) | 🟡 |
-| 4.5 | Admin console and funnel (kitchen list and status control exist) | 🟡 |
+| 4.5 | Admin console and funnel (lead/vendor parts done in M7; kitchen list and status control exist) | 🟡 |
 | 4.6 | Backups, restore drill, Sentry, load test, security review | ⬜ |
 | 4.7 | Play Store build | ⬜ |
 

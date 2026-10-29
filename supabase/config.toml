@@ -281,6 +281,8 @@ max_frequency = "5s"
 919000000100 = "123456"
 919000000101 = "123456"
 919000000102 = "123456"
+919000000021 = "123456"
+919000000103 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -435,6 +437,9 @@ verify_jwt = false
 
 # Local mock payment page (refuses to run unless RAZORPAY_MODE=mock).
 [functions.razorpay-mock]
+verify_jwt = false
+
+[functions.lead-intake]
 verify_jwt = false
 
 [functions.whatsapp-webhook]
