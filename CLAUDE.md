@@ -111,6 +111,14 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
   - Webhook URL: `https://<project>.functions.supabase.co/razorpay-webhook`.
   - Events: `payment_link.paid`, `payment.captured`, `payment.failed`, `payment_link.expired`, `payment_link.cancelled`, `refund.processed`, `refund.failed`.
 
+**WhatsApp (M4)**
+- One platform number. Inbound goes through `whatsapp-webhook` (Meta HMAC check, dedupe on message id). It calls service-role RPCs `wa_*`, then the bot (`_shared/bot.ts`).
+- The bot is pure logic with injected `BotDeps`; add flows there and unit-test them in `tests/integration/bot.test.ts`.
+- **Guardrails stay in code** (`_shared/ai.ts`: `needsHuman`, `guardReply`). Never let the AI state prices or make promises.
+- **Outbound:** always enqueue to `notifications_outbox`. Add a template to `_shared/templates.ts` **and** `docs/WHATSAPP_TEMPLATES.md`, and get it approved by Meta before use.
+- **Customer page:** `portal_*` RPCs are granted to anon and must start with `private.portal_customer(p_token)`.
+- **Inbox:** owner-only (D-060).
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -150,7 +158,22 @@ Edge Function secrets (`supabase/functions/.env`):
 | `PUBLIC_FUNCTIONS_URL` | Browser-reachable functions URL, used for mock payment pages |
 | `RAZORPAY_ALLOW_LIVE` | Unset. Only the owner may approve live mode |
 
-Later milestones add WhatsApp Cloud API, Anthropic, Sentry and PostHog variables. They're listed, commented out, in `.env.example`.
+WhatsApp and AI Edge Function secrets (same file):
+
+| Variable | Notes |
+|---|---|
+| `WHATSAPP_MODE` | `mock` (default) or `live` |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Live only |
+| `WHATSAPP_APP_SECRET` | Verifies Meta webhooks |
+| `WHATSAPP_VERIFY_TOKEN` | Webhook subscription handshake |
+| `PUBLIC_WEB_URL` | Base URL for customer page links |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
+
+Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+
+Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
+
+Later milestones add Sentry and PostHog variables. They're listed, commented out, in `.env.example`.
 
 ## Secrets
 - Never commit secrets. `.env*` files are gitignored except `.env.example`.

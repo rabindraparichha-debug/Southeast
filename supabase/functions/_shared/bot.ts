@@ -84,7 +84,7 @@ export function mainMenu(lang: Lang, ctx: Json, intro?: string): Out {
   ];
   return {
     type: 'list',
-    text: intro ?? t(lang, 'greeting', { name: String(ctx.customer?.name ?? '').split(' ')[0], kitchen: ctx.kitchen?.name ?? '' }),
+    text: intro ?? t(lang, 'greeting', { name: String(ctx.customer?.name ?? '').split(' ')[0] ?? '', kitchen: ctx.kitchen?.name ?? '' }),
     button: t(lang, 'menu_button'),
     rows,
   };
@@ -176,7 +176,7 @@ async function runMenuItem(item: string, lang: Lang, ctx: Json, deps: BotDeps): 
       const meals = openMeals(ctx);
       if (meals.length === 0) return done([{ type: 'text', text: t(lang, 'nothing_to_skip') }]);
       const firstDate = meals[0]!.date;
-      const rows = meals.slice(0, 8).map((m: Json) => ({ id: `skip|${m.subscription_id}|${m.date}|${m.slot}`, title: mealLabel(lang, m) }));
+      const rows = meals.slice(0, 8).map((m: Json) => ({ id: `skip|${m.subscription_id}|${m.date}|${m.slot}`, title: mealLabel(lang, m as { date: string; slot: string }) }));
       if (meals.filter((m: Json) => m.date === firstDate).length > 1) rows.unshift({ id: `skipday|${firstDate}`, title: t(lang, 'skip_day', { date: dateLabel(firstDate) }) });
       return done([{ type: 'list', text: t(lang, 'skip_pick'), button: t(lang, 'skip_pick_button'), rows: rows.slice(0, 10) }]);
     }

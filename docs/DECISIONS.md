@@ -20,6 +20,10 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-049 | How often low-balance and dues reminders go out | ⏳ PENDING | M3, M4 |
 | D-056 | New customers start at zero balance, so onboarding needs opening balances | ⏳ PENDING | M3 |
 | D-043 – D-055 | Money defaults (M3) | Decided | — |
+| D-057 | Odia and Hindi bot/page texts are drafts | ⏳ PENDING (native review) | M4 |
+| D-058 | AI fallback model and when it runs | ⏳ PENDING | M4 |
+| D-060 | Inbox is owner-only (staff excluded) | ⏳ PENDING | M4 |
+| D-059, D-061 – D-066 | WhatsApp defaults (M4) | Decided | — |
 
 ---
 
@@ -312,3 +316,66 @@ Still deferred (see D-038).
   - "Credit / adjust → Opening balance" on the customer page;
   - or by recording a payment.
 - **Your call:** should new kitchens default to a small credit limit (e.g. 2 meals) during the pilot instead?
+
+---
+
+## WhatsApp (M4)
+
+### D-057 Bot and customer-page languages ⏳ PENDING (native review)
+- English is the source text.
+- I wrote the Odia and Hindi bot replies, customer-page labels and template texts so the three-language flow works end to end. They are **drafts**: a native speaker must review them before customers see them or templates are submitted to Meta.
+- Vendor-facing screens stay English-only for now (D-006).
+
+### D-058 AI fallback ⏳ PENDING
+- **What it is for:** free text the deterministic bot didn't understand.
+- **Model:** `claude-opus-5-5` by default, configurable with `ANTHROPIC_MODEL`.
+- **Settings:** effort `low` (chat), structured JSON output (`reply`, `intent`, `handoff`), and Anthropic's server-side refusal fallback. A refusal hands the conversation to the kitchen.
+- **Guardrails in code, not just the prompt:**
+  - money negotiations (discounts, refunds, "free", compensation) never reach the model;
+  - replies mentioning a price that isn't in the kitchen's data, or promising anything, are replaced by a hand-off.
+- **Without `ANTHROPIC_API_KEY`:** a rule-based fallback answers a few FAQs (cutoff times, FSSAI number, plan price) and hands off everything else.
+- **SDK:** pinned to `@anthropic-ai/sdk@0.137.0` (the 1.x line was 6 days old) and loaded only when a key is set.
+- **Your call:** keep Opus 5.5, or use a cheaper model for this high-volume, simple job? That is a cost/quality decision I haven't made for you.
+
+### D-059 One platform number, routing
+- Customers are recognised by the hash of their phone number.
+- A number that is a customer at several kitchens is asked which kitchen. The choice sticks for 12 hours, or comes from an invite code ("Hi maa-tarini-tiffin").
+- Unknown numbers get a polite generic reply. Lead intake for them is M7.
+
+### D-060 The inbox is owner-only ⏳ PENDING
+- Conversations include balances and payments, and staff have no money access, so only owners see the inbox.
+- **Your call:** should staff be able to see and answer messages, perhaps with money messages hidden?
+
+### D-061 How the bot behaves
+- **Priority order:** menu buttons, then keywords (English, Hindi, Odia), then the guardrails, then the AI fallback, then the kitchen inbox.
+- **Changes:** an on-time skip is applied immediately. A late skip or pause is previewed with "will still be charged" and needs confirmation, so the customer is told before confirming.
+- **Cancellations** always go to the kitchen, so refund terms are explained by a person.
+- **While a conversation is with the kitchen**, the bot stays quiet except for "hi"/"menu", until the owner taps "Done, hand back to bot".
+
+### D-062 Opt-in and the 24-hour window
+- The bot asks for opt-in once, on the customer's first message.
+- Business-initiated templates (receipts, reminders, the 7 pm nudge, announcements) go only to customers who opted in. Replies inside the 24-hour window go to anyone, because the customer wrote first.
+- Opt-in and withdrawal are recorded in `consents`.
+- Vendors move offline customers to WhatsApp with an invite link that opens a chat with the platform number and carries their kitchen code.
+
+### D-063 Customer page links
+- Random 256-bit tokens, stored only as a SHA-256 hash, valid 7 days, one customer each.
+- Sent by the bot ("my page") or shared by the owner.
+- The page works without a login: every RPC checks the token and is limited to that customer.
+- Cancellations aren't possible from the page (they go to the kitchen); changes are recorded with channel `web`.
+
+### D-064 Complaints
+- **Created** from WhatsApp, the customer page, or by the vendor. Creating one hands the conversation to the kitchen and alerts the owner.
+- **Escalation:** if there's no response within **2 hours**, the complaint escalates to the platform team (admin page).
+- **Resolution:** the owner can add free-meal credits, linked to the complaint.
+- **Grievance contact:** shown on the customer page (`NEXT_PUBLIC_GRIEVANCE_CONTACT`). The bot acknowledges every complaint immediately, well within the 48-hour rule.
+
+### D-065 Announcements
+- Owner-written and sent only to opted-in customers with a live subscription.
+- Capped at **4 per kitchen per month** by default. The cap is a platform setting that owners can't change.
+- Sent with the `kitchen_update_v1` template (marketing category, so Meta charges more for it).
+
+### D-066 How outbound messages are sent
+- `notifications_outbox` is drained by the `whatsapp-outbox` Edge Function. pg_cron starts it every minute through `pg_net`, using the Vault secrets `functions_base_url` and `service_role_key`; the inbox also starts it right after a reply.
+- Failed sends retry with exponential backoff for up to 5 attempts.
+- Messages to customers are logged in their conversation.

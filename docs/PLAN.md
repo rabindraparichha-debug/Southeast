@@ -85,16 +85,45 @@ Known gaps carried forward:
 
 ## P2: WhatsApp and riders (M4–M5)
 
+### M4: WhatsApp ✅ (built 2026-10-30, mock Cloud API; waiting for your test pass)
+
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 2.1 | Cloud API webhook, templates, outbox, opt-in | ✅ (mock mode) | `supabase/functions/whatsapp-webhook`, `whatsapp-outbox`, `_shared/templates.ts`, `docs/WHATSAPP_TEMPLATES.md` |
+| 2.2 | Bot flows, 3 languages, 7 pm nudge | ✅ (Odia/Hindi are drafts) | `_shared/bot.ts`, `_shared/bot-i18n.ts`, `private.queue_tomorrow_nudges` |
+| 2.3 | Customer magic-link page | ✅ | `apps/web/src/app/c/[token]` |
+| 2.4 | Vendor inbox | ✅ | Web `/inbox`, mobile Inbox tab |
+| 2.5 | AI fallback with guardrails | ✅ (rule-based without a key) | `_shared/ai.ts` |
+
+Acceptance tests:
+- ✅ **A WhatsApp pause at 20:55 drops tomorrow's lunch count by one and shows in the vendor feed.**
+  - `supabase/tests/05_whatsapp.test.sql`: simulated clock, plus a 21:05 change that is previewed as charged.
+  - `tests/integration/m4.test.ts`: the same pause over real HTTP.
+- ✅ **"Can I get a discount?" gets no promise and is handed off to the vendor.**
+  - `tests/integration/bot.test.ts`: even a model that *would* promise a discount is never asked, because the code guardrail catches it first.
+  - `tests/integration/m4.test.ts`: through the webhook; the conversation shows in the inbox as "needs reply" and the owner gets an alert.
+- Also covered:
+  - routing (unknown numbers, customers of several kitchens, invite codes) and message dedupe;
+  - outbox window and opt-in rules, retries, delivery statuses;
+  - permissions (owner-only inbox, anon customer page);
+  - complaint escalation after 2 hours, with resolution credit;
+  - expired customer-page links, broadcast cap, 7 pm nudge.
+
+Known gaps carried forward:
+- **No real Meta account yet**, so everything ran in `WHATSAPP_MODE=mock`. Templates must be submitted and approved (`docs/WHATSAPP_TEMPLATES.md`) before live use.
+- **Translations:** Odia and Hindi bot and page texts are my drafts; a native speaker must review them (D-057).
+- **AI fallback:** without `ANTHROPIC_API_KEY` it is rule-based (a few FAQs, otherwise hand-off). The Claude path is written with the SDK but has not been called for real.
+- **Complaint photos:** WhatsApp media is stored as the Meta media id. Downloading it into Supabase Storage comes later.
+- **Push notifications** (cutoff push, inbox alerts in the app) still need expo-notifications and an EAS project. Owner alerts currently go out as WhatsApp templates.
+- **Mobile web build only:** after switching tabs, the hidden previous tab can block taps. This doesn't affect the Android target, but needs a check on a device.
+
+### M5: Rider mode ⬜
+
 | Pkg | Scope | Status |
 |---|---|---|
-| 2.1 | Cloud API webhook, templates, outbox, opt-in | ⬜ |
-| 2.2 | Bot flows, 3 languages, 7 pm nudge | ⬜ |
-| 2.3 | Customer magic-link page (placeholder route `/c` exists) | 🟡 |
-| 2.4 | Vendor inbox | ⬜ |
-| 2.5 | AI fallback with guardrails | ⬜ |
 | 2.6 | Runs, stops, proof, failed flow, offline sync (rider tab placeholder exists) | 🟡 |
 | 2.7 | VROOM service, saved routes, drag reorder | ⬜ |
-| 2.8 | Tiffin tracking, live board, "on the way" message | ⬜ |
+| 2.8 | Tiffin tracking, live board, "on the way" message (`record_cash_at_door` already exists) | ⬜ |
 
 ## P3: Kitchen operations (M6)
 
