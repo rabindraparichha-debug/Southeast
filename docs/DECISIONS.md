@@ -513,7 +513,7 @@ Still deferred (see D-038).
 
 ### D-087 Who does what in inventory ⏳ PENDING
 - **Owner and staff:** items, recipes, supplier bills (quantities and bill amounts), wastage, stock-takes, the production plan, alerts.
-- **Owner only:** paying suppliers and supplier dues, stock adjustments outside a stock-take, cost per meal and margins, stock value.
+- **Owner only:** paying suppliers and supplier dues, stock adjustments outside a stock-take, cost per meal and margins, stock value, cost per portion, the money value of stock-take differences and old/new prices in price-jump warnings (staff see the percentage).
 - **Riders:** nothing.
 - **Your call:** the spec says staff handle "inventory only, no money". I treated supplier bill amounts as kitchen costs staff may enter (they usually do the shopping), but kept dues, payments and margins from them. Should staff enter bill amounts at all?
 

@@ -60,7 +60,7 @@ export default async function SheetPage({ searchParams }: PageProps<'/sheet'>) {
             <li className="flex justify-between"><span>Non-veg</span><strong>{totals.by_diet.nonveg}</strong></li>
             <li className="flex justify-between"><span>Jain</span><strong>{totals.by_diet.jain}</strong></li>
           </ul>
-          <p className="mt-4 text-xs text-ink-500">Ingredient quantities come with recipes (inventory milestone).</p>
+          <p className="mt-4 text-xs print:hidden"><Link href={`/inventory/recipes?date=${date}&slot=${slot}#plan`} className="text-brand-700 hover:underline">Ingredients for this meal →</Link></p>
         </Card>
         <Card title="By plan">
           <ul className="space-y-1 text-sm">

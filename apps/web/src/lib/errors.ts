@@ -63,11 +63,21 @@ const MESSAGES: Record<string, string> = {
   invalid_fssai: 'FSSAI numbers have 14 digits.',
   invalid_rating: 'Choose 1 to 5 stars.',
   invalid_status: 'That status can’t be set by hand.',
+  // Inventory (M6)
+  unit_mismatch: 'That unit does not fit this item. Use kg/g for weight, litre/ml for liquids, pieces for counted items.',
+  invalid_qty: 'Enter a valid quantity.',
+  no_lines: 'Add at least one item to the bill.',
+  supplier_required: 'Choose a supplier to record a payment with the bill.',
+  stock_take_closed: 'This stock-take is already closed.',
 };
 
 // Codes whose meaning depends on the screen.
 const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   route: { already_exists: 'A route with this name already exists for this meal.' },
+  item: { already_exists: 'An item with this name already exists.' },
+  supplier: { already_exists: 'A supplier with this name already exists.' },
+  dish: { already_exists: 'A dish with this name already exists.' },
+  stock_take: { reason_required: 'Some items are off by more than the allowed difference. Give a reason for each before closing.' },
   // Public website forms (customers and kitchen owners, not logged in).
   public: {
     consent_required: 'Please tick the box to agree to be contacted.',

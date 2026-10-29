@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
     items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
     items.push({ href: '/menu', label: 'Menu', icon: '📅' });
+    items.push({ href: '/inventory', label: 'Inventory', icon: '📦' });
   }
   if (role === 'owner') {
     const supabase = await createClient();
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
       .eq('kitchen_id', session.kitchen.kitchenId).or('unread_count.gt.0,handoff_open.eq.true');
     items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
     items.push({ href: '/money', label: 'Money', icon: '💰' });
+    items.push({ href: '/reports/costs', label: 'Costs', icon: '📊' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });
     items.push({ href: '/team', label: 'Team', icon: '🧑‍🍳' });

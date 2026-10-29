@@ -174,6 +174,8 @@ Known gaps carried forward:
 - **Costing** uses a 90-day weighted average purchase price, not exact FIFO batches (D-089).
 - **Gas and packaging** are flat per-meal costs set by the owner, not tracked as stock (D-089).
 - **Bill photo OCR** (reading amounts from the photo) isn't built; amounts are typed.
+- **Supplier payments** can't be undone or edited (append-only); "paid now" is capped at the bill total. A wrong payment is corrected with a note and the next bill.
+- **The variance alert** (over 10%) is fixed; only the reason threshold (2%) is a kitchen setting.
 
 ## P4: Growth and launch (M7–M8)
 **Goal:** 30 vendors live and the first platform-sourced customers paid.

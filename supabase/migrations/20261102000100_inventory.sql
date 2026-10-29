@@ -424,8 +424,10 @@ begin
     insert into public.suppliers (kitchen_id, name, phone, notes) values (p_kitchen, trim(p_name), nullif(trim(p_phone), ''), nullif(trim(p_notes), ''))
     returning id into v_id;
   else
-    update public.suppliers set name = coalesce(nullif(trim(p_name), ''), name), phone = coalesce(nullif(trim(p_phone), ''), phone),
-           notes = coalesce(nullif(trim(p_notes), ''), notes)
+    -- null keeps a field, '' clears it.
+    update public.suppliers set name = coalesce(nullif(trim(p_name), ''), name),
+           phone = case when p_phone is null then phone else nullif(trim(p_phone), '') end,
+           notes = case when p_notes is null then notes else nullif(trim(p_notes), '') end
     where id = p_supplier and kitchen_id = p_kitchen returning id into v_id;
     if v_id is null then
       raise exception 'not_found' using errcode = 'P0002';
@@ -508,9 +510,9 @@ begin
     update public.items set last_price_paise = v_price where id = v_item.id;
     if v_jump > v_threshold then
       -- Prices are the owner's business: staff see only the percentage.
-      v_jumps := v_jumps || jsonb_build_object('item', v_item.name, 'pct', v_jump)
+      v_jumps := v_jumps || jsonb_build_array(jsonb_build_object('item', v_item.name, 'pct', v_jump)
                  || case when private.has_role(p_kitchen, '{owner}')
-                         then jsonb_build_object('from_paise', v_prev, 'to_paise', v_price) else '{}'::jsonb end;
+                         then jsonb_build_object('from_paise', v_prev, 'to_paise', v_price) else '{}'::jsonb end);
       perform private.notify_owners_stock(p_kitchen, v_item.id, 'price_jump',
         jsonb_build_object('item', v_item.name, 'pct', v_jump, 'from_paise', v_prev, 'to_paise', v_price, 'unit', v_item.unit));
     end if;
@@ -731,16 +733,19 @@ stable
 security definer
 set search_path = ''
 as $$
+declare
+  v_owner boolean;
 begin
   perform private.require_role(p_kitchen, '{owner,staff}');
+  v_owner := private.has_role(p_kitchen, '{owner}');   -- costs are the owner's business (D-087)
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'dish_id', d.id, 'name', d.name, 'serves', d.serves, 'active', d.active,
-      'cost_per_portion_paise', coalesce((select round(sum(rl.qty_per_portion * private.item_unit_cost(rl.item_id)))
-                                          from public.recipe_lines rl where rl.dish_id = d.id), 0),
+      'cost_per_portion_paise', case when v_owner then coalesce((select round(sum(rl.qty_per_portion * private.item_unit_cost(rl.item_id)))
+                                          from public.recipe_lines rl where rl.dish_id = d.id), 0) end,
       'lines', coalesce((select jsonb_agg(jsonb_build_object('item_id', i.id, 'item', i.name, 'unit', i.unit,
                                             'qty_per_portion', rl.qty_per_portion,
-                                            'cost_paise', round(rl.qty_per_portion * private.item_unit_cost(i.id))) order by i.name)
+                                            'cost_paise', case when v_owner then round(rl.qty_per_portion * private.item_unit_cost(i.id)) end) order by i.name)
                          from public.recipe_lines rl join public.items i on i.id = rl.item_id where rl.dish_id = d.id), '[]'::jsonb)
     ) order by d.active desc, d.name)
     from public.dishes d where d.kitchen_id = p_kitchen), '[]'::jsonb);
@@ -865,7 +870,8 @@ begin
   return jsonb_build_object('id', v_t.id, 'status', v_t.status, 'started_at', v_t.started_at, 'closed_at', v_t.closed_at,
     'lines', coalesce((select jsonb_agg(jsonb_build_object(
         'item_id', i.id, 'item', i.name, 'unit', i.unit, 'expected', l.expected_qty, 'counted', l.counted_qty,
-        'variance', l.variance, 'variance_value_paise', round(coalesce(l.variance, 0) * private.item_unit_cost(i.id)),
+        'variance', l.variance,
+        'variance_value_paise', case when private.has_role(v_t.kitchen_id, '{owner}') then round(coalesce(l.variance, 0) * private.item_unit_cost(i.id)) end,
         'variance_pct', case when l.expected_qty <> 0 then round(l.variance * 100 / l.expected_qty, 1) end,
         'reason', l.reason, 'needs_reason', private.needs_reason(v_t.kitchen_id, l.expected_qty, l.variance) and l.reason is null)
       order by (private.needs_reason(v_t.kitchen_id, l.expected_qty, l.variance) and l.reason is null) desc, i.name)
@@ -1004,14 +1010,14 @@ begin
   from public.meal_orders o
   where o.kitchen_id = p_kitchen and o.service_date between p_from and p_to and o.locked_at is not null
     and (o.status <> 'skipped' or o.charged);
-  select coalesce(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0)), 0) into v_ingredients
+  select coalesce(round(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0))), 0) into v_ingredients
   from public.stock_moves sm join public.count_snapshots cs on cs.id = sm.ref_id
   where sm.ref_type = 'count_snapshot' and sm.type = 'consume' and cs.kitchen_id = p_kitchen and cs.service_date between p_from and p_to;
-  select coalesce(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0)), 0) into v_waste
+  select coalesce(round(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0))), 0) into v_waste
   from public.stock_moves sm
   where sm.kitchen_id = p_kitchen and sm.type = 'waste'
     and sm.created_at >= (p_from::timestamp at time zone 'Asia/Kolkata') and sm.created_at < ((p_to + 1)::timestamp at time zone 'Asia/Kolkata');
-  select coalesce(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0)), 0) into v_shrink
+  select coalesce(round(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0))), 0) into v_shrink
   from public.stock_moves sm
   where sm.kitchen_id = p_kitchen and sm.type = 'count'
     and sm.created_at >= (p_from::timestamp at time zone 'Asia/Kolkata') and sm.created_at < ((p_to + 1)::timestamp at time zone 'Asia/Kolkata');
@@ -1028,7 +1034,7 @@ begin
     'margin_pct', case when v_revenue > 0 then round((v_revenue - v_cost) * 100.0 / v_revenue, 1) end,
     'by_day', coalesce((
       select jsonb_agg(jsonb_build_object('date', d.service_date, 'meals', d.meals,
-                         'ingredients_paise', coalesce((select sum(-sm.qty * coalesce(sm.unit_cost_paise, 0))
+                         'ingredients_paise', coalesce((select round(sum(-sm.qty * coalesce(sm.unit_cost_paise, 0)))
                                                         from public.stock_moves sm join public.count_snapshots cs on cs.id = sm.ref_id
                                                         where sm.ref_type = 'count_snapshot' and sm.type = 'consume'
                                                           and cs.kitchen_id = p_kitchen and cs.service_date = d.service_date), 0))

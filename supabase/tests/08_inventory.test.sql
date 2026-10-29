@@ -60,7 +60,8 @@ select is(public.set_recipe_line((select id from ids where k = 'd_rice'), (selec
   '0.12 kg of rice per portion');
 select throws_ok($$ select public.set_recipe_line((select id from ids where k = 'd_rice'), (select id from ids where k = 'rice'), 2, 'pc') $$,
   '22023', 'unit_mismatch', 'pieces cannot be converted to kg');
-select ok((public.dish_costs('84000000-0000-4000-f000-000000000001') -> 0 ->> 'cost_per_portion_paise')::int > 0, 'dish cost per portion is shown');
+select is((public.dish_costs('84000000-0000-4000-f000-000000000001') -> 0 ->> 'cost_per_portion_paise'), null,
+  'staff see recipes without costs');
 select throws_ok($$ select * from public.supplier_dues('84000000-0000-4000-f000-000000000001') $$, '42501', 'forbidden',
   'staff cannot see supplier dues (money)');
 reset role;
@@ -122,6 +123,11 @@ select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-0000000
 select is((select due_paise from public.supplier_dues('84000000-0000-4000-f000-000000000001')), 175000,
   'supplier dues: ₹2,750 bought − ₹1,000 paid = ₹1,750 on credit');
 select lives_ok($$ select public.pay_supplier((select id from ids where k = 'sup'), 75000, 'upi_manual') $$, 'the owner pays ₹750');
+select ok((public.dish_costs('84000000-0000-4000-f000-000000000001') -> 0 ->> 'cost_per_portion_paise')::int > 0, 'the owner sees cost per portion');
+select is((public.record_purchase('84000000-0000-4000-f000-000000000001',
+  jsonb_build_array(jsonb_build_object('item_id', (select id from ids where k = 'oil'), 'qty', 1, 'amount_paise', 30000))) -> 'price_jumps'),
+  jsonb_build_array(jsonb_build_object('item', 'Mustard oil', 'pct', 66.67, 'from_paise', 18000, 'to_paise', 30000)),
+  'a price jump comes back as one warning with the old and new price (owner)');
 select is((select due_paise from public.supplier_dues('84000000-0000-4000-f000-000000000001')), 100000, '₹1,000 still due');
 select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
 select throws_ok($$ select public.record_purchase('84000000-0000-4000-f000-000000000001',
@@ -194,9 +200,9 @@ reset role;
 -- ===========================================================================
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
-select lives_ok($$ select public.update_item((select id from ids where k = 'oil'), p_min_qty => 6) $$, 'owner raises the oil minimum to 6 l');
+select lives_ok($$ select public.update_item((select id from ids where k = 'oil'), p_min_qty => 7) $$, 'owner raises the oil minimum to 7 l');
 select ok(exists (select 1 from jsonb_array_elements(public.inventory_alerts('84000000-0000-4000-f000-000000000001')) x
-                  where x ->> 'type' = 'low_stock' and x ->> 'item' = 'Mustard oil'), 'oil (5.5 l) shows as low stock');
+                  where x ->> 'type' = 'low_stock' and x ->> 'item' = 'Mustard oil'), 'oil (6.5 l) shows as low stock');
 select ok(exists (select 1 from jsonb_array_elements(public.inventory_alerts('84000000-0000-4000-f000-000000000001')) x
                   where x ->> 'type' = 'price_jump' and x ->> 'item' = 'Toor dal'), 'the dal price jump shows');
 create temp table cost (v jsonb);
