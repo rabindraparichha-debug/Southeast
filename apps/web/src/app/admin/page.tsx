@@ -13,6 +13,8 @@ export default async function AdminPage() {
     .from('kitchens')
     .select('id, name, area, fssai_no, status, created_at, kitchen_payout_accounts(razorpay_linked_account_id, kyc_status)')
     .order('created_at', { ascending: false });
+  const { data: escalated } = await supabase.from('complaints').select('id, category, description, created_at, escalated_at, kitchen_id')
+    .eq('status', 'escalated').order('escalated_at');
   // Count through customers_v: the customers table itself is not selectable as a whole (phone columns).
   const { data: custRows } = await supabase.from('customers_v').select('kitchen_id');
   const counts = new Map<string, number>();
@@ -25,6 +27,19 @@ export default async function AdminPage() {
         subtitle="Every admin action is written to the audit log."
         actions={session.kitchen && <Link href="/" className="text-sm text-brand-700 hover:underline">Back to my kitchen</Link>}
       />
+      <Card title={`Escalated complaints (${escalated?.length ?? 0})`} className="mb-6">
+        {escalated?.length ? (
+          <ul className="divide-y divide-ink-100 text-sm">
+            {escalated.map((c) => (
+              <li key={c.id} className="py-2">
+                <strong>{(kitchens ?? []).find((k) => k.id === c.kitchen_id)?.name}</strong> · {c.category}
+                {c.description ? ` · ${c.description}` : ''}
+                <span className="text-ink-500"> · no kitchen reply within 2 hours</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-sm text-ink-500">None. Kitchens are replying within 2 hours.</p>}
+      </Card>
       <Card className="overflow-x-auto p-0">
         <table className="min-w-full text-sm">
           <thead className="border-b border-ink-100 text-left text-xs uppercase text-ink-500">

@@ -9,6 +9,7 @@ import { AddSubscription } from './add-subscription';
 import { EraseCustomer } from './erase-customer';
 import { SubscriptionActions } from './subscription-actions';
 import { MoneyPanel } from './money-panel';
+import { WhatsAppCard } from './whatsapp-card';
 
 const formatDate = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -51,6 +52,13 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
         supabase.rpc('unused_meals_value', { p_customer: id }),
       ])
     : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
+  const [{ data: optin }, { data: conv }, { data: kslug }] = isOwner
+    ? await Promise.all([
+        supabase.from('customers_v').select('whatsapp_opt_in').eq('id', id).single(),
+        supabase.from('conversations').select('id').eq('customer_id', id).not('last_message_at', 'is', null).maybeSingle(),
+        supabase.from('kitchens').select('slug').eq('id', kitchen.kitchenId).single(),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
   const livePlan = (subscriptions ?? []).find((s) => s.status !== 'cancelled')?.plan ?? subscriptions?.[0]?.plan ?? null;
 
   return (
@@ -124,6 +132,11 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             payments={payments ?? []}
             refunds={refunds ?? []}
           />
+        )}
+
+        {isOwner && (
+          <WhatsAppCard customerId={c.id!} customerName={c.name!} customerPhone={c.phone} kitchenName={kitchen.kitchenName}
+            kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null} />
         )}
 
         {isOwner && (

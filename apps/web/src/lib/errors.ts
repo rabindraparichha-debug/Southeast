@@ -38,6 +38,10 @@ const MESSAGES: Record<string, string> = {
   gateway_error: 'The payment gateway did not respond. Try again in a minute.',
   invalid_account_id: 'Razorpay account ids look like acc_XXXXXXXX.',
   live_keys_not_approved: 'Razorpay live mode is not approved yet.',
+  broadcast_cap_reached: 'You have used all announcements for this month.',
+  invalid_message: 'Write a message of up to 1,000 characters.',
+  invalid_link: 'This link has expired.',
+  cancel_via_kitchen: 'Cancellations are handled by the kitchen.',
 };
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {

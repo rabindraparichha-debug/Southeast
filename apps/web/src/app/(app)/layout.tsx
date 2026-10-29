@@ -1,4 +1,5 @@
 import { requireKitchen } from '@/lib/session';
+import { createClient } from '@/lib/supabase/server';
 import { signOut } from '@/app/actions';
 import { Nav, type NavItem } from '@/components/nav';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
@@ -14,6 +15,10 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/menu', label: 'Menu', icon: '📅' });
   }
   if (role === 'owner') {
+    const supabase = await createClient();
+    const { count: needsReply } = await supabase.from('conversations').select('id', { count: 'exact', head: true })
+      .eq('kitchen_id', session.kitchen.kitchenId).or('unread_count.gt.0,handoff_open.eq.true');
+    items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
     items.push({ href: '/money', label: 'Money', icon: '💰' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });

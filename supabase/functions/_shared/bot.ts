@@ -148,7 +148,10 @@ async function runMenuItem(item: string, lang: Lang, ctx: Json, deps: BotDeps): 
     }
     case 'week': {
       const byDate = new Map<string, string[]>();
+      const off: number[] = ctx.kitchen?.weekly_off ?? [];
       for (const m of ctx.menus ?? []) {
+        const dow = new Date(`${m.date}T00:00:00Z`).getUTCDay() || 7;
+        if (off.includes(dow)) continue;
         const line = `${t(lang, m.slot as BotKey)}: ${m.dishes.join(', ')}`;
         byDate.set(m.date, [...(byDate.get(m.date) ?? []), line]);
       }

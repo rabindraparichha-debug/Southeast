@@ -1077,7 +1077,7 @@ revoke all on public.conversations, public.messages, public.complaints, public.c
 grant select (id, kitchen_id, customer_id, phone_last4, contact_name, language, handoff_open, handoff_at, last_inbound_at,
   last_message_at, unread_count, created_at, updated_at) on public.conversations to authenticated;
 grant select on public.messages, public.complaints, public.broadcasts to authenticated;
-grant update (broadcast_cap_monthly) on public.kitchen_settings to authenticated;
+-- broadcast_cap_monthly is a platform limit: not updatable by kitchen owners (admin/service only).
 
 revoke execute on all functions in schema private from public, anon, authenticated;
 grant execute on function private.kitchen_ids(public.member_role[]) to authenticated;
