@@ -25,6 +25,8 @@ Meta only lets us message a customer outside the 24-hour customer-service window
 | `tomorrow_menu_v1` | Utility | `{{1}}: tomorrow's menu ({{2}}): {{3}}. Not eating? Tap Skip before the cutoff.` | kitchen, date, dishes | `Skip tomorrow` (payload `nudge_skip\|<date>`), `Keep` (`nudge_keep`) |
 | `kitchen_message_v1` | Utility | `Message from {{1}}: {{2}}` | kitchen, text | – |
 | `kitchen_update_v1` | Marketing | `Update from {{1}}: {{2}}` | kitchen, text | – |
+| `on_the_way_v1` | Utility | `{{1}}: your {{2}} is on the way with {{3}} (stop {{4}} of {{5}}). Delivery code: {{6}}. Share it only when you receive your tiffin.` | kitchen, lunch/dinner, rider first name, stop, stops, 4-digit code | – |
+| `delivery_credit_v1` | Utility | `{{1}}: sorry, your {{2}} on {{3}} could not be delivered. {{4}} meal(s) have been added back to your balance.` | kitchen, lunch/dinner, date, meals | – |
 
 ## Kitchen-owner templates (English)
 
@@ -39,7 +41,6 @@ Meta only lets us message a customer outside the 24-hour customer-service window
 | Name | Category | Purpose |
 |---|---|---|
 | `otp_v1` | Authentication | Login codes, if WhatsApp OTP is chosen (D-004) |
-| `on_the_way_v1` | Utility | Rider dispatch message (M5) |
 
 ## Opt-in rules the code enforces
 

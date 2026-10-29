@@ -193,6 +193,44 @@ begin
   update public.notifications_outbox set status = 'cancelled', last_error = 'seed history';
 end $$;
 
+-- A week of deliveries (M5). Runs were built at each lock; the riders delivered every past run
+-- (OTP proof, a few without proof), a couple of customers were not home and one stop was late
+-- from the kitchen (credited). Today's runs stay planned so they can be tried in the app.
+do $$
+declare
+  v_today date := (now() at time zone 'Asia/Kolkata')::date;
+  v_start timestamptz;
+  r record;
+  s record;
+  i integer := 0;
+begin
+  for r in select * from public.delivery_runs where service_date < v_today order by service_date, slot loop
+    v_start := (r.service_date + case when r.slot = 'lunch' then time '12:00' else time '19:30' end) at time zone 'Asia/Kolkata';
+    perform set_config('app.now', v_start::text, true);
+    perform private.do_start_run(r.id, null, r.rider_id);
+    for s in select ds.*, a.lat, a.lng from public.delivery_stops ds left join public.addresses a on a.id = ds.address_id
+             where ds.run_id = r.id order by ds.seq loop
+      i := i + 1;
+      perform set_config('app.now', (v_start + s.seq * interval '4 minutes')::text, true);
+      if i % 37 = 0 then
+        perform private.do_fail_stop(s.id, 'not_home', null, s.lat, s.lng, null, 0, null, false, r.rider_id);
+      elsif i = 50 then
+        perform private.do_fail_stop(s.id, 'kitchen_late', 'Lunch left the kitchen 40 minutes late', s.lat, s.lng, null, 0,
+                                     null, false, r.rider_id);
+      else
+        perform private.do_complete_stop(s.id, case when i % 11 = 0 then 'none' else 'otp' end::public.proof_type,
+          (select otp from public.delivery_stops where id = s.id), null, s.lat, s.lng, 15, null,
+          1, case when i % 5 = 0 then 0 else 1 end, 0, null, i % 17 = 0, r.rider_id);
+      end if;
+    end loop;
+    perform set_config('app.now', (v_start + interval '2 hours')::text, true);
+    perform private.do_finish_run(r.id, null, r.rider_id);
+  end loop;
+  perform set_config('app.now', '', true);
+  update public.notifications_outbox set status = 'cancelled', last_error = 'seed history'
+  where status = 'pending' and template in ('on_the_way', 'delivery_credit');
+end $$;
+
 -- Menus for the next 7 days.
 insert into public.menus (kitchen_id, service_date, slot, dishes, published)
 select k.id, (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,

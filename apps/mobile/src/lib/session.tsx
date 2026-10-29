@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MemberRole } from '@tiffin/db';
+import { resetRider } from './rider-store';
 import { supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
@@ -17,6 +18,7 @@ type AuthState = {
 };
 
 const KITCHEN_KEY = 'tiffin.kitchenId';
+const MEMBERSHIPS_KEY = 'tiffin.memberships'; // so riders can open the app without network
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -32,13 +34,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // Staff/riders invited before their first login join their kitchen now.
     await supabase.rpc('claim_invites');
-    const { data } = await supabase.from('members').select('role, kitchen:kitchens(id, name)').eq('user_id', s.user.id);
-    setMemberships(
-      (data ?? [])
-        .filter((m) => m.kitchen)
-        .map((m) => ({ kitchenId: m.kitchen!.id, kitchenName: m.kitchen!.name, role: m.role }))
-        .sort((a, b) => a.kitchenName.localeCompare(b.kitchenName)),
-    );
+    const { data, error } = await supabase.from('members').select('role, kitchen:kitchens(id, name)').eq('user_id', s.user.id);
+    if (error) {
+      const cached = await AsyncStorage.getItem(MEMBERSHIPS_KEY);
+      if (cached) setMemberships(JSON.parse(cached) as Membership[]);
+      return;
+    }
+    const list = (data ?? [])
+      .filter((m) => m.kitchen)
+      .map((m) => ({ kitchenId: m.kitchen!.id, kitchenName: m.kitchen!.name, role: m.role }))
+      .sort((a, b) => a.kitchenName.localeCompare(b.kitchenName));
+    setMemberships(list);
+    await AsyncStorage.setItem(MEMBERSHIPS_KEY, JSON.stringify(list));
   }, []);
 
   useEffect(() => {
@@ -75,7 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reload: () => loadMemberships(session),
       signOut: async () => {
         await supabase.auth.signOut();
-        await AsyncStorage.removeItem(KITCHEN_KEY);
+        await AsyncStorage.multiRemove([KITCHEN_KEY, MEMBERSHIPS_KEY]);
+        await resetRider();
       },
     };
   }, [ready, session, memberships, kitchenId, loadMemberships]);

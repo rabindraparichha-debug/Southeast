@@ -33,6 +33,20 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Tiffin OS records where a delivery was marked, as proof for your kitchen."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Tiffin OS takes a photo of the delivered tiffin as proof of delivery.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

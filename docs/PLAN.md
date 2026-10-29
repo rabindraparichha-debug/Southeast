@@ -117,13 +117,39 @@ Known gaps carried forward:
 - **Push notifications** (cutoff push, inbox alerts in the app) still need expo-notifications and an EAS project. Owner alerts currently go out as WhatsApp templates.
 - **Mobile web build only:** after switching tabs, the hidden previous tab can block taps. This doesn't affect the Android target, but needs a check on a device.
 
-### M5: Rider mode ⬜
+### M5: Rider mode ✅ (built 2026-10-30; VROOM not tried against a real server)
 
-| Pkg | Scope | Status |
-|---|---|---|
-| 2.6 | Runs, stops, proof, failed flow, offline sync (rider tab placeholder exists) | 🟡 |
-| 2.7 | VROOM service, saved routes, drag reorder | ⬜ |
-| 2.8 | Tiffin tracking, live board, "on the way" message (`record_cash_at_door` already exists) | ⬜ |
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 2.6 | Runs, stops, proof (OTP or photo + GPS + time), failed flow with kitchen-fault credit, offline sync | ✅ | `supabase/migrations/20261031000100_delivery.sql`, mobile "My stops" tab + `stop/[id]`, `apps/mobile/src/lib/rider-store.ts` |
+| 2.7 | Route optimiser, saved routes, drag reorder that persists | ✅ (built-in optimiser; VROOM optional) | `private.tsp_order`, `build_runs`, `reorder_run`, `supabase/functions/route-optimize`, web `/delivery/routes` |
+| 2.8 | Tiffin tracking, live board, "on the way" message, rider stats | ✅ | `tiffin_ledger`, web `/delivery`, `/delivery/tiffins`, `/delivery/riders`, template `on_the_way_v1` |
+
+Acceptance tests:
+- ✅ **25 stops within 3 km produce a sensible order, and a drag reorder persists to the next day.**
+  - `supabase/tests/06_delivery.test.sql`: 25 customers on a 1.5 km circle around the kitchen, created in shuffled order. The run built at lock visits them house by house around the circle (planned ≈ 13.7 km). Staff drag the last stop to the front; Wednesday's run keeps Tuesday's hand-made order, and a new 26th customer is slotted in at the cheapest place without disturbing it.
+  - The optimiser on its own: on scattered points within 3 km the path is under half the unordered one.
+- ✅ **A delivery marked offline syncs later with its original timestamp.**
+  - pgTAP: marked at 12:41, synced at 14:30 → `done_at` 12:41, `synced_at` 14:30; tiffin and cash entries also carry 12:41; the same queued action sent twice counts once.
+  - `tests/integration/m5.test.ts`: the same over HTTP, with a real proof photo uploaded to Storage.
+  - In the app (Expo web build, Playwright): delivered while the browser was offline, the queue survived, and the stop reached the server 8.6 s later with the tap time.
+- Also covered:
+  - OTP proof (wrong code online is retried, offline it is recorded and flagged), photo proof in the kitchen's folder only, GPS distance from the pin;
+  - kitchen-fault failures credit the meal at the charged price and tell the customer; customer-side failures don't;
+  - "on the way" messages with the delivery code, sent once; a stop moved into a run that is already out gets its own code;
+  - riders see only their own runs, today only, with masked phones and no codes; calling reveals the number only for their pending stop on a run that is out, and is logged;
+  - staff see the board without cash and can't see rider pay stats; other kitchens and anon see nothing;
+  - tiffin ledger append-only, returns capped; rider stats (shifts, stops, km, proof rate, cash).
+
+Known gaps carried forward:
+- **VROOM:** the client and Edge Function are written and unit-tested against VROOM's documented API, but the VROOM image could not be pulled here (registry blocked), so it has never answered a real request. Without `VROOM_URL` the built-in optimiser is used (D-067).
+- **Call masking** is reveal-on-tap with an audit entry, not a virtual number (D-069).
+- **Delivery codes** go only to customers who opted in to WhatsApp; others need photo proof. Meta may want the code in an authentication-category template (D-070).
+- **Planned km**, not GPS odometer, is what rider pay stats use (D-075).
+- **Live location** is a ping every minute while the app is open on the stop list; there is no background tracking.
+- **No "undo"** for a stop marked by mistake: the owner corrects it with a balance adjustment.
+- **The 3-hour complaint window** after a slot closes isn't enforced; complaints are accepted any time.
+- **Mobile web build only:** a web page can't reload without network (the phone app keeps running).
 
 ## P3: Kitchen operations (M6)
 

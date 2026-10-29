@@ -2,11 +2,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useAuth, useKitchen } from '@/lib/session';
 import { Button, Card, Chip, Label, Muted, Screen } from '@/components/ui';
 import { colors, space } from '@/components/theme';
+import { useRider } from '@/lib/rider-store';
 import { t } from '@/i18n';
 
 export default function Account() {
   const { memberships, selectKitchen, signOut, session } = useAuth();
   const kitchen = useKitchen();
+  const { queue } = useRider();
   return (
     <Screen>
       <Card>
@@ -26,7 +28,8 @@ export default function Account() {
           </View>
         </Card>
       )}
-      <Button title={t('account.signOut')} onPress={signOut} variant="secondary" />
+      {queue.length > 0 && <Muted>{t('account.unsynced', { n: queue.length })}</Muted>}
+      <Button title={t('account.signOut')} onPress={signOut} variant="secondary" disabled={queue.length > 0} />
     </Screen>
   );
 }

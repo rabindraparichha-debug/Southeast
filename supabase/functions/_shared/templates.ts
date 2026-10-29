@@ -92,6 +92,25 @@ export const TEMPLATES: Record<string, Def> = {
     text: { en: 'Update from {{1}}: {{2}}', hi: '{{1}} से सूचना: {{2}}', or: '{{1}} ଙ୍କ ସୂଚନା: {{2}}' },
     params: (p, k) => [k, String(p.text ?? '')],
   },
+  on_the_way: {
+    name: 'on_the_way_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: your {{2}} is on the way with {{3}} (stop {{4}} of {{5}}). Delivery code: {{6}}. Share it only when you receive your tiffin.',
+      hi: '{{1}}: आपका {{2}} {{3}} के साथ रास्ते में है ({{5}} में से स्टॉप {{4}})। डिलीवरी कोड: {{6}}। टिफिन मिलने पर ही बताएँ।',
+      or: '{{1}}: ଆପଣଙ୍କ {{2}} {{3}}ଙ୍କ ସହ ବାଟରେ ଅଛି ({{5}}ରୁ ଷ୍ଟପ୍ {{4}})। ଡେଲିଭରି କୋଡ୍: {{6}}। ଟିଫିନ୍ ପାଇଲେ ହିଁ କୁହନ୍ତୁ।',
+    },
+    params: (p, k) => [k, p.slot === 'dinner' ? 'dinner' : 'lunch', String(p.rider_name ?? 'our rider'), String(p.stop ?? ''),
+      String(p.stops ?? ''), String(p.otp ?? '')],
+  },
+  delivery_credit: {
+    name: 'delivery_credit_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: sorry, your {{2}} on {{3}} could not be delivered. {{4}} meal(s) have been added back to your balance.',
+      hi: '{{1}}: माफ़ कीजिए, {{3}} का आपका {{2}} नहीं पहुँच सका। {{4}} खाना आपके बैलेंस में वापस जोड़ दिया गया है।',
+      or: '{{1}}: କ୍ଷମା କରିବେ, {{3}}ର ଆପଣଙ୍କ {{2}} ପହଞ୍ଚିପାରିଲା ନାହିଁ। {{4}}ଟି ଖାଇବା ଆପଣଙ୍କ ବାଲାନ୍ସରେ ଫେରାଇ ଦିଆଗଲା।',
+    },
+    params: (p, k) => [k, p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date), String(p.meals ?? 1)],
+  },
   // To the kitchen owner (English).
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',

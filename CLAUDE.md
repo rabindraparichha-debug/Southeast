@@ -119,6 +119,13 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Customer page:** `portal_*` RPCs are granted to anon and must start with `private.portal_customer(p_token)`.
 - **Inbox:** owner-only (D-060).
 
+**Rider mode (M5)**
+- Runs are built at lock by `private.build_runs()` (trigger on `count_snapshots`); it re-syncs only `planned` runs. Owners can rebuild with `plan_runs`.
+- The saved order lives in `route_stops`. Any reorder or move must write back there (`persist_run_order`), so the next day keeps it.
+- Rider actions go through `complete_stop` / `fail_stop` / `start_run` / `finish_run` with `p_at` (device time) and `p_client_op` (idempotency key). Never use `now()` for a rider's action time.
+- Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
+- The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -170,6 +177,8 @@ WhatsApp and AI Edge Function secrets (same file):
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+
+Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the built-in optimiser is used) and `VROOM_USE_ROUTING` (`true` only if the VROOM server has its own OSRM/ORS).
 
 Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
 

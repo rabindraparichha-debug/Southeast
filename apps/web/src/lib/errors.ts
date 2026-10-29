@@ -42,7 +42,30 @@ const MESSAGES: Record<string, string> = {
   invalid_message: 'Write a message of up to 1,000 characters.',
   invalid_link: 'This link has expired.',
   cancel_via_kitchen: 'Cancellations are handled by the kitchen.',
+  // Delivery (M5)
+  invalid_order: 'The stop list changed meanwhile. Refresh and try again.',
+  invalid_run: 'Stops can only move to another run of the same day and meal.',
+  run_closed: 'This run is finished, or the stop is already delivered. It cannot be changed.',
+  invalid_rider: 'Choose the owner or one of your riders.',
+  too_many_returned: 'That is more tiffins than this customer holds.',
+  stops_pending: 'Some stops are still pending. Deliver or mark them failed first.',
+  proof_required: 'Choose a proof: delivery code or photo.',
+  photo_required: 'Take a photo of the delivery.',
+  invalid_photo: 'This photo could not be used. Take it again.',
+  otp_locked: 'Too many wrong codes. Use a photo as proof instead.',
+  note_required: 'Please add a short note.',
 };
+
+// Codes whose meaning depends on the screen.
+const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
+  route: { already_exists: 'A route with this name already exists for this meal.' },
+};
+
+/** friendlyError with screen-specific wording for codes like already_exists. */
+export function friendlyErrorIn(context: keyof typeof CONTEXT_MESSAGES, error: { message?: string; code?: string } | null | undefined): string {
+  const msg = error?.message ?? '';
+  return CONTEXT_MESSAGES[context]?.[msg] ?? friendlyError(error);
+}
 
 export function friendlyError(error: { message?: string; code?: string } | null | undefined): string {
   if (!error) return '';

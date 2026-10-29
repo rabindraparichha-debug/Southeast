@@ -30,6 +30,7 @@ function RootStack() {
         <Stack.Screen name="customer/[id]" options={{ title: '' }} />
         <Stack.Screen name="sheet" options={{ title: '' }} />
         <Stack.Screen name="chat/[id]" options={{ title: '' }} />
+        <Stack.Screen name="stop/[id]" options={{ title: '' }} />
       </Stack.Protected>
     </Stack>
   );

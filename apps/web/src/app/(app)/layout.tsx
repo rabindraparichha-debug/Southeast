@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   if (role === 'owner' || role === 'staff') {
     items.push({ href: '/customers', label: 'Customers', icon: '👥' });
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
+    items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
     items.push({ href: '/menu', label: 'Menu', icon: '📅' });
   }
   if (role === 'owner') {

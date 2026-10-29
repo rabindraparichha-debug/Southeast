@@ -613,6 +613,253 @@ export type Database = {
           },
         ];
       };
+      delivery_routes: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          id: string;
+          kitchen_id: string;
+          name: string;
+          rider_id: string | null;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          kitchen_id: string;
+          name: string;
+          rider_id?: string | null;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          kitchen_id?: string;
+          name?: string;
+          rider_id?: string | null;
+          slot?: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'delivery_routes_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      delivery_runs: {
+        Row: {
+          created_at: string;
+          finished_at: string | null;
+          id: string;
+          kitchen_id: string;
+          last_lat: number | null;
+          last_lng: number | null;
+          last_seen_at: string | null;
+          planned_km: number | null;
+          rider_id: string | null;
+          route_id: string;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          started_at: string | null;
+          status: Database['public']['Enums']['run_status'];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          finished_at?: string | null;
+          id?: string;
+          kitchen_id: string;
+          last_lat?: number | null;
+          last_lng?: number | null;
+          last_seen_at?: string | null;
+          planned_km?: number | null;
+          rider_id?: string | null;
+          route_id: string;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          started_at?: string | null;
+          status?: Database['public']['Enums']['run_status'];
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          finished_at?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          last_lat?: number | null;
+          last_lng?: number | null;
+          last_seen_at?: string | null;
+          planned_km?: number | null;
+          rider_id?: string | null;
+          route_id?: string;
+          service_date?: string;
+          slot?: Database['public']['Enums']['meal_slot'];
+          started_at?: string | null;
+          status?: Database['public']['Enums']['run_status'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'delivery_runs_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'delivery_runs_route_id_kitchen_id_slot_fkey';
+            columns: ['route_id', 'kitchen_id', 'slot'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_routes';
+            referencedColumns: ['id', 'kitchen_id', 'slot'];
+          },
+        ];
+      };
+      delivery_stops: {
+        Row: {
+          address_id: string | null;
+          cash_payment_id: string | null;
+          client_op_id: string | null;
+          created_at: string;
+          credit_entry_id: string | null;
+          customer_id: string;
+          device_at: string | null;
+          done_at: string | null;
+          done_by: string | null;
+          failed_note: string | null;
+          failed_reason: Database['public']['Enums']['fail_reason'] | null;
+          gps_accuracy_m: number | null;
+          gps_distance_m: number | null;
+          gps_lat: number | null;
+          gps_lng: number | null;
+          id: string;
+          kitchen_fault: boolean | null;
+          kitchen_id: string;
+          meal_count: number;
+          offline: boolean;
+          otp: string | null;
+          otp_attempts: number;
+          otp_ok: boolean | null;
+          photo_path: string | null;
+          proof_type: Database['public']['Enums']['proof_type'] | null;
+          run_id: string;
+          seq: number;
+          status: Database['public']['Enums']['stop_status'];
+          synced_at: string | null;
+          tiffins_out: number;
+          tiffins_returned: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          address_id?: string | null;
+          cash_payment_id?: string | null;
+          client_op_id?: string | null;
+          created_at?: string;
+          credit_entry_id?: string | null;
+          customer_id: string;
+          device_at?: string | null;
+          done_at?: string | null;
+          done_by?: string | null;
+          failed_note?: string | null;
+          failed_reason?: Database['public']['Enums']['fail_reason'] | null;
+          gps_accuracy_m?: number | null;
+          gps_distance_m?: number | null;
+          gps_lat?: number | null;
+          gps_lng?: number | null;
+          id?: string;
+          kitchen_fault?: boolean | null;
+          kitchen_id: string;
+          meal_count: number;
+          offline?: boolean;
+          otp?: string | null;
+          otp_attempts?: number;
+          otp_ok?: boolean | null;
+          photo_path?: string | null;
+          proof_type?: Database['public']['Enums']['proof_type'] | null;
+          run_id: string;
+          seq: number;
+          status?: Database['public']['Enums']['stop_status'];
+          synced_at?: string | null;
+          tiffins_out?: number;
+          tiffins_returned?: number;
+          updated_at?: string;
+        };
+        Update: {
+          address_id?: string | null;
+          cash_payment_id?: string | null;
+          client_op_id?: string | null;
+          created_at?: string;
+          credit_entry_id?: string | null;
+          customer_id?: string;
+          device_at?: string | null;
+          done_at?: string | null;
+          done_by?: string | null;
+          failed_note?: string | null;
+          failed_reason?: Database['public']['Enums']['fail_reason'] | null;
+          gps_accuracy_m?: number | null;
+          gps_distance_m?: number | null;
+          gps_lat?: number | null;
+          gps_lng?: number | null;
+          id?: string;
+          kitchen_fault?: boolean | null;
+          kitchen_id?: string;
+          meal_count?: number;
+          offline?: boolean;
+          otp?: string | null;
+          otp_attempts?: number;
+          otp_ok?: boolean | null;
+          photo_path?: string | null;
+          proof_type?: Database['public']['Enums']['proof_type'] | null;
+          run_id?: string;
+          seq?: number;
+          status?: Database['public']['Enums']['stop_status'];
+          synced_at?: string | null;
+          tiffins_out?: number;
+          tiffins_returned?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'delivery_stops_address_id_kitchen_id_fkey';
+            columns: ['address_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'addresses';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'delivery_stops_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'delivery_stops_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'delivery_stops_run_id_kitchen_id_fkey';
+            columns: ['run_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_runs';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       import_batches: {
         Row: {
           created_at: string;
@@ -874,6 +1121,7 @@ export type Database = {
           skip_reason: string | null;
           slot: Database['public']['Enums']['meal_slot'];
           status: Database['public']['Enums']['order_status'];
+          stop_id: string | null;
           stop_seq: number | null;
           subscription_id: string;
           updated_at: string;
@@ -897,6 +1145,7 @@ export type Database = {
           skip_reason?: string | null;
           slot: Database['public']['Enums']['meal_slot'];
           status?: Database['public']['Enums']['order_status'];
+          stop_id?: string | null;
           stop_seq?: number | null;
           subscription_id: string;
           updated_at?: string;
@@ -919,6 +1168,7 @@ export type Database = {
           skip_reason?: string | null;
           slot?: Database['public']['Enums']['meal_slot'];
           status?: Database['public']['Enums']['order_status'];
+          stop_id?: string | null;
           stop_seq?: number | null;
           subscription_id?: string;
           updated_at?: string;
@@ -957,6 +1207,20 @@ export type Database = {
             columns: ['plan_id', 'kitchen_id'];
             isOneToOne: false;
             referencedRelation: 'plans';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'meal_orders_run_fk';
+            columns: ['run_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_runs';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'meal_orders_stop_fk';
+            columns: ['stop_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_stops';
             referencedColumns: ['id', 'kitchen_id'];
           },
           {
@@ -1481,6 +1745,55 @@ export type Database = {
           },
         ];
       };
+      route_stops: {
+        Row: {
+          address_id: string;
+          id: string;
+          kitchen_id: string;
+          pinned: boolean;
+          route_id: string;
+          seq: number;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          address_id: string;
+          id?: string;
+          kitchen_id: string;
+          pinned?: boolean;
+          route_id: string;
+          seq: number;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Update: {
+          address_id?: string;
+          id?: string;
+          kitchen_id?: string;
+          pinned?: boolean;
+          route_id?: string;
+          seq?: number;
+          slot?: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'route_stops_address_id_kitchen_id_fkey';
+            columns: ['address_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'addresses';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'route_stops_route_id_kitchen_id_slot_fkey';
+            columns: ['route_id', 'kitchen_id', 'slot'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_routes';
+            referencedColumns: ['id', 'kitchen_id', 'slot'];
+          },
+        ];
+      };
       schedule_changes: {
         Row: {
           address_id: string | null;
@@ -1678,6 +1991,65 @@ export type Database = {
           },
         ];
       };
+      tiffin_ledger: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          customer_id: string;
+          id: string;
+          kitchen_id: string;
+          note: string | null;
+          stop_id: string | null;
+          tiffins_out: number;
+          tiffins_returned: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          customer_id: string;
+          id?: string;
+          kitchen_id: string;
+          note?: string | null;
+          stop_id?: string | null;
+          tiffins_out?: number;
+          tiffins_returned?: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          customer_id?: string;
+          id?: string;
+          kitchen_id?: string;
+          note?: string | null;
+          stop_id?: string | null;
+          tiffins_out?: number;
+          tiffins_returned?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'tiffin_ledger_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'tiffin_ledger_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'tiffin_ledger_stop_id_kitchen_id_fkey';
+            columns: ['stop_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_stops';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       webhook_events: {
         Row: {
           event_id: string;
@@ -1785,6 +2157,7 @@ export type Database = {
         };
         Returns: string;
       };
+      assign_run: { Args: { p_rider?: string; p_run: string }; Returns: undefined };
       attach_payment_link: {
         Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
         Returns: undefined;
@@ -1808,6 +2181,24 @@ export type Database = {
       };
       claim_invites: { Args: Record<PropertyKey, never>; Returns: number };
       close_conversation: { Args: { p_conversation: string }; Returns: undefined };
+      complete_stop: {
+        Args: {
+          p_accuracy?: number;
+          p_at?: string;
+          p_cash_paise?: number;
+          p_client_op?: string;
+          p_lat?: number;
+          p_lng?: number;
+          p_offline?: boolean;
+          p_otp?: string;
+          p_photo_path?: string;
+          p_proof: Database['public']['Enums']['proof_type'];
+          p_stop: string;
+          p_tiffins_out?: number;
+          p_tiffins_returned?: number;
+        };
+        Returns: Json;
+      };
       confirm_payment: { Args: { p_meals?: number; p_payment: string }; Returns: undefined };
       create_customer: {
         Args: {
@@ -1868,6 +2259,15 @@ export type Database = {
         Args: { p_customer: string; p_description?: string; p_meals: number };
         Returns: Json;
       };
+      create_route: {
+        Args: {
+          p_kitchen: string;
+          p_name: string;
+          p_rider?: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: string;
+      };
       customer_page_link: { Args: { p_customer: string }; Returns: string };
       customer_phone: { Args: { p_customer: string }; Returns: string };
       dues_list: {
@@ -1881,6 +2281,21 @@ export type Database = {
         }[];
       };
       erase_customer: { Args: { p_customer: string }; Returns: undefined };
+      fail_stop: {
+        Args: {
+          p_at?: string;
+          p_client_op?: string;
+          p_lat?: number;
+          p_lng?: number;
+          p_note?: string;
+          p_offline?: boolean;
+          p_reason: Database['public']['Enums']['fail_reason'];
+          p_stop: string;
+          p_tiffins_returned?: number;
+        };
+        Returns: Json;
+      };
+      finish_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
       import_customers: {
         Args: { p_consent: boolean; p_file_name?: string; p_kitchen: string; p_rows: Json };
         Returns: Json;
@@ -1891,6 +2306,14 @@ export type Database = {
           p_kitchen: string;
           p_phone: string;
           p_role: Database['public']['Enums']['member_role'];
+        };
+        Returns: Json;
+      };
+      live_board: {
+        Args: {
+          p_date: string;
+          p_kitchen: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
         };
         Returns: Json;
       };
@@ -1908,6 +2331,8 @@ export type Database = {
         Returns: undefined;
       };
       money_report: { Args: { p_from: string; p_kitchen: string; p_to: string }; Returns: Json };
+      move_stop: { Args: { p_run: string; p_stop: string }; Returns: undefined };
+      optimize_route: { Args: { p_route: string }; Returns: Json };
       packing_list: {
         Args: {
           p_date: string;
@@ -1929,6 +2354,14 @@ export type Database = {
           status: Database['public']['Enums']['order_status'];
           stop_seq: number;
         }[];
+      };
+      plan_runs: {
+        Args: {
+          p_date: string;
+          p_kitchen: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: number;
       };
       portal_add_address: {
         Args: {
@@ -1981,6 +2414,10 @@ export type Database = {
         };
         Returns: string;
       };
+      record_tiffins: {
+        Args: { p_customer: string; p_note?: string; p_out: number; p_returned: number };
+        Returns: string;
+      };
       refund_for_gateway: { Args: { p_refund: string }; Returns: Json };
       refund_unused_meals: {
         Args: { p_customer: string; p_meals?: number; p_reason?: string };
@@ -1988,6 +2425,7 @@ export type Database = {
       };
       reject_payment: { Args: { p_payment: string; p_reason: string }; Returns: undefined };
       remove_member: { Args: { p_member: string }; Returns: undefined };
+      reorder_run: { Args: { p_run: string; p_stop_ids: string[] }; Returns: undefined };
       request_schedule_change: {
         Args: {
           p_address?: string;
@@ -2008,6 +2446,28 @@ export type Database = {
       };
       reveal_customer_phone: { Args: { p_customer: string }; Returns: string };
       revoke_invite: { Args: { p_invite: string }; Returns: undefined };
+      rider_call_number: { Args: { p_stop: string }; Returns: string };
+      rider_ping: { Args: { p_lat: number; p_lng: number; p_run: string }; Returns: undefined };
+      rider_stats: {
+        Args: { p_kitchen: string; p_month: string };
+        Returns: {
+          cash_collected_paise: number;
+          days: number;
+          km: number;
+          proof_rate: number;
+          rider_id: string;
+          rider_name: string;
+          shifts: number;
+          stops_delivered: number;
+          stops_failed: number;
+        }[];
+      };
+      rider_today: { Args: Record<PropertyKey, never>; Returns: Json };
+      route_points: { Args: { p_route: string }; Returns: Json };
+      save_route_order: {
+        Args: { p_address_ids: string[]; p_pinned?: boolean; p_route: string };
+        Returns: undefined;
+      };
       search_customers: {
         Args: { p_kitchen: string; p_limit?: number; p_q: string };
         Returns: {
@@ -2062,8 +2522,30 @@ export type Database = {
         };
         Returns: Json;
       };
+      start_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
+      tiffin_balances: {
+        Args: { p_kitchen: string };
+        Returns: {
+          area: string;
+          customer_id: string;
+          customer_name: string;
+          last_out_at: string;
+          outstanding: number;
+          overdue: boolean;
+        }[];
+      };
       unused_meals_value: { Args: { p_customer: string }; Returns: Json };
       update_customer: { Args: { p_customer: string; p_patch: Json }; Returns: undefined };
+      update_route: {
+        Args: {
+          p_active?: boolean;
+          p_clear_rider?: boolean;
+          p_name?: string;
+          p_rider?: string;
+          p_route: string;
+        };
+        Returns: undefined;
+      };
       wa_add_location_address: {
         Args: { p_conversation: string; p_label?: string; p_lat: number; p_lng: number };
         Returns: string;
@@ -2167,6 +2649,16 @@ export type Database = {
       change_type: 'skip' | 'pause' | 'resume' | 'address' | 'cancel';
       customer_source: 'vendor' | 'import' | 'whatsapp' | 'web' | 'platform';
       diet_type: 'veg' | 'nonveg' | 'jain';
+      fail_reason:
+        | 'not_home'
+        | 'wrong_address'
+        | 'refused'
+        | 'unreachable'
+        | 'kitchen_late'
+        | 'food_issue'
+        | 'missing_meal'
+        | 'rider_issue'
+        | 'other';
       kitchen_status: 'draft' | 'active' | 'suspended';
       language_code: 'en' | 'or' | 'hi';
       meal_slot: 'lunch' | 'dinner';
@@ -2177,8 +2669,11 @@ export type Database = {
         'razorpay_link' | 'razorpay_autopay' | 'cash' | 'upi_manual' | 'bank_transfer';
       payment_status:
         'created' | 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled' | 'review';
+      proof_type: 'otp' | 'photo' | 'none';
       refund_method: 'razorpay' | 'cash' | 'upi_manual' | 'bank_transfer';
       refund_status: 'pending' | 'processing' | 'processed' | 'failed';
+      run_status: 'planned' | 'out' | 'done';
+      stop_status: 'pending' | 'delivered' | 'failed';
       subscription_status:
         'trial' | 'active' | 'paused' | 'low_balance' | 'suspended' | 'cancelled';
     };
@@ -2297,6 +2792,17 @@ export const Constants = {
       change_type: ['skip', 'pause', 'resume', 'address', 'cancel'],
       customer_source: ['vendor', 'import', 'whatsapp', 'web', 'platform'],
       diet_type: ['veg', 'nonveg', 'jain'],
+      fail_reason: [
+        'not_home',
+        'wrong_address',
+        'refused',
+        'unreachable',
+        'kitchen_late',
+        'food_issue',
+        'missing_meal',
+        'rider_issue',
+        'other',
+      ],
       kitchen_status: ['draft', 'active', 'suspended'],
       language_code: ['en', 'or', 'hi'],
       meal_slot: ['lunch', 'dinner'],
@@ -2304,8 +2810,11 @@ export const Constants = {
       order_status: ['scheduled', 'locked', 'prepared', 'out', 'delivered', 'failed', 'skipped'],
       payment_method: ['razorpay_link', 'razorpay_autopay', 'cash', 'upi_manual', 'bank_transfer'],
       payment_status: ['created', 'pending', 'paid', 'failed', 'expired', 'cancelled', 'review'],
+      proof_type: ['otp', 'photo', 'none'],
       refund_method: ['razorpay', 'cash', 'upi_manual', 'bank_transfer'],
       refund_status: ['pending', 'processing', 'processed', 'failed'],
+      run_status: ['planned', 'out', 'done'],
+      stop_status: ['pending', 'delivered', 'failed'],
       subscription_status: ['trial', 'active', 'paused', 'low_balance', 'suspended', 'cancelled'],
     },
   },

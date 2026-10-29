@@ -24,6 +24,12 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-058 | AI fallback model and when it runs | ⏳ PENDING | M4 |
 | D-060 | Inbox is owner-only (staff excluded) | ⏳ PENDING | M4 |
 | D-059, D-061 – D-066 | WhatsApp defaults (M4) | Decided | — |
+| D-067 | Route optimiser: built-in, VROOM optional | ⏳ PENDING (VPS) | M5 |
+| D-068 | No maps API key needed yet | ⏳ PENDING | M5, M7 |
+| D-069 | Rider calls: reveal on tap, logged (no virtual numbers) | ⏳ PENDING | M5 |
+| D-070 | Delivery code in the "on the way" message | ⏳ PENDING (Meta category) | M5 |
+| D-071 – D-076 | Rider-mode defaults (M5) | Decided | — |
+| D-077 | Build through all milestones without stopping | Your instruction | M5+ |
 
 ---
 
@@ -379,3 +385,60 @@ Still deferred (see D-038).
 - `notifications_outbox` is drained by the `whatsapp-outbox` Edge Function. pg_cron starts it every minute through `pg_net`, using the Vault secrets `functions_base_url` and `service_role_key`; the inbox also starts it right after a reply.
 - Failed sends retry with exponential backoff for up to 5 attempts.
 - Messages to customers are logged in their conversation.
+
+---
+
+## Rider mode (M5)
+
+### D-067 Route optimisation ⏳ PENDING (VROOM hosting)
+- **Always available:** a built-in optimiser in Postgres (`private.tsp_order`: nearest neighbour, then 2-opt until no move improves). It runs in milliseconds for a kitchen's stops, needs no server, and is what the acceptance test checks.
+- **VROOM (optional):** set `VROOM_URL` (Edge Function secret). "Optimise" on a route then asks VROOM and saves its order. By default we send VROOM a travel-time matrix computed from straight-line distances, so VROOM needs no OSRM road-routing server (heavy: it needs the Odisha road map). With `VROOM_USE_ROUTING=true` VROOM gets coordinates and uses its own router. If VROOM fails or times out, the built-in optimiser is used.
+- **Not tested against a real VROOM server**: the image couldn't be pulled in this sandbox.
+- **Your call:** run VROOM (plus OSRM if you want road distances) on your VPS now, or stay on the built-in optimiser for the pilot? With 10–80 stops in 3 km the difference is small.
+
+### D-068 Maps and geocoding ⏳ PENDING
+- v1 needs no maps API key. Locations come from the vendor's map pin (Leaflet + OpenStreetMap) and WhatsApp location shares; distances are computed from coordinates.
+- Navigation opens Google Maps with a directions link (`travelmode=two-wheeler`), which needs no key.
+- An Ola Maps or Google key is only needed for typed-address search (geocoding), useful for lead intake (M7). OSM tiles are fine for low traffic; a production tile provider is D-013.
+
+### D-069 Rider calls ⏳ PENDING
+- The rider sees `XXXXXX1234`. Tapping Call fetches the real number only for their own pending stop on a run that is out (today), writes an `ACCESS` row to `audit_log`, and opens the dialer, so the number is visible in the phone's call log.
+- True masking (a virtual number that bridges the call) needs a telephony provider such as Exotel or Knowlarity, which costs per minute.
+- **Your call:** is reveal-on-tap acceptable for the pilot?
+
+### D-070 Proof of delivery ⏳ PENDING (Meta category)
+- Starting a run sends each customer `on_the_way_v1` with a 4-digit code. The rider types the code to deliver; wrong codes online are rejected (5 tries, then photo).
+- Customers who haven't opted in to WhatsApp get no code, so the rider takes a photo (stored in the private `proofs` bucket, readable by the owner). "Deliver without proof" exists but lowers the proof rate (goal: 90% of stops proved).
+- Offline, the code can't be checked on the phone (the phone never holds it); it is recorded and checked at sync, and a wrong one is flagged for the owner.
+- **Meta:** a template carrying a code might be re-categorised as "authentication". Check when submitting.
+
+### D-071 Failed deliveries
+- Customer-side reasons (not home, wrong address, refused, phone unreachable) keep the meal charged.
+- Kitchen-side reasons (food late, food problem, meal missing, vehicle or rider problem; the vendor's riders are the vendor's responsibility) post a `credit` balance entry for the meals at the price they were charged, and the customer gets `delivery_credit_v1`.
+- "Other" needs a note and gives no automatic credit; the owner can credit by hand.
+- Meals skipped after the cutoff stay charged but aren't delivered (the customer said no).
+
+### D-072 Offline timestamps
+- Every rider action carries the time it was tapped and a client id. The server keeps the device time, clamped between the day before the service date and the server's "now"; a clamped raw time is kept in `device_at`.
+- The same client id sent twice counts once. If two actions hit one stop, the first one wins and the second is reported back as a conflict.
+- The queue lives in the phone's storage, so it survives the app being closed. Logging out is blocked while actions are waiting.
+
+### D-073 How runs are built
+- At each slot lock, deliverable orders become one run per route, one stop per customer address.
+- A kitchen starts with "Route 1" (its only rider is assigned automatically). Owners or staff can add routes and move stops between them.
+- The first build of a route is fully optimised. After that, new addresses are slotted in at the cheapest place and the saved order is kept.
+- Drag reorders and moves are written back to the saved route, so the next day's run keeps them.
+
+### D-074 Who delivers
+- Riders, and owners (many home cooks deliver themselves: owners get a "Deliver" tab).
+- Staff can't be assigned as riders. An owner can change a staff member's role to rider in Team.
+
+### D-075 Rider pay stats
+- Shifts = finished runs; km = the run's planned km (straight-line × 1.3), not a GPS odometer; plus stops delivered/failed, proof rate and cash collected.
+
+### D-076 Tiffins
+- Each delivery records tiffins given and empties taken back (`tiffin_ledger`, append-only). A customer holding 2 or more with nothing returned for 2 days is flagged as overdue.
+
+### D-077 Building without stopping
+- Your instruction during M5: "continue till the all finish also complete automate about getting the new customers and food vendor in parallel as well". So I'm building M5 → M8 without pausing for review between milestones, and adding automated acquisition of both new customers and new vendors (lead intake and matching, vendor sign-up and onboarding).
+- I still commit and push each milestone separately with its tests, and log every default here.
