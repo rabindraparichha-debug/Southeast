@@ -90,6 +90,13 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Ledgers are append-only:** `audit_log` now; `balance_entries` and `stock_moves` later. Use triggers raising on UPDATE/DELETE. Never store a balance or stock number.
 - **Audit:** attach `private.audit_row()` to every table with money, count, membership or customer data.
 
+**Daily engine (M2)**
+- `meal_orders` for the next 7 days are reconciled by `private.refresh_orders()`. It never edits a frozen (date, slot): one whose cutoff has passed or that has a `count_snapshots` row.
+- Customer requests go through `private.apply_change()`; the vendor RPC is `request_schedule_change(..., p_dry_run)`. Always preview first in the UI.
+- Counted order = `status <> 'skipped' or charged`. The lock (`private.lock_slot`) is idempotent. Never add a second path that posts `meal` entries.
+- Use `private.now()` / `private.ist_today()` in SQL, never `now()`, so tests can set `app.now`.
+- pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST).
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).

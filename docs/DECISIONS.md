@@ -12,6 +12,10 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-006 | Vendor app languages | ⏳ PENDING | M1+ |
 | D-007 | Slots: lunch and dinner only | ⏳ PENDING | M2 |
 | D-008 – D-028 | Technical defaults | Decided | — |
+| D-031 | Phone-close rule: late vendor-entered changes are charged | ⏳ PENDING | M2 |
+| D-033 | Trial subscriptions get no meals | ⏳ PENDING | M2, M7 |
+| D-035 | Cancellation defaults to today + notice days | ⏳ PENDING | M2, M3 |
+| D-029 – D-042 | Daily-engine defaults (M2) | Decided | — |
 
 ---
 
@@ -166,3 +170,55 @@ New subscriptions start as `trial` or `active` only (enforced by a trigger). Eve
 
 ### D-028 Mobile session storage
 Supabase session tokens are kept in AsyncStorage, as Supabase's React Native guide recommends. Moving the refresh token to SecureStore can be reconsidered in the M8 security review.
+
+---
+
+## Daily engine (M2)
+
+### D-029 Balance-driven statuses wait for M3
+- The lock posts one `meal` entry per counted order from day one, so the ledger is right from the start.
+- *Active → Low balance → Suspended* only makes sense once recharges exist, so those transitions arrive in M3. Until then balances can go negative and nobody is auto-suspended.
+- The seed gives active customers an opening balance of 40 meals (`adjust` entries).
+
+### D-030 What "late = charged" means
+- A skip or pause that lands after the meal's cutoff is accepted. The meal stays in the locked count and its `meal` entry is posted (charged). It's marked `skipped` + `charged`, so the packing list shows "don't deliver".
+- A meal that was already skipped on time is never charged by a later request.
+- A late address change is still applied to meals that haven't left the kitchen, with no charge.
+
+### D-031 Phone-close rule ⏳ PENDING (policy)
+- The spec says "phone pauses close at 7 pm, WhatsApp stays open until cutoff". Implementation:
+  - Changes the vendor enters (`channel = vendor`) count as late once it's past `kitchen_settings.phone_pause_close_time` (default 19:00) on the evening before service, or past the slot cutoff if that's earlier.
+  - WhatsApp and web changes use the slot cutoff.
+- The vendor sees the charge in the preview and can **waive** it, but only while the slot itself is still open. Once the count is frozen, a late change is always charged. Waivers are recorded (`late_waived`).
+- **Your call:** charge or waive by default? Should the rule also apply to dinner (it currently closes 7 pm the evening before)?
+
+### D-032 Resume semantics
+A resume ends every skip or pause requested before it that had already started by the resume date, for dates on or after the resume date. A future skip (for a date after the resume date) stays.
+
+### D-033 Trial subscriptions ⏳ PENDING
+Following the spec literally, meals are generated only for Active and Low balance (and Paused, for the days after the pause). A **trial gets no meals** until it becomes Active (payment, M3/M7). If pilot vendors run free or cash trials, I can generate meals for trials too.
+
+### D-034 Paused status
+- A subscription is `paused` while a pause covers today (all its meals). The nightly job flips it to paused and back to active.
+- A pause that starts in the future leaves the status `active`; its days just come out as skipped.
+
+### D-035 Cancellation ⏳ PENDING
+- **Default:** cancellation takes effect today + `notice_days` (default 1). The owner can pick an earlier date.
+- `end_date` is set to the day before the effective date, and the nightly job sets `cancelled` once it passes. A cancellation effective today cancels immediately; meals already frozen stay.
+- The pro-rata refund comes with M3.
+
+### D-036 Production sheet delivery
+- **Now:** the web `/sheet` page (print to PDF from the browser) and the mobile packing list.
+- **M4:** the WhatsApp image/PDF and the owner's 22:00 summary. Both are already queued in `notifications_outbox` with dedupe keys, so the worker sends each once.
+- The "one push at cutoff" needs `expo-notifications` and an EAS project ID (M4).
+
+### D-037 to D-042 Engine mechanics
+- **D-037 Stock:** stock deduction at lock is an M6 hook (no recipes yet).
+- **D-038 Add-ons:** add-ons in counts arrive with priced add-ons in M3.
+- **D-039 Test clock:** `private.now()` honours a simulated clock (`app.now`) only for direct `postgres` sessions (tests, seed). API roles always get the real time.
+- **D-040 Empty slots:** every slot past its cutoff gets a snapshot, even with zero meals. That keeps "locked" visible and the lock idempotent.
+- **D-041 Audit of the ledger:** `balance_entries` rows aren't copied into `audit_log` one by one. The ledger is immutable and carries `created_by` and `ref`. Changes, snapshots and menus are audited.
+- **D-042 Generation:**
+  - Orders cover 7 days ahead.
+  - They're created immediately when a subscription, plan or kitchen schedule changes (triggers), plus nightly at 00:30 IST.
+  - Reconciliation never touches a frozen (date, slot).

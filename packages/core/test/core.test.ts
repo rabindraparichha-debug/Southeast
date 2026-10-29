@@ -6,6 +6,8 @@ import {
   formatPaise,
   formatPhone,
   formatTime12h,
+  formatIstShort,
+  formatServiceDate,
   guessMapping,
   istDate,
   isoDow,
@@ -73,6 +75,10 @@ describe('IST time helpers', () => {
     expect(formatTime12h('21:00:00')).toBe('9:00 pm');
     expect(formatTime12h('12:00')).toBe('12:00 pm');
     expect(formatTime12h('00:30')).toBe('12:30 am');
+  });
+  it('formats service dates and IST instants for the counts screens', () => {
+    expect(formatServiceDate('2026-11-03')).toBe('Tue, 3 Nov');
+    expect(formatIstShort('2026-11-02T15:30:00Z')).toBe('Mon, 9:00 pm');
   });
 });
 

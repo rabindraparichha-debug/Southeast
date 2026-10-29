@@ -22,16 +22,35 @@ Known gaps carried forward:
 - Web dashboard strings aren't on translation keys yet (D-006).
 - Production OTP channel and production map tiles aren't set up (D-004, D-013).
 
-### M2: Daily engine ⬜ (needs D-002 and D-007 answered)
+### M2: Daily engine ✅ (built 2026-10-29, waiting for your test pass)
 
-| Pkg | Scope | Status |
-|---|---|---|
-| 1.4 | Generation, skip, pause, resume, cancel, cutoffs, lock (pg_cron, idempotent) | ⬜ |
-| 1.5 | Production sheet, packing list, owner's 10 pm summary | ⬜ |
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 1.4 | Generation, skip, pause, resume, cancel, cutoffs, lock (pg_cron, idempotent) | ✅ | `supabase/migrations/20261029000100_daily_engine.sql` |
+| 1.5 | Production sheet, packing list, owner's 10 pm summary | 🟡 | Web `/sheet` (printable) and mobile packing list ✅. The 22:00 summary and production sheet are **queued** in `notifications_outbox`; WhatsApp delivery comes in M4 |
 
-Tests: 20 customers, 3 skips before cutoff and 1 after → locked count 17, late skip marked charged. Running the lock job twice duplicates nothing.
+Acceptance tests:
+- ✅ **20 customers, 3 skips before cutoff and 1 after → locked count 17, late skip marked charged.** Covered by `supabase/tests/03_daily_engine.test.sql` (simulated clock).
+- ✅ **Running the lock job twice duplicates nothing** (snapshot, meal entries, production-sheet message). Same file.
+- Also covered:
+  - the phone-close rule and waiver;
+  - pause → paused → resume → active, with every transition logged;
+  - weekly off;
+  - temporary address change;
+  - cancel with notice;
+  - permissions for staff, other kitchens and anon;
+  - append-only ledgers;
+  - `tests/integration/m2.test.ts` over the API.
+- Scale probe: 5,000 subscriptions across 50 kitchens. Nightly generation (60,000 orders) takes 3.1 s; locking 3 slots (15,000 meal entries) takes 1.0 s.
 
-### M3: Money ⬜ (needs D-002 and D-003)
+Known gaps carried forward:
+- Low-balance and suspended transitions need recharges (M3). Until then balances can go negative and nobody is auto-suspended (D-029).
+- Ingredient deduction at lock needs recipes (M6); the hook point is in `lock_slot`.
+- Add-ons in counts come with priced add-ons (M3).
+- WhatsApp image/PDF of the sheet and the 10 pm summary are delivered in M4. The push notification at cutoff needs expo-notifications plus an EAS project (M4).
+- Trial subscriptions generate no meals, as the spec says (D-033).
+
+### M3: Money ⬜ (needs D-002 and D-003; ledger table and meal entries already exist)
 
 | Pkg | Scope | Status |
 |---|---|---|
