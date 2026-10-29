@@ -2,12 +2,14 @@
 // and after vendor actions. Free-form inside the 24h window; approved templates outside it, and
 // only to customers who opted in.
 import { corsHeaders, json, rpc as callRpc } from '../_shared/http.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, previewOf, sendWhatsApp } from '../_shared/whatsapp.ts';
 import { renderOutbox } from '../_shared/templates.ts';
 import type { Lang } from '../_shared/bot-i18n.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
 type Row = {
   id: string; template: string; payload: Record<string, unknown>; recipient_type: string; phone_e164: string | null;
@@ -52,6 +54,7 @@ Deno.serve(async (req) => {
         counts.sent++;
       } catch (e) {
         await complete(false, null, String((e as Error).message).slice(0, 500), null);
+        await reportError(monitor, e, { fn: 'whatsapp-outbox', tags: { template: r.template } });
         counts.failed++;
       }
     }

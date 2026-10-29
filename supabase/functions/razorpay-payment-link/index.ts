@@ -1,9 +1,11 @@
 // Creates a Razorpay Payment Link for N meals, routed to the kitchen's linked account.
 // Called by the signed-in owner (web or mobile) via supabase.functions.invoke.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -47,6 +49,7 @@ Deno.serve(async (req) => {
     return json({ payment_id: rec.payment_id, amount_paise: rec.amount_paise, meals: rec.meals, short_url: link.shortUrl, mode: cfg.mode });
   } catch (e) {
     console.error('payment link failed', e);
+    await reportError(monitor, e, { fn: 'razorpay-payment-link' });
     return json({ error: 'gateway_error' }, 502);
   }
 });

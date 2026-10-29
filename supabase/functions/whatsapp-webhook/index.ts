@@ -1,5 +1,6 @@
 // WhatsApp Cloud API webhook (verify_jwt = false: Meta authenticates with X-Hub-Signature-256).
 import { handleWhatsAppWebhook } from './handler.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, sendWhatsApp } from '../_shared/whatsapp.ts';
 import { createPaymentLink, loadConfig as loadRazorpay } from '../_shared/razorpay.ts';
 import { AI_OUTPUT_SCHEMA, type AiResult, type Complete } from '../_shared/ai.ts';
@@ -42,11 +43,14 @@ if (env('ANTHROPIC_API_KEY')) {
   };
 }
 
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
+
 Deno.serve(async (req) => {
   const cfg = loadWaConfig(env);
   return handleWhatsAppWebhook(req, {
     cfg,
     rpc,
+    report: (e, code) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code } }),
     send: (to, out) => sendWhatsApp(cfg, to, out),
     createLink: async (record) => {
       const link = await createPaymentLink(loadRazorpay(env), {

@@ -2,7 +2,9 @@
   "name": "tiffin-platform",
   "private": true,
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -15,7 +17,10 @@
     "db:test": "supabase test db",
     "db:types": "supabase gen types typescript --local --schema public > packages/db/src/types.ts && prettier --write packages/db/src/types.ts",
     "test:integration": "pnpm --filter @tiffin/integration-tests test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:backup": "scripts/backup.sh",
+    "db:restore-drill": "scripts/restore-drill.sh",
+    "db:loadtest": "docker exec -i supabase_db_tiffin psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/perf/lock_load.sql"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
@@ -24,6 +29,11 @@
     "typescript": "^5.6.3"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["supabase", "esbuild", "sharp", "unrs-resolver"]
+    "onlyBuiltDependencies": [
+      "supabase",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

@@ -44,7 +44,8 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 
 | Name | Category | Body | Parameters |
 |---|---|---|---|
-| `owner_summary_v1` | Utility | `{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}.` | kitchen, date, lunch, dinner, collections |
+| `owner_summary_v1` | Utility | `{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}. Low stock: {{6}}.` | kitchen, date, lunch, dinner, collections, low-stock items |
+| `stock_alert_v1` | Utility | `{{1}} stock alert: {{2}}. Details are in the app.` | kitchen, alert ("Toor dal is low: 4 kg left (minimum 5 kg)", "Toor dal price up 25% (₹120 → ₹150 per kg)", "stock-take found Toor dal short by 1 kg (Spilled)") |
 | `production_sheet_v1` | Utility | `{{1}} final count for {{2}} {{3}}: {{4}} meals (veg {{5}}, non-veg {{6}}, Jain {{7}}). Packing list is in the app.` | kitchen, date, slot, total, veg, non-veg, Jain |
 | `new_platform_customer_v1` | Utility | `{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.` | kitchen, customer, area, plan, trial meals |
 | `inbox_alert_v1` | Utility | `{{1}}: {{2}} needs a reply in your inbox ({{3}}).` | kitchen, customer, reason |

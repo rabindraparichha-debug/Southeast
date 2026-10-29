@@ -34,6 +34,11 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-079 | Paid trial: per-kitchen trial meals at plan price | ⏳ PENDING | M7 |
 | D-081 | WhatsApp leads count as opted in for follow-ups | ⏳ PENDING | M7 |
 | D-080, D-082 – D-086 | Acquisition defaults (M7) | Decided | — |
+| D-087 | Staff can record supplier bills but not see dues or costs | ⏳ PENDING | M6 |
+| D-088 – D-091 | Inventory defaults (M6) | Decided | — |
+| D-092 | Monitoring without vendor SDKs (Sentry envelopes, optional PostHog) | Decided | M8 |
+| D-093 | Backups: Supabase backups + portable dump + monthly restore drill | Decided | M8 |
+| D-094 | Play Store via EAS, internal track first | ⏳ PENDING (accounts) | M8 |
 
 ---
 
@@ -501,3 +506,47 @@ Still deferred (see D-038).
 
 ### D-086 Funnel log
 - `lead_events` (append-only) records created, enquiry, qualified, matched/waitlist, chose_kitchen, trial_paid, trial_followup, reminded, converted, renewed, status changes and phone reveals. Bot answers are not events.
+
+---
+
+## Inventory (M6)
+
+### D-087 Who does what in inventory ⏳ PENDING
+- **Owner and staff:** items, recipes, supplier bills (quantities and bill amounts), wastage, stock-takes, the production plan, alerts.
+- **Owner only:** paying suppliers and supplier dues, stock adjustments outside a stock-take, cost per meal and margins, stock value.
+- **Riders:** nothing.
+- **Your call:** the spec says staff handle "inventory only, no money". I treated supplier bill amounts as kitchen costs staff may enter (they usually do the shopping), but kept dues, payments and margins from them. Should staff enter bill amounts at all?
+
+### D-088 Units and recipes
+- Each item has one stock unit (kg, g, l, ml or pc), and every quantity of it is stored in that unit. Forms accept any unit of the same kind and convert ("30 g" of dal stocked in kg → 0.03 kg).
+- A dish lists which diets it serves; at the lock, portions per dish = counted meals of those diets for the slot's menu. Menu dishes are matched to recipes by name.
+- Consumption is posted once per item per locked slot (unique key), so the idempotent lock stays idempotent. A recipe problem never blocks the lock (it is logged instead).
+
+### D-089 Costing
+- **Unit cost:** weighted average of the last 90 days of purchases, else the last price; stored on every stock move at the time it happens.
+- **Cost per meal** = (recipe consumption + wastage + stock-take losses + gas + packaging) ÷ meals locked. Gas and packaging are flat per-meal amounts the owner sets (default ₹0).
+- **Revenue** = meals locked × the price frozen at lock, so margin is per meal actually charged.
+
+### D-090 Stock-take and alerts
+- A variance needs a reason when it is more than 2% of the expected quantity (kitchen setting `variance_reason_pct`). Closing is refused until every such line has one.
+- **Alerts:** low stock (at or below the item's minimum, once a day per item), a purchase price more than 15% above the recent average (kitchen setting `price_jump_pct`), and a stock-take variance over 10%. The owner gets `stock_alert_v1` on WhatsApp; the 10 pm summary lists low-stock items.
+
+### D-091 The 10 pm summary
+- It now includes today's collections (paid payments) and low-stock items. Both were placeholders since M2/M3; the template gained a sixth parameter (`owner_summary_v1`, not yet submitted to Meta).
+
+---
+
+## Admin and hardening (M8)
+
+### D-092 Monitoring
+- **Errors:** Sentry, through its plain HTTP envelope API from Edge Functions, the web app and the mobile app. There are no heavy SDKs or native modules, so it works in Expo Go and adds nothing to the bundle. Phone numbers are masked before sending. Nothing is sent unless a DSN is set.
+- **Analytics:** PostHog on the web only, off unless `NEXT_PUBLIC_POSTHOG_KEY` is set. It records page views and funnel events (lead submitted, kitchen picked, vendor applied) without phone numbers or names. Turn it on only after the privacy policy mentions it.
+
+### D-093 Backups and restore
+- **Production:** Supabase's daily backups or PITR (a paid-plan feature: your call when going live), plus `pnpm db:backup` for a portable copy kept off the server.
+- **Restore drill** (`pnpm db:restore-drill`): restore into a scratch database and compare every table's row count and the ledger totals. It passed locally (51 tables). Run it monthly.
+- Vault keys are never in backups; keep them in a password manager.
+
+### D-094 Play Store ⏳ PENDING (your accounts)
+- Android first via EAS: `development`, `preview` and `production` profiles; production goes to the internal track as a draft.
+- Needs your Expo account, a Google Play developer account and a service-account key (docs/RELEASE.md). No build has been made yet (expo.dev was unreachable from the sandbox).

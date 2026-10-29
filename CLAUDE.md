@@ -36,6 +36,8 @@ pnpm db:test                 # pgTAP: RLS, roles, guards, import
 pnpm --filter @tiffin/core test
 pnpm test:integration        # needs db:start + db:reset
 pnpm db:types                # regenerate packages/db/src/types.ts after every migration
+pnpm db:loadtest             # 5,000-subscription lock timing (rolled back)
+pnpm db:restore-drill        # backup → restore → compare counts and ledger totals
 
 # Web
 cp apps/web/.env.example apps/web/.env.local       # anon key: pnpm supabase status
@@ -61,7 +63,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
-| 90000 00101, 90000 00102, 90000 00103 | Spare (used by the M1, M3 and M7 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00101 – 90000 00104 | Spare (used by the M1, M3, M7 and M6 integration tests; test files run in parallel, so each suite needs its own number) |
 
 ## Conventions (follow these in every change)
 
@@ -127,6 +129,12 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
 
+**Inventory (M6)**
+- Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.
+- Consumption happens only in `private.consume_for_slot()` (lock trigger), one move per item per snapshot. Never add a second path that posts `consume` moves.
+- Costs: `private.item_unit_cost()` (90-day weighted average); store `unit_cost_paise` on each move.
+- Supplier dues, payments, adjustments and cost reports are owner-only; staff do the rest of inventory.
+
 **Acquisition (M7)**
 - Leads and vendor applications belong to the platform: admin-only RLS; vendors see a customer only once the lead picks their kitchen.
 - All lead writes go through `private.upsert_lead()` (one open lead per phone) and `private.convert_lead()` (the only place that creates `platform_sourced` customers). Funnel stages after matching are set only by real events (the recharge trigger), never by hand.
@@ -134,6 +142,11 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Unknown WhatsApp numbers go to `_shared/lead-bot.ts` (customer qualification, or vendor sign-up); unit-test flows in `tests/integration/lead-bot.test.ts`.
 - Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers.
 - Public anon RPCs (`submit_lead`, `lead_choose`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves.
+
+**Hardening (M8)**
+- `supabase/tests/09_security.test.sql` pins schema-wide rules (RLS everywhere, definer hygiene, anon allowlist, no direct ledger writes, private buckets). If you add an anon RPC or a public bucket, update its allowlist deliberately.
+- Performance: `pnpm db:loadtest` (21:00 lock for 5,000 subscriptions must stay under 60 s). Anything you hang off the lock (`count_snapshots` triggers) must stay fast and must never raise.
+- Backups: `pnpm db:backup`, `pnpm db:restore-drill`. Edge Function errors go through `_shared/monitor.ts` (`reportError`, phones masked).
 
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
@@ -195,7 +208,7 @@ Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the
 
 Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
 
-Later milestones add Sentry and PostHog variables. They're listed, commented out, in `.env.example`.
+Monitoring (optional): `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` (Edge Functions), `NEXT_PUBLIC_SENTRY_DSN` and `NEXT_PUBLIC_POSTHOG_KEY`/`NEXT_PUBLIC_POSTHOG_HOST` (web), `EXPO_PUBLIC_SENTRY_DSN` (mobile). All listed in `.env.example`.
 
 ## Secrets
 - Never commit secrets. `.env*` files are gitignored except `.env.example`.

@@ -12,6 +12,13 @@ const rupees = (paise: unknown) => `₹${(Number(paise ?? 0) / 100).toLocaleStri
 const day = (d: unknown) =>
   new Date(`${String(d)}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+const qty = (n: unknown, unit: unknown) => `${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${String(unit ?? '')}`.trim();
+function stockAlertText(p: Payload): string {
+  if (p.kind === 'price_jump') return `${p.item} price up ${p.pct}% (${rupees(p.from_paise)} → ${rupees(p.to_paise)} per ${p.unit})`;
+  if (p.kind === 'variance') return `stock-take found ${p.item} ${Number(p.variance) < 0 ? 'short' : 'over'} by ${qty(Math.abs(Number(p.variance)), p.unit)}${p.reason ? ` (${p.reason})` : ''}`;
+  return `${p.item} is low: ${qty(p.stock, p.unit)} left (minimum ${qty(p.min_qty, p.unit)})`;
+}
+
 const VENDOR_STEP: Record<string, string> = {
   signup: 'log in with this WhatsApp number and create your kitchen',
   profile: 'add a short description and a photo of your food',
@@ -180,15 +187,21 @@ export const TEMPLATES: Record<string, Def> = {
   },
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',
-    text: { en: '{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}.' },
+    text: { en: '{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}. Low stock: {{6}}.' },
     params: (p, k) => [k, day(p.service_date), String(p.lunch?.total_meals ?? 0), String(p.dinner?.total_meals ?? 0),
-      p.collections_paise == null ? 'see app' : rupees(p.collections_paise)],
+      p.collections_paise == null ? 'see app' : rupees(p.collections_paise),
+      (p.low_stock as string[] | undefined)?.length ? (p.low_stock as string[]).join(', ') : 'none'],
   },
   production_sheet: {
     name: 'production_sheet_v1', category: 'UTILITY',
     text: { en: '{{1}} final count for {{2}} {{3}}: {{4}} meals (veg {{5}}, non-veg {{6}}, Jain {{7}}). Packing list is in the app.' },
     params: (p, k) => [k, day(p.service_date), String(p.slot), String(p.totals?.total_meals ?? 0),
       String(p.totals?.by_diet?.veg ?? 0), String(p.totals?.by_diet?.nonveg ?? 0), String(p.totals?.by_diet?.jain ?? 0)],
+  },
+  stock_alert: {
+    name: 'stock_alert_v1', category: 'UTILITY',
+    text: { en: '{{1}} stock alert: {{2}}. Details are in the app.' },
+    params: (p, k) => [k, stockAlertText(p)],
   },
   inbox_alert: {
     name: 'inbox_alert_v1', category: 'UTILITY',

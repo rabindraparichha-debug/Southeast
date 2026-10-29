@@ -15,6 +15,8 @@ export type WebhookDeps = {
   /** Creates a Razorpay link for a payment row; returns the short URL. */
   createLink: (record: Json) => Promise<string>;
   complete?: Complete;
+  /** Error reporting (monitoring); optional. Gets only the error code. */
+  report?: (e: unknown, code: string) => void;
 };
 
 const ERROR_TEXT: Record<string, string> = {
@@ -120,6 +122,7 @@ async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<stri
   } catch (e) {
     const code = (e as Error).message;
     console.error('whatsapp message failed', code);
+    deps.report?.(e, code);
     await say({ type: 'text', text: ERROR_TEXT[code] ?? 'Sorry, something went wrong. Please try again, or send "talk" to reach the kitchen.' }, 'system', 'error')
       .catch((err) => console.error('error reply failed', err));
     return 'error';

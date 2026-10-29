@@ -18,7 +18,16 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "in.tiffinos.vendor"
+      "package": "in.tiffinos.vendor",
+      "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ]
     },
     "web": {
       "output": "single",
@@ -43,7 +52,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Tiffin OS takes a photo of the delivered tiffin as proof of delivery.",
+          "cameraPermission": "Tiffin OS takes photos of delivered tiffins as proof of delivery and of supplier bills for your stock records.",
           "photosPermission": false,
           "microphonePermission": false
         }
@@ -51,6 +60,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

@@ -3,10 +3,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/lib/session';
+import { installGlobalErrorHandler } from '@/lib/monitor';
 import { colors } from '@/components/theme';
 import { t } from '@/i18n';
 
 SplashScreen.preventAutoHideAsync();
+installGlobalErrorHandler();
 
 function RootStack() {
   const { ready, session, kitchen } = useAuth();
@@ -31,6 +33,9 @@ function RootStack() {
         <Stack.Screen name="sheet" options={{ title: '' }} />
         <Stack.Screen name="chat/[id]" options={{ title: '' }} />
         <Stack.Screen name="stop/[id]" options={{ title: '' }} />
+        <Stack.Screen name="stock/purchase" options={{ title: t('stock.purchase.title'), presentation: 'modal' }} />
+        <Stack.Screen name="stock/waste" options={{ title: t('stock.waste.title') }} />
+        <Stack.Screen name="stock/count" options={{ title: t('stock.count.title') }} />
       </Stack.Protected>
     </Stack>
   );

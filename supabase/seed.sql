@@ -145,6 +145,99 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Inventory (M6) for kitchen A: items with opening stock, suppliers, recipes for the menu dishes,
+-- and the past week's menus, so every lock in the simulated week below deducts ingredients.
+-- ---------------------------------------------------------------------------
+update public.kitchen_settings set gas_paise_per_meal = 300, packaging_paise_per_meal = 400
+where kitchen_id = '10000000-0000-4000-a000-00000000000a';
+
+do $$
+declare
+  k constant uuid := '10000000-0000-4000-a000-00000000000a';
+  r record;
+  v_item uuid;
+  v_dish uuid;
+  v_sup1 uuid;
+  v_sup2 uuid;
+  v_p uuid;
+begin
+  for r in select * from (values
+    ('Rice', 'kg', 'grain', 20, 4800, 30), ('Toor dal', 'kg', 'pulse', 5, 12000, 8), ('Atta', 'kg', 'grain', 10, 3800, 10),
+    ('Mustard oil', 'l', 'oil', 3, 17500, 6), ('Mixed vegetables', 'kg', 'vegetable', 8, 4000, 15), ('Potato', 'kg', 'vegetable', 5, 3000, 10),
+    ('Saga (greens)', 'kg', 'vegetable', 2, 4000, 4), ('Onion', 'kg', 'vegetable', 3, 3000, 5), ('Paneer', 'kg', 'dairy', 1, 36000, 2),
+    ('Curd', 'kg', 'dairy', 2, 7000, 5), ('Milk', 'l', 'dairy', 2, 5600, 5)
+  ) as t(name, unit, category, min_qty, price, opening) loop
+    insert into public.items (kitchen_id, name, unit, category, min_qty, last_price_paise, created_at)
+    values (k, r.name, r.unit::public.stock_unit, r.category::public.item_category, r.min_qty, r.price, now() - interval '10 days')
+    returning id into v_item;
+    insert into public.stock_moves (kitchen_id, item_id, type, qty, unit_cost_paise, reason, created_at)
+    values (k, v_item, 'adjust', r.opening, r.price, 'Opening stock', now() - interval '10 days');
+  end loop;
+
+  -- Dish → ingredient per portion (in the item's unit).
+  for r in select * from (values
+    ('Rice', 'Rice', 0.12), ('Jeera rice', 'Rice', 0.12), ('Jeera rice', 'Mustard oil', 0.003), ('Pakhala', 'Rice', 0.12), ('Pakhala', 'Curd', 0.03),
+    ('Dal', 'Toor dal', 0.03), ('Dal', 'Mustard oil', 0.004), ('Dal fry', 'Toor dal', 0.035), ('Dal fry', 'Mustard oil', 0.005),
+    ('Dalma', 'Toor dal', 0.025), ('Dalma', 'Mixed vegetables', 0.06), ('Dalma', 'Mustard oil', 0.003),
+    ('Roti', 'Atta', 0.06), ('Sabzi', 'Mixed vegetables', 0.1), ('Sabzi', 'Mustard oil', 0.005),
+    ('Mixed veg', 'Mixed vegetables', 0.1), ('Mixed veg', 'Mustard oil', 0.005), ('Santula', 'Mixed vegetables', 0.1),
+    ('Besara', 'Mixed vegetables', 0.1), ('Besara', 'Mustard oil', 0.006), ('Aloo bhaja', 'Potato', 0.08), ('Aloo bhaja', 'Mustard oil', 0.006),
+    ('Aloo bharta', 'Potato', 0.08), ('Aloo bharta', 'Mustard oil', 0.003), ('Saga', 'Saga (greens)', 0.07), ('Saga bhaja', 'Saga (greens)', 0.07),
+    ('Salad', 'Onion', 0.02), ('Paneer curry', 'Paneer', 0.05), ('Paneer curry', 'Mustard oil', 0.005), ('Curd', 'Curd', 0.08),
+    ('Kheer', 'Milk', 0.1), ('Kheer', 'Rice', 0.02)
+  ) as t(dish, item, qty) loop
+    insert into public.dishes (kitchen_id, name) values (k, r.dish) on conflict (kitchen_id, lower(name)) do nothing;
+    select id into v_dish from public.dishes where kitchen_id = k and lower(name) = lower(r.dish);
+    insert into public.recipe_lines (kitchen_id, dish_id, item_id, qty_per_portion)
+    select k, v_dish, i.id, r.qty from public.items i where i.kitchen_id = k and i.name = r.item;
+  end loop;
+
+  insert into public.suppliers (kitchen_id, name, phone) values (k, 'Patia Kirana Store', '9437011111') returning id into v_sup1;
+  insert into public.suppliers (kitchen_id, name, phone) values (k, 'Rasulgarh Sabzi Mandi', '9437022222') returning id into v_sup2;
+
+  -- Groceries five days ago (paid half), vegetables three days ago (onion up 40%: a price-jump alert).
+  insert into public.purchases (kitchen_id, supplier_id, bill_no, bill_date, total_paise, created_at)
+  values (k, v_sup1, 'PKS-2211', (now() at time zone 'Asia/Kolkata')::date - 5, 25 * 4800 + 5 * 12000, now() - interval '5 days')
+  returning id into v_p;
+  insert into public.purchase_lines (kitchen_id, purchase_id, item_id, qty, unit_price_paise, amount_paise)
+  select k, v_p, id, q, p, q * p from (values ('Rice', 25, 4800), ('Toor dal', 5, 12000)) v(n, q, p) join public.items i on i.kitchen_id = k and i.name = v.n;
+  insert into public.stock_moves (kitchen_id, item_id, type, qty, unit_cost_paise, ref_type, ref_id, created_at)
+  select k, item_id, 'purchase', qty, unit_price_paise, 'purchase', v_p, now() - interval '5 days' from public.purchase_lines where purchase_id = v_p;
+  insert into public.supplier_payments (kitchen_id, supplier_id, purchase_id, amount_paise, method, note, paid_at)
+  values (k, v_sup1, v_p, 90000, 'cash', 'Paid with the bill', now() - interval '5 days');
+
+  insert into public.purchases (kitchen_id, supplier_id, bill_no, bill_date, total_paise, created_at)
+  values (k, v_sup2, null, (now() at time zone 'Asia/Kolkata')::date - 3, 10 * 4000 + 5 * 4200 + 3 * 4000, now() - interval '3 days')
+  returning id into v_p;
+  insert into public.purchase_lines (kitchen_id, purchase_id, item_id, qty, unit_price_paise, amount_paise, price_jump_pct)
+  select k, v_p, id, q, p, q * p, j from (values ('Mixed vegetables', 10, 4000, null::numeric), ('Onion', 5, 4200, 40.00), ('Saga (greens)', 3, 4000, null))
+    v(n, q, p, j) join public.items i on i.kitchen_id = k and i.name = v.n;
+  insert into public.stock_moves (kitchen_id, item_id, type, qty, unit_cost_paise, ref_type, ref_id, created_at)
+  select k, item_id, 'purchase', qty, unit_price_paise, 'purchase', v_p, now() - interval '3 days' from public.purchase_lines where purchase_id = v_p;
+  update public.items i set last_price_paise = pl.unit_price_paise
+  from public.purchase_lines pl where pl.item_id = i.id and pl.purchase_id = v_p;
+end $$;
+
+-- Menus for the past week (the forward week is added after the history below).
+insert into public.menus (kitchen_id, service_date, slot, dishes, published)
+select k.id, (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
+       case sl.slot
+         when 'lunch' then string_to_array((array[
+           'Rice|Dalma|Aloo bhaja|Saga|Salad',
+           'Rice|Dal|Besara|Pampada|Khatta',
+           'Rice|Dal|Santula|Roti|Curd',
+           'Jeera rice|Dal fry|Paneer curry|Roti|Salad',
+           'Rice|Dalma|Potala rasa|Bhaja|Pickle',
+           'Pakhala|Badi chura|Aloo bharta|Saga bhaja',
+           'Rice|Dal|Mixed veg|Roti|Kheer'])[1 + (((g % 7) + 7) % 7)], '|')
+         else array['Roti', 'Sabzi', 'Dal', 'Salad']
+       end,
+       true
+from public.kitchens k
+cross join generate_series(-8, -1) g
+cross join unnest(enum_range(null::public.meal_slot)) as sl(slot);
+
+-- ---------------------------------------------------------------------------
 -- A week of meals (M2). Runs the real engine with a simulated clock (app.now):
 -- each past day is generated the evening before, a few customers skip, then the
 -- day's slots are locked. Ends with today's real-time refresh and lock.

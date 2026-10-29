@@ -1,6 +1,8 @@
 import { verifySignature } from '../_shared/razorpay.ts';
 
 export type WebhookDeps = {
+  /** Error reporting (monitoring); optional. */
+  report?: (e: unknown) => void;
   webhookSecret: string;
   /** Stores + applies the event in Postgres (idempotent on event id). Returns the outcome. */
   processEvent: (eventId: string, payload: unknown) => Promise<string>;
@@ -27,6 +29,7 @@ export async function handleRazorpayWebhook(req: Request, deps: WebhookDeps): Pr
     return new Response(JSON.stringify({ result }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (e) {
     console.error('razorpay-webhook processing failed', e);
+    deps.report?.(e);
     return new Response(JSON.stringify({ error: 'processing_failed' }), { status: 500 });
   }
 }

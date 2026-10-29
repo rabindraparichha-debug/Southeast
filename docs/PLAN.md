@@ -151,14 +151,29 @@ Known gaps carried forward:
 - **The 3-hour complaint window** after a slot closes isn't enforced; complaints are accepted any time.
 - **Mobile web build only:** a web page can't reload without network (the phone app keeps running).
 
-## P3: Kitchen operations (M6)
+## P3: Kitchen operations (M6) ✅ (built 2026-10-30)
 
-| Pkg | Scope | Status |
-|---|---|---|
-| 3.1 | Items, suppliers, purchases | ⬜ |
-| 3.2 | Recipes and auto-consumption | ⬜ |
-| 3.3 | Stock-take, wastage, alerts | ⬜ |
-| 3.4 | Cost per meal | ⬜ |
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 3.1 | Items, suppliers, purchases with bill photo and supplier credit dues | ✅ | `supabase/migrations/20261102000100_inventory.sql`, web `/inventory`, `/inventory/purchases`, `/inventory/suppliers`, mobile Stock tab |
+| 3.2 | Recipes per portion (any unit, e.g. "30 g") and automatic consumption at the lock; production plan | ✅ | `recipe_lines`, `private.consume_for_slot` (lock trigger), `production_plan()`, web `/inventory/recipes` |
+| 3.3 | Stock-take with variance and reason prompt, wastage with reason, alerts (low stock, price jump > 15%, high variance) | ✅ | `stock_takes`, `record_waste`, `inventory_alerts()`, `stock_alert_v1`, low stock in the 10 pm summary |
+| 3.4 | Cost per meal (ingredients + gas + packaging, plus waste and stock losses) and margin | ✅ | `cost_report()`, web `/reports/costs` |
+
+Acceptance tests:
+- ✅ **Toor dal at 30 g per portion with a count of 100 deducts 3 kg.**
+  - `supabase/tests/08_inventory.test.sql`: the recipe is entered as "30 g" for an item stocked in kg (stored as 0.03 kg). 10 subscriptions × 10 tiffins lock at 100 meals; the lock posts one consumption of exactly −3.000 kg (stock 20 → 17 kg), plus oil and rice from the same menu. Locking again deducts nothing twice. The production plan showed the same 3 kg before the lock.
+- ✅ **A stock-take 1 kg short shows as variance with a reason prompt.**
+  - pgTAP: counted 26 kg against 27 kg expected → variance −1 kg, `needs_reason`; closing is refused (`reason_required`) until a reason is given; closing then posts one `count` move with the reason, and book stock equals the count. A 0.3% difference needs no reason. Items not counted are left alone.
+  - `tests/integration/m6.test.ts`: the same over HTTP, with a supplier bill photo uploaded to Storage.
+- Also covered: unit conversion and mismatch, price-jump flag and owner alert, supplier dues and payments, wastage, owner-only adjustments, cost per meal and margin, the 10 pm summary now carrying collections and low stock, permissions (staff: no dues, payments or costs; riders and other kitchens: nothing), append-only ledgers.
+
+Known gaps carried forward:
+- **Consumption needs menu dish names to match dish names** (case-insensitive). The production plan lists menu dishes without a recipe so they can be added.
+- **Diet variants** are handled by which diets a dish serves (dal for everyone, chicken curry for non-veg). Per-plan recipes (e.g. a bigger portion for a "large" plan) aren't modelled.
+- **Costing** uses a 90-day weighted average purchase price, not exact FIFO batches (D-089).
+- **Gas and packaging** are flat per-meal costs set by the owner, not tracked as stock (D-089).
+- **Bill photo OCR** (reading amounts from the photo) isn't built; amounts are typed.
 
 ## P4: Growth and launch (M7–M8)
 **Goal:** 30 vendors live and the first platform-sourced customers paid.

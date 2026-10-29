@@ -2,9 +2,11 @@
 // With VROOM_URL set: VROOM computes the order and it is saved with save_route_order (planned runs
 // follow). Without it, or if VROOM fails: the built-in optimiser (optimize_route RPC). D-067.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { optimizeWithVroom, pathKm, type Stop } from '../_shared/vroom.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const VROOM_URL = Deno.env.get('VROOM_URL') ?? '';
 const VROOM_USE_ROUTING = Deno.env.get('VROOM_USE_ROUTING') === 'true';
@@ -48,6 +50,7 @@ Deno.serve(async (req) => {
     return json({ engine: 'vroom', km_before: pathKm(start, stops), km_after: pathKm(start, order.map((id) => byId.get(id)!)) });
   } catch (e) {
     console.error('vroom failed, using the built-in optimiser', e);
+    await reportError(monitor, e, { fn: 'route-optimize', tags: { engine: 'vroom' } });
     return local(String((e as Error).message).split(':')[0]);
   }
 });

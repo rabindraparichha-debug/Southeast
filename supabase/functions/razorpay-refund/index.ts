@@ -1,9 +1,11 @@
 // Refunds a pending refund to the customer's original online payment (Razorpay, reversing the
 // Route transfer). Cash/UPI refunds are marked paid directly with the mark_refund_paid RPC.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { createRefund, deliverMockEvent, loadConfig, mockEvent } from '../_shared/razorpay.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -38,6 +40,7 @@ Deno.serve(async (req) => {
     return json({ refund_id: r.refund_id, razorpay_refund_id: refund.id, mode: cfg.mode });
   } catch (e) {
     console.error('refund failed', e);
+    await reportError(monitor, e, { fn: 'razorpay-refund' });
     return json({ error: 'gateway_error' }, 502);
   }
 });

@@ -7,9 +7,8 @@ create extension if not exists pgtap with schema extensions;
 select no_plan();
 
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
--- Keep the seed kitchens out of the way so the scenario is self-contained.
-update public.kitchens set accepts_platform_leads = false
-where id in ('10000000-0000-4000-a000-00000000000a', '10000000-0000-4000-a000-00000000000c');
+-- Keep every other kitchen (seed, or left by integration runs) out of the way.
+update public.kitchens set accepts_platform_leads = false;
 
 -- ===========================================================================
 -- Setup: kitchens around Patia (20.3553, 85.8197). One owner user runs all of them.

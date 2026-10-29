@@ -6,11 +6,13 @@
 // WhatsApp only when the person opted in.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { parseGenericLead, parseGoogleAdsLead, parseJustdialLead, safeEqual, type ParsedLead } from '../_shared/leads.ts';
+import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LEAD_INTAKE_KEY = Deno.env.get('LEAD_INTAKE_KEY') ?? '';
 const GOOGLE_ADS_LEAD_KEY = Deno.env.get('GOOGLE_ADS_LEAD_KEY') ?? '';
+const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
 const GENERIC = new Set(['instagram', 'website', 'referral', 'other']);
 
@@ -52,6 +54,7 @@ Deno.serve(async (req) => {
       p_campaign: lead.campaign, p_whatsapp_opt_in: lead.whatsapp_opt_in,
       p_extra: Object.fromEntries(Object.entries(lead.extra).filter(([, v]) => v !== undefined)),
     });
+  if (error && error.message !== 'invalid_phone') await reportError(monitor, new Error(error.message), { fn: 'lead-intake', tags: { source: lead.source } });
   if (error) return json({ error: error.message }, error.message === 'invalid_phone' ? 422 : 500);
   return json(data);
 });
