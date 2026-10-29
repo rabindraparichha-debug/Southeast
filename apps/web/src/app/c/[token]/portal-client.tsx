@@ -293,6 +293,10 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
         <p>{t('stopping')}</p>
         {grievance && <p><strong>{t('grievance')}:</strong> {grievance}</p>}
         <button className="underline" disabled={busy} onClick={() => sendComplaint('privacy', 'Please delete my personal data.')}>{t('delete_data')}</button>
+        <p className="flex gap-4">
+          <a href="/privacy" target="_blank" rel="noreferrer" className="underline">{t('privacy')}</a>
+          <a href="/terms" target="_blank" rel="noreferrer" className="underline">{t('terms')}</a>
+        </p>
       </footer>
     </main>
   );

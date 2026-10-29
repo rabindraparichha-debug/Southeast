@@ -69,7 +69,7 @@ export default async function VendorApplicationsPage({ searchParams }: PageProps
                       <div className="text-ink-700">
                         Kitchen set up · {done}/{list.length} ready
                         {live && a.kitchen_slug && <> · <Link href={`/k/${a.kitchen_slug}`} className="text-brand-700 hover:underline" target="_blank">public page</Link></>}
-                        {' · '}<Link href="/admin" className="text-brand-700 hover:underline">kitchens</Link>
+                        {' · '}<Link href="/admin/kitchens" className="text-brand-700 hover:underline">kitchens</Link>
                       </div>
                       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-ink-100">
                         <div className="h-full bg-brand-500" style={{ width: `${list.length ? Math.round((done / list.length) * 100) : 0}%` }} />

@@ -3090,6 +3090,7 @@ export type Database = {
         Args: {
           p_action?: string;
           p_before?: string;
+          p_before_id?: number;
           p_kitchen?: string;
           p_limit?: number;
           p_table?: string;
@@ -3128,7 +3129,7 @@ export type Database = {
       admin_reveal_lead_phone: { Args: { p_lead: string }; Returns: string };
       admin_reveal_vendor_phone: { Args: { p_id: string }; Returns: string };
       admin_reviews: { Args: { p_kitchen?: string; p_limit?: number }; Returns: Json };
-      admin_set_fssai: { Args: { p_fssai: string; p_kitchen: string }; Returns: undefined };
+      admin_set_fssai: { Args: { p_fssai?: string; p_kitchen: string }; Returns: undefined };
       admin_set_lead_status: {
         Args: {
           p_lead: string;

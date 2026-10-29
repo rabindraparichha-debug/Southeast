@@ -1,4 +1,4 @@
-import { addDays, formatPhone, istDate, isoDow, WEEKDAYS } from '@tiffin/core';
+import { addDays, formatPhone, istDate, isoDow, WEEKDAYS, isIsoDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { PrintButton } from '@/components/print-button';
@@ -10,7 +10,7 @@ export default async function RegisterPage({ searchParams }: PageProps<'/print/r
   const sp = await searchParams;
   const today = istDate();
   const monday = addDays(today, 1 - isoDow(today));
-  const start = typeof sp.start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.start) ? sp.start : monday;
+  const start = isIsoDate(sp.start) ? sp.start : monday;
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const supabase = await createClient();
 

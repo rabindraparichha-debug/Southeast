@@ -69,6 +69,13 @@ const MESSAGES: Record<string, string> = {
   no_lines: 'Add at least one item to the bill.',
   supplier_required: 'Choose a supplier to record a payment with the bill.',
   stock_take_closed: 'This stock-take is already closed.',
+  // Admin and hardening (M8)
+  fssai_locked: 'Your FSSAI number is verified. Ask Tiffin support to change it.',
+};
+
+// Check constraints whose violation needs a specific explanation (matched on the constraint name).
+const CONSTRAINT_MESSAGES: Record<string, string> = {
+  kitchens_live_needs_fssai: 'A kitchen needs an FSSAI number before it can be listed. Add the 14-digit number first.',
 };
 
 // Codes whose meaning depends on the screen.
@@ -102,6 +109,8 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   if (!error) return '';
   const msg = error.message ?? '';
   if (MESSAGES[msg]) return MESSAGES[msg];
+  const constraint = Object.keys(CONSTRAINT_MESSAGES).find((c) => msg.includes(c));
+  if (constraint) return CONSTRAINT_MESSAGES[constraint]!;
   if (error.code === '23514') return 'One of the values is not allowed. Please check the form.';
   if (error.code === '23505') return 'This already exists.';
   if (error.code === '42501') return MESSAGES.forbidden!;

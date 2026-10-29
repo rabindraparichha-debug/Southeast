@@ -322,6 +322,15 @@ export async function handleMessage(input: Inbound, ctx: Json, rawDeps: BotDeps)
     };
   } else if (input.kind === 'text') {
     const text = input.text.trim();
+    // WhatsApp opt-out/in keywords work at any time, even while the kitchen is handling the chat.
+    if (/^(stop|stop updates|stop messages|unsubscribe)\.?$/i.test(text)) {
+      await deps.setOptIn(false);
+      return { replies: [{ type: 'text', text: t(lang, 'optout_done') }], intent: 'optout', handledBy: 'bot' };
+    }
+    if (/^updates\.?$/i.test(text)) {
+      await deps.setOptIn(true);
+      return { replies: [{ type: 'text', text: t(lang, 'optin_saved_yes') }], intent: 'optin', handledBy: 'bot' };
+    }
     const intent = detectIntent(text);
     if (ctx.handoff_open && intent !== 'greet' && intent !== 'menu') {
       // The kitchen is handling this conversation; stay quiet (message is in their inbox).

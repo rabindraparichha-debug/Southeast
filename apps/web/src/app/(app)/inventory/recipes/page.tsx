@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { SLOT_LABEL, addDays, formatServiceDate, istDate } from '@tiffin/core';
+import { SLOT_LABEL, addDays, formatServiceDate, istDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
@@ -17,7 +17,7 @@ export default async function RecipesPage({ searchParams }: PageProps<'/inventor
   const isOwner = kitchen.role === 'owner';
   const sp = await searchParams;
   // Same default as /sheet: tomorrow's lunch.
-  const date = typeof sp.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : addDays(istDate(), 1);
+  const date = isIsoDate(sp.date) ? sp.date : addDays(istDate(), 1);
   const slot: MealSlot = sp.slot === 'dinner' ? 'dinner' : 'lunch';
   const newDish = typeof sp.new === 'string' ? sp.new.slice(0, 60) : '';
   const supabase = await createClient();

@@ -59,5 +59,6 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 ## Opt-in rules the code enforces
 
 - **Templates go only to customers who opted in** (`customers.whatsapp_opt_in`). The bot asks once, on the customer's first message. Vendors can also share an invite link that opens a chat with the platform number.
+- **Opting out:** a customer who replies **STOP** (or "stop updates", "unsubscribe") is opted out at once, even while the kitchen is handling the chat; **UPDATES** opts back in. "Stop my tiffin" is a cancellation request and goes to the kitchen.
 - **Replies inside the 24-hour window are normal messages.** They need no opt-in, because the customer wrote first.
 - **Announcements:** only to opted-in customers, and limited per kitchen per month (`kitchen_settings.broadcast_cap_monthly`, default 4, set by the platform).

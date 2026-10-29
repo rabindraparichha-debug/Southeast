@@ -1,4 +1,4 @@
-import { formatPaise, istDate } from '@tiffin/core';
+import { formatPaise, istDate, isIsoDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
@@ -7,7 +7,7 @@ import { Alert, Card, PageHeader, Stat } from '@/components/ui';
 import { PrintButton } from '@/components/print-button';
 import { CostSettings } from './cost-settings';
 
-const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const isDate = isIsoDate;
 // by_day ingredients_paise arrives unrounded (fractional paise) from cost_report; round before formatting.
 const money = (p: number | null | undefined) => (p == null ? '—' : formatPaise(Math.round(Number(p))));
 

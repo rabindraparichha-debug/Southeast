@@ -232,7 +232,10 @@ Acceptance tests:
   - automated security review (RLS everywhere, definer hygiene, anon allowlist, no direct ledger writes, append-only triggers, private buckets, encrypted phones);
   - FSSAI lock for live kitchens (finding #1 in docs/SECURITY.md);
   - admin RPCs refused to owners (`tests/integration/m8.test.ts`);
-  - phone masking in error reports (`monitor.test.ts`).
+  - phone masking in error reports (`monitor.test.ts`);
+  - audit-log paging that never skips rows written in one transaction;
+  - WhatsApp STOP / UPDATES keywords;
+  - malformed dates in page URLs no longer crash pages (`isIsoDate`).
 
 Known gaps carried forward:
 - **No Play Store build yet:** needs your Expo account, a Google Play developer account and the store listing (docs/RELEASE.md).

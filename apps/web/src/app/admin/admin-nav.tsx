@@ -4,10 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const ITEMS = [
-  { href: '/admin', label: 'Kitchens' },
+  { href: '/admin', label: 'Dashboard' },
+  { href: '/admin/kitchens', label: 'Kitchens' },
   { href: '/admin/leads', label: 'Leads' },
   { href: '/admin/funnel', label: 'Funnel & gaps' },
   { href: '/admin/vendors', label: 'Vendor applications' },
+  { href: '/admin/reviews', label: 'Reviews' },
+  { href: '/admin/audit', label: 'Audit log' },
 ];
 
 export function AdminNav() {

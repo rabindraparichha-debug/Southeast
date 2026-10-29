@@ -166,3 +166,15 @@ describe('validateImportRows', () => {
     ]);
   });
 });
+
+describe('isIsoDate', () => {
+  it('accepts real dates only', async () => {
+    const { isIsoDate } = await import('../src/time');
+    expect(isIsoDate('2026-11-02')).toBe(true);
+    expect(isIsoDate('2028-02-29')).toBe(true);
+    expect(isIsoDate('2026-13-45')).toBe(false);
+    expect(isIsoDate('2026-02-30')).toBe(false);
+    expect(isIsoDate('zz')).toBe(false);
+    expect(isIsoDate(undefined)).toBe(false);
+  });
+});

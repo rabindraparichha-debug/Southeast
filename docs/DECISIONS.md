@@ -479,6 +479,7 @@ Still deferred (see D-038).
 - **Website and vendor forms:** consent to be contacted is required; WhatsApp updates are a separate, optional tick.
 - **Google Ads forms:** WhatsApp only if the form has a WhatsApp question answered yes; otherwise the team calls.
 - **Justdial:** never opted in (they don't collect it); the team calls.
+- **Customers can always opt out** by replying STOP (and back in with UPDATES).
 - **People who message us on WhatsApp** are treated as opted in for follow-ups about their enquiry (the 24 h reminder, the trial offer). **Your call:** is this acceptable, or should the bot ask an explicit opt-in question?
 
 ### D-082 Platform-sourced customers

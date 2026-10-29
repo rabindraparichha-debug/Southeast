@@ -57,6 +57,20 @@ describe('bot flows', () => {
     expect(calls.states.at(-1)).toEqual({ optin_asked: true });
   });
 
+  it('STOP turns WhatsApp updates off (even during a hand-off); UPDATES turns them back on', async () => {
+    const optIns: boolean[] = [];
+    const { deps } = fakeDeps();
+    deps.setOptIn = async (v) => { optIns.push(v); };
+    const stop = await handleMessage(text('STOP'), ctx({ handoff_open: true }), deps);
+    expect(stop.intent).toBe('optout');
+    expect(previewOf(stop.replies[0]!)).toMatch(/not get updates/);
+    const back = await handleMessage(text('updates'), ctx(), deps);
+    expect(back.intent).toBe('optin');
+    expect(optIns).toEqual([false, true]);
+    // "stop my tiffin" is a cancellation request, not an opt-out.
+    expect((await handleMessage(text('please stop the tiffin service'), ctx(), deps)).intent).toBe('cancel');
+  });
+
   it('M4 test 2: "can I get a discount?" gets no promise and is handed off to the kitchen', async () => {
     const { deps, calls } = fakeDeps({ ai: { reply: 'Sure, 20% discount for you!', intent: 'answer', handoff: false } });
     const res = await handleMessage(text('can I get a discount?'), ctx(), deps);

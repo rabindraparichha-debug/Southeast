@@ -70,7 +70,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
           <Field label="Kitchen name"><Input value={k.name} onChange={(e) => setK({ ...k, name: e.target.value })} required /></Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Area"><Input value={k.area} onChange={(e) => setK({ ...k, area: e.target.value })} /></Field>
-            <Field label="FSSAI number" hint="14 digits. Required before your kitchen can be listed.">
+            <Field label="FSSAI number" hint={kitchen.status === 'active' ? 'Verified: your kitchen is listed. Ask Tiffin support to change it.' : '14 digits. Required before your kitchen can be listed.'}>
               <Input value={k.fssai_no} onChange={(e) => setK({ ...k, fssai_no: e.target.value })} inputMode="numeric" maxLength={14} />
             </Field>
           </div>

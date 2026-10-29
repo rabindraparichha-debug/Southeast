@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { formatPhone, normalizePhone } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyErrorIn } from '@/lib/errors';
+import { track } from '@/lib/analytics';
 import type { LeadSource } from '@/lib/public';
 import { Alert, Button, Field, Input } from '@/components/ui';
 
@@ -39,6 +40,9 @@ export function VendorForm({ areas, source, campaign }: { areas: string[]; sourc
     });
     setBusy(false);
     if (error) return setError(friendlyErrorIn('public', error));
+    // Area only when it is one of the known areas (the field is free text).
+    const area = areas.find((a) => a.toLowerCase() === f.area.trim().toLowerCase()) ?? (f.area.trim() ? 'other' : null);
+    track('vendor_applied', { source, campaign, area });
     setDone(phone);
   }
 

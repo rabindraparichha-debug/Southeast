@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { addDays, istDate } from '@tiffin/core';
+import { addDays, istDate, isIsoDate } from '@tiffin/core';
 import { requireAdmin } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { firstParam, SOURCE_LABEL } from '@/lib/public';
@@ -13,7 +13,7 @@ type Row = { source: keyof typeof SOURCE_LABEL; campaign: string; leads: number;
 const COUNT_KEYS = ['leads', 'qualified', 'matched', 'chose', 'trial', 'converted', 'renewed', 'waitlist', 'lost'] as const;
 
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '—');
-const isDate = (s: string | undefined) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
+const isDate = (s: string | undefined) => (isIsoDate(s) ? s : undefined);
 
 export default async function FunnelPage({ searchParams }: PageProps<'/admin/funnel'>) {
   await requireAdmin();

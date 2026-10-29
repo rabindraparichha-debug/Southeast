@@ -17,6 +17,7 @@
     "leaflet": "^1.9.4",
     "next": "16.4.3",
     "papaparse": "^5.7.0",
+    "posthog-js": "1.438.10",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-leaflet": "^5.0.0",

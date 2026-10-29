@@ -23,7 +23,7 @@ $$;
 create trigger kitchens_fssai_guard before update of fssai_no on public.kitchens
   for each row execute function private.guard_fssai();
 
-create or replace function public.admin_set_fssai(p_kitchen uuid, p_fssai text)
+create or replace function public.admin_set_fssai(p_kitchen uuid, p_fssai text default null)  -- null clears it
 returns void
 language plpgsql
 security definer
@@ -107,6 +107,7 @@ begin
     select jsonb_agg(jsonb_build_object(
       'id', k.id, 'name', k.name, 'slug', k.slug, 'area', k.area, 'status', k.status, 'fssai_no', k.fssai_no,
       'kyc_status', a.kyc_status, 'linked_account', a.razorpay_linked_account_id is not null,
+      'razorpay_linked_account_id', a.razorpay_linked_account_id,
       'customers', (select count(*) from public.customers c where c.kitchen_id = k.id and c.deleted_at is null),
       'whatsapp_pct', (select round(100.0 * count(*) filter (where whatsapp_opt_in) / nullif(count(*), 0), 0)
                        from public.customers c where c.kitchen_id = k.id and c.deleted_at is null),
@@ -126,8 +127,10 @@ end;
 $$;
 
 -- Audit log viewer (admin). Rows are already redacted (no encrypted phones or tokens).
+-- Paging: pass the last row's (at, id) as (p_before, p_before_id); rows written in one transaction
+-- share a timestamp, so the id breaks ties.
 create or replace function public.admin_audit_log(p_kitchen uuid default null, p_table text default null,
-  p_action text default null, p_before timestamptz default null, p_limit integer default 100)
+  p_action text default null, p_before timestamptz default null, p_limit integer default 100, p_before_id bigint default null)
 returns jsonb
 language plpgsql
 stable
@@ -143,7 +146,8 @@ begin
                      order by a.created_at desc, a.id desc)
     from (select * from public.audit_log a0
           where (p_kitchen is null or a0.kitchen_id = p_kitchen) and (p_table is null or a0.table_name = p_table)
-            and (p_action is null or a0.action = p_action) and (p_before is null or a0.created_at < p_before)
+            and (p_action is null or a0.action = p_action)
+            and (p_before is null or (a0.created_at, a0.id) < (p_before, coalesce(p_before_id, 9223372036854775807)))
           order by a0.created_at desc, a0.id desc limit least(coalesce(p_limit, 100), 500)) a
     left join public.kitchens k on k.id = a.kitchen_id
     left join auth.users u on u.id = a.actor_id), '[]'::jsonb);

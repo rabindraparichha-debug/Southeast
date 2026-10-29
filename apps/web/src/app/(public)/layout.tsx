@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { AnalyticsProvider } from '@/components/analytics-provider';
 
 // Light chrome for the public website (no login): customers looking for a tiffin and kitchen owners.
 export default function PublicLayout({ children }: { children: ReactNode }) {
   const grievance = process.env.NEXT_PUBLIC_GRIEVANCE_CONTACT ?? '';
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <AnalyticsProvider />
       <header className="sticky top-0 z-20 border-b border-ink-100 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3">
           <Link href="/find" className="flex items-center gap-2 font-semibold text-ink-900">
@@ -25,6 +27,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           <p className="font-medium text-ink-700">We never hold your money: you pay the kitchen directly.</p>
           <p>Every listed kitchen has an FSSAI registration number shown on its page.</p>
           {grievance && <p>{grievance}</p>}
+          <p className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+            <Link href="/privacy" className="underline hover:text-ink-800">Privacy policy</Link>
+            <Link href="/terms" className="underline hover:text-ink-800">Terms of use</Link>
+            <Link href="/login" className="underline hover:text-ink-800">Kitchen login</Link>
+          </p>
           <p>© Tiffin Bhubaneswar · Free software for home kitchens and tiffin services.</p>
         </div>
       </footer>

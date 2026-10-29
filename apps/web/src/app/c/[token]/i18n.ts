@@ -42,6 +42,9 @@ const en = {
   rate_send: 'Send rating',
   rate_thanks: 'Thank you! Your rating helps other customers choose.',
   rate_note: 'Shown on the kitchen’s public page with your first name.',
+  // M8: legal pages (English only for now)
+  privacy: 'Privacy policy',
+  terms: 'Terms of use',
 };
 export type Key = keyof typeof en;
 
@@ -60,6 +63,7 @@ const hi: Partial<Record<Key, string>> = {
   rate_title: 'अपने किचन को रेटिंग दें', rate_comment: 'कुछ और कहना है? (वैकल्पिक)', rate_send: 'रेटिंग भेजें',
   rate_thanks: 'धन्यवाद! आपकी रेटिंग से दूसरे ग्राहकों को चुनने में मदद मिलती है।',
   rate_note: 'किचन के सार्वजनिक पेज पर आपके पहले नाम के साथ दिखेगी।',
+  privacy: 'गोपनीयता नीति', terms: 'उपयोग की शर्तें',
 };
 const or: Partial<Record<Key, string>> = {
   balance: 'ବାକି ଖାଇବା', owes: 'ଆପଣଙ୍କ ଉପରେ {n}ଟି ଖାଇବା ବାକି', prepaid: '{v} ପ୍ରିପେଡ୍', pay: 'ଖାଇବା ପାଇଁ ପେମେଣ୍ଟ',
@@ -76,6 +80,7 @@ const or: Partial<Record<Key, string>> = {
   rate_title: 'ଆପଣଙ୍କ କିଚେନକୁ ରେଟିଂ ଦିଅନ୍ତୁ', rate_comment: 'ଆଉ କିଛି କହିବେ? (ଇଚ୍ଛାଧୀନ)', rate_send: 'ରେଟିଂ ପଠାନ୍ତୁ',
   rate_thanks: 'ଧନ୍ୟବାଦ! ଆପଣଙ୍କ ରେଟିଂ ଅନ୍ୟ ଗ୍ରାହକଙ୍କୁ ବାଛିବାରେ ସାହାଯ୍ୟ କରେ।',
   rate_note: 'କିଚେନର ସାର୍ବଜନୀନ ପେଜରେ ଆପଣଙ୍କ ପ୍ରଥମ ନାମ ସହ ଦେଖାଯିବ।',
+  privacy: 'ଗୋପନୀୟତା ନୀତି', terms: 'ବ୍ୟବହାର ସର୍ତ୍ତାବଳୀ',
 };
 const dict: Record<Lang, Partial<Record<Key, string>>> = { en, hi, or };
 

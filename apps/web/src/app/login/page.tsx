@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Log in · Tiffin OS' };
@@ -15,6 +16,10 @@ export default function LoginPage() {
         <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-ink-100">
           <LoginForm showDevHint={process.env.NODE_ENV !== 'production'} />
         </div>
+        <p className="mt-6 text-center text-xs text-ink-500">
+          By logging in you agree to our <Link href="/terms" className="underline hover:text-ink-800">Terms of use</Link> and{' '}
+          <Link href="/privacy" className="underline hover:text-ink-800">Privacy policy</Link>.
+        </p>
       </div>
     </main>
   );

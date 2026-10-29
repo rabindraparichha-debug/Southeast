@@ -7,6 +7,7 @@ import { addDays, formatPaise, istDate, normalizePhone } from '@tiffin/core';
 import type { DietType, MealSlot } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyErrorIn } from '@/lib/errors';
+import { track } from '@/lib/analytics';
 import { BUDGETS, ratingLabel, type LeadChoice, type LeadSource, type ShortlistKitchen, type SubmitLeadResult } from '@/lib/public';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
 
@@ -131,6 +132,7 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug }: Props) 
     setBusy(false);
     if (error) return setError(friendlyErrorIn('public', error));
     const result = data as unknown as SubmitLeadResult;
+    track('lead_submitted', { source, campaign, area: f.area || (coords ? 'shared_location' : null) });
     store.set({ token: result.token, result });
     window.scrollTo({ top: 0 });
   }
@@ -237,7 +239,8 @@ function Shortlist({ saved, kitchenSlug }: { saved: Saved; kitchenSlug: string |
     }
     const choice = { ...(data as unknown as LeadChoice), kitchen_id: k.kitchen_id };
     const next: Saved = { ...saved, choice };
-    const pay = await startPayment(choice);
+    track('kitchen_picked', { kitchen: k.slug, area: k.area });
+    const pay = await startPayment(choice, k.slug);
     if (pay === 'redirected') {
       store.set(next);
       return;
@@ -310,12 +313,13 @@ function Shortlist({ saved, kitchenSlug }: { saved: Saved; kitchenSlug: string |
 }
 
 /** Asks the payment-link function for the trial payment page; goes there when it exists. */
-async function startPayment(choice: LeadChoice): Promise<'redirected' | 'cash' | 'error'> {
+async function startPayment(choice: LeadChoice, kitchenSlug: string | null): Promise<'redirected' | 'cash' | 'error'> {
   const { data, error } = await supabaseBrowser().functions.invoke('razorpay-payment-link', {
     body: { token: choice.portal_token, meals: choice.trial_meals },
   });
   const url = (data as { short_url?: string } | null)?.short_url;
   if (!error && url) {
+    track('trial_payment_started', { kitchen: kitchenSlug }, { beforeNavigation: true });
     window.location.assign(url);
     return 'redirected';
   }
@@ -334,7 +338,7 @@ function Chosen({ saved }: { saved: Saved }) {
 
   async function retry() {
     setBusy(true);
-    const r = await startPayment(c);
+    const r = await startPayment(c, saved.result.kitchens.find((k) => k.kitchen_id === c.kitchen_id)?.slug ?? null);
     if (r !== 'redirected') {
       setBusy(false);
       setPayment(r);

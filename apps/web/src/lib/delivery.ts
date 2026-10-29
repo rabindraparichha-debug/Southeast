@@ -1,6 +1,6 @@
 // Shapes returned by the M5 delivery RPCs (jsonb results are untyped in the generated types),
 // plus small display helpers shared by the /delivery pages.
-import { IST_OFFSET_MINUTES, addDays, istDate } from '@tiffin/core';
+import { IST_OFFSET_MINUTES, addDays, istDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot, MemberRole } from '@tiffin/db';
 
 export type RunStatus = 'planned' | 'out' | 'done';
@@ -104,7 +104,7 @@ export const RUN_STATUS_TONE = { planned: 'blue', out: 'amber', done: 'green' } 
 /** GPS more than this far from the saved pin is flagged for review. */
 export const GPS_WARN_M = 300;
 
-export const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+export const isDate = isIsoDate;
 
 /**
  * The slot the delivery board opens on: the one being delivered now or next, by the IST clock.

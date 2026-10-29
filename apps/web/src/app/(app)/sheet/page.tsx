@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { SLOT_LABEL, addDays, formatIstShort, formatServiceDate, istDate } from '@tiffin/core';
+import { SLOT_LABEL, addDays, formatIstShort, formatServiceDate, istDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot, SlotSummary } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
@@ -16,7 +16,7 @@ function neighbours(date: string, slot: MealSlot) {
 export default async function SheetPage({ searchParams }: PageProps<'/sheet'>) {
   const { kitchen } = await requireKitchen(['owner', 'staff']);
   const sp = await searchParams;
-  const date = typeof sp.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : addDays(istDate(), 1);
+  const date = isIsoDate(sp.date) ? sp.date : addDays(istDate(), 1);
   const slot: MealSlot = sp.slot === 'dinner' ? 'dinner' : 'lunch';
   const supabase = await createClient();
 

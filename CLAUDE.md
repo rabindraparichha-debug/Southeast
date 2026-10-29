@@ -91,7 +91,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Internal helpers live in schema `private` (not exposed by PostgREST).
 - RPCs raise short error codes (`forbidden`, `invalid_phone`, `already_exists`, …). Map them to UI text in `apps/web/src/lib/errors.ts` and `apps/mobile/src/i18n/en.ts`.
 - **Ledgers are append-only:** `audit_log` now; `balance_entries` and `stock_moves` later. Use triggers raising on UPDATE/DELETE. Never store a balance or stock number.
-- **Audit:** attach `private.audit_row()` to every table with money, count, membership or customer data.
+- **Audit:** attach `private.audit_row()` to every table with money, count, membership or customer data. (`balance_entries` is the exception: append-only with `created_by`/`created_at`, it is its own audit record.)
 
 **Daily engine (M2)**
 - `meal_orders` for the next 7 days are reconciled by `private.refresh_orders()`. It never edits a frozen (date, slot): one whose cutoff has passed or that has a `count_snapshots` row.

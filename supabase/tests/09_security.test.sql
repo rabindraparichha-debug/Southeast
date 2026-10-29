@@ -84,5 +84,20 @@ select lives_ok($$ select public.admin_set_fssai('10000000-0000-4000-a000-000000
   'the platform team can correct it');
 reset role;
 
+-- Audit log paging: rows written in one transaction share a timestamp; the (at, id) cursor keeps them all.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
+create temp table pages (n integer, ids bigint[]);
+grant all on pages to authenticated;
+insert into pages select 1, array(select (x ->> 'id')::bigint from jsonb_array_elements(public.admin_audit_log(p_table => 'delivery_stops', p_limit => 50)) x);
+insert into pages select 2, array(select (x ->> 'id')::bigint from jsonb_array_elements(public.admin_audit_log(
+  p_table => 'delivery_stops', p_limit => 50,
+  p_before => (select created_at from public.audit_log where id = (select ids[50] from pages where n = 1)),
+  p_before_id => (select ids[50] from pages where n = 1))) x);
+select is((select cardinality(ids) from pages where n = 2), 50, 'the second page is full even when page 1 ended inside one transaction');
+select is((select ids[1] from pages where n = 2), (select max(id) from public.audit_log where table_name = 'delivery_stops' and id < (select ids[50] from pages where n = 1)),
+  'and continues exactly after the last row shown');
+reset role;
+
 select * from finish();
 rollback;

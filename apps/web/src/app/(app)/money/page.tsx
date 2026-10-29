@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { addDays, formatPaise, formatServiceDate, istDate } from '@tiffin/core';
+import { addDays, formatPaise, formatServiceDate, istDate, isIsoDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { Card, LinkButton, PageHeader, Stat } from '@/components/ui';
@@ -18,8 +18,8 @@ export default async function MoneyPage({ searchParams }: PageProps<'/money'>) {
   const { kitchen } = await requireKitchen(['owner']);
   const sp = await searchParams;
   const today = istDate();
-  const from = typeof sp.from === 'string' ? sp.from : `${today.slice(0, 8)}01`;
-  const to = typeof sp.to === 'string' ? sp.to : today;
+  const from = isIsoDate(sp.from) ? sp.from : `${today.slice(0, 8)}01`;
+  const to = isIsoDate(sp.to) ? sp.to : today;
   const supabase = await createClient();
 
   const [{ data: reportRaw }, { data: pending }, { data: refunds }, { data: dues }, { data: recent }] = await Promise.all([
