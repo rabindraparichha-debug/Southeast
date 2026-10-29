@@ -25,10 +25,13 @@ Deno.serve(async (req) => {
     return json({ error: String((e as Error).message).split(':')[0] }, 500);
   }
 
-  const { customer_id, meals, description } = await req.json().catch(() => ({}));
-  // Step 1, as the caller: checks owner role + verified payout account, creates our payment row.
-  const { data: rec, error } = await rpc<Record_>(SUPABASE_URL, ANON_KEY, auth, 'create_payment_link_record',
-    { p_customer: customer_id, p_meals: meals, p_description: description ?? null });
+  const { customer_id, meals, description, token } = await req.json().catch(() => ({}));
+  // Step 1, as the caller: an owner (role + verified payout account checked), or a customer on
+  // their own page (magic-link token checked). Creates our payment row.
+  const { data: rec, error } = token
+    ? await rpc<Record_>(SUPABASE_URL, ANON_KEY, `Bearer ${ANON_KEY}`, 'portal_payment_link_record', { p_token: token, p_meals: meals })
+    : await rpc<Record_>(SUPABASE_URL, ANON_KEY, auth, 'create_payment_link_record',
+        { p_customer: customer_id, p_meals: meals, p_description: description ?? null });
   if (error || !rec) return json({ error: error?.message ?? 'failed' }, 400);
 
   // Step 2: Razorpay (or mock). Step 3, as the service role: attach the link to our row.

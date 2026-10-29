@@ -436,3 +436,6 @@ verify_jwt = false
 # Local mock payment page (refuses to run unless RAZORPAY_MODE=mock).
 [functions.razorpay-mock]
 verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false

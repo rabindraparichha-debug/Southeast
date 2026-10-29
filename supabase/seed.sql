@@ -211,3 +211,17 @@ select k.id, (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
 from public.kitchens k
 cross join generate_series(0, 6) g
 cross join unnest(enum_range(null::public.meal_slot)) as sl(slot);
+
+-- ---------------------------------------------------------------------------
+-- WhatsApp (M4), local only
+-- ---------------------------------------------------------------------------
+-- Lets pg_cron (private.kick_outbox) call the whatsapp-outbox function inside the Docker network.
+-- The key is the Supabase CLI's public local-development service key, not a real secret.
+select vault.create_secret('http://supabase_kong_tiffin:8000/functions/v1', 'functions_base_url');
+select vault.create_secret('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU', 'service_role_key');
+
+-- Half of kitchen A's customers have opted in to WhatsApp updates.
+update public.customers set whatsapp_opt_in = true
+where kitchen_id = '10000000-0000-4000-a000-00000000000a' and phone_last4::int % 2 = 1;
+insert into public.consents (kitchen_id, customer_id, purpose, basis, channel)
+select kitchen_id, id, 'whatsapp', 'customer', 'whatsapp' from public.customers where whatsapp_opt_in;
