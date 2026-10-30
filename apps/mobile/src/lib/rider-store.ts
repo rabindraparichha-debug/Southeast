@@ -6,7 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { useSyncExternalStore } from 'react';
+import { completeStopArgs, parseQueue, type QueuedOp } from './rider-queue';
 import { supabase } from './supabase';
+
+export type { QueuedOp } from './rider-queue';
 
 export type RiderStop = {
   id: string;
@@ -31,6 +34,8 @@ export type RiderStop = {
   tiffins_returned: number;
   tiffins_with_customer: number;
   otp_sent: boolean;
+  qr_token?: string | null; // tiffin sticker code (P5); missing in caches from older versions
+  office?: boolean; // office stop (P6): name is the office, meal_count covers every member
   queued?: boolean; // changed on the phone, not synced yet
 };
 
@@ -48,20 +53,6 @@ export type RiderRun = {
   finished_at: string | null;
   planned_km: number | null;
   stops: RiderStop[];
-};
-
-type Kind = 'start' | 'complete' | 'fail' | 'finish';
-export type QueuedOp = {
-  op: string; // client id (idempotency key)
-  kind: Kind;
-  runId: string;
-  stopId?: string;
-  at: string; // when the rider tapped (device time)
-  offline: boolean; // could not be sent at the time
-  args: Record<string, unknown>;
-  photoUri?: string;
-  photoPath?: string;
-  uploaded?: boolean;
 };
 
 type State = {
@@ -122,7 +113,7 @@ export function loadRider(): Promise<void> {
   loading ??= (async () => {
     const [[, cache], [, queue]] = await AsyncStorage.multiGet([CACHE_KEY, QUEUE_KEY]);
     const c = cache ? (JSON.parse(cache) as { runs: RiderRun[]; fetchedAt: string | null }) : { runs: [], fetchedAt: null };
-    set({ loaded: true, runs: c.runs, fetchedAt: c.fetchedAt, queue: queue ? JSON.parse(queue) : [] });
+    set({ loaded: true, runs: c.runs, fetchedAt: c.fetchedAt, queue: parseQueue(queue) });
   })();
   return loading;
 }
@@ -207,10 +198,7 @@ async function send(q: QueuedOp): Promise<SendResult> {
       : q.kind === 'finish'
         ? supabase.rpc('finish_run', { p_run: q.runId, ...common })
         : q.kind === 'complete'
-          ? supabase.rpc('complete_stop', {
-              ...(q.args as { p_proof: 'otp' | 'photo' | 'none' }),
-              p_stop: q.stopId!, ...common, p_client_op: q.op, p_offline: q.offline, p_photo_path: q.photoPath,
-            })
+          ? supabase.rpc('complete_stop', completeStopArgs(q) as { p_stop: string; p_proof: 'otp' | 'photo' | 'none' })
           : supabase.rpc('fail_stop', {
               ...(q.args as { p_reason: 'not_home' }),
               p_stop: q.stopId!, ...common, p_client_op: q.op, p_offline: q.offline,
@@ -223,6 +211,9 @@ async function send(q: QueuedOp): Promise<SendResult> {
     return { ok: false, network: true, message: String((e as Error).message) };
   }
 }
+
+// Actions the server refused (e.g. wrong_tiffin), by client id, so act() can tell its caller.
+const rejected = new Map<string, string>();
 
 let syncing: Promise<void> | null = null;
 /** Sends queued actions in order. Stops at the first network failure (they wait for the next try). */
@@ -240,7 +231,11 @@ export function syncQueue(): Promise<void> {
           await persist();
           return;
         }
-        if (!res.ok) set({ lastError: res.message });
+        if (!res.ok) {
+          set({ lastError: res.message });
+          if (rejected.size > 50) rejected.clear();
+          rejected.set(q.op, res.message);
+        }
         dropPhoto(q.photoUri);
         set({ online: true, queue: state.queue.slice(1) });
         await persist();
@@ -297,6 +292,14 @@ export async function act(input: Omit<QueuedOp, 'op' | 'at' | 'offline'> & { op?
   await persist();
   await syncQueue();
   const stillQueued = state.queue.some((x) => x.op === q.op);
+  const refused = rejected.get(q.op);
+  rejected.delete(q.op);
+  if (refused) {
+    // Undo what the screen showed: reload today's runs, so the rider can fix it and try again.
+    await refreshRider();
+    set({ lastError: null }); // shown on the stop screen instead
+    return { synced: false, error: refused };
+  }
   if (!stillQueued) {
     set({ runs: state.runs.map((r) => ({ ...r, stops: r.stops.map((s) => (s.id === q.stopId ? { ...s, queued: false } : s)) })) });
     await persist();
@@ -312,6 +315,7 @@ export function clearRiderError() {
 export async function resetRider() {
   state = { loaded: false, runs: [], queue: [], fetchedAt: null, online: true, syncing: false, lastError: null };
   loading = null;
+  rejected.clear();
   await AsyncStorage.multiRemove([CACHE_KEY, QUEUE_KEY]);
   listeners.forEach((l) => l());
 }

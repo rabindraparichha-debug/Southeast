@@ -1,7 +1,7 @@
 import { addDays, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
-import { PageHeader } from '@/components/ui';
+import { LinkButton, PageHeader } from '@/components/ui';
 import { MenuEditor } from './menu-editor';
 
 export default async function MenuPage() {
@@ -16,7 +16,8 @@ export default async function MenuPage() {
   ]);
   return (
     <>
-      <PageHeader title="Menu" subtitle="Next 7 days. Shown on the kitchen sheet, and to customers on WhatsApp later." />
+      <PageHeader title="Menu" subtitle="Next 7 days. Shown on the kitchen sheet, and to customers on WhatsApp later."
+        actions={<LinkButton href="/menu/specials" variant="secondary">Festival specials</LinkButton>} />
       <MenuEditor kitchenId={kitchen.kitchenId} days={days} weeklyOff={k?.weekly_off ?? []} menus={menus ?? []} />
     </>
   );

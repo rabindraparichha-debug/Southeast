@@ -8,6 +8,7 @@ import { currentDeliverySlot, isDate, type LiveBoard } from '@/lib/delivery';
 import { Alert, PageHeader } from '@/components/ui';
 import { DeliveryTabs } from './tabs';
 import { LiveBoardView } from './live-board';
+import { DispatchPhotoCard, type DispatchPhoto } from './dispatch-photo';
 
 function neighbours(date: string, slot: MealSlot) {
   const prev = slot === 'dinner' ? { date, slot: 'lunch' as const } : { date: addDays(date, -1), slot: 'dinner' as const };
@@ -23,7 +24,12 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
   const date = isDate(sp.date) ? sp.date : now.date;
   const slot: MealSlot = sp.slot === 'dinner' || sp.slot === 'lunch' ? sp.slot : isDate(sp.date) ? 'lunch' : now.slot;
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('live_board', { p_kitchen: kitchen.kitchenId, p_date: date, p_slot: slot });
+  const [{ data, error }, { data: photos }] = await Promise.all([
+    supabase.rpc('live_board', { p_kitchen: kitchen.kitchenId, p_date: date, p_slot: slot }),
+    supabase.from('dispatch_photos').select('id, run_id, photo_path, taken_at').eq('kitchen_id', kitchen.kitchenId)
+      .eq('service_date', date).eq('slot', slot).order('taken_at'),
+  ]);
+  const board = data as unknown as LiveBoard | null;
   const { prev, next } = neighbours(date, slot);
   const isOwner = kitchen.role === 'owner';
 
@@ -42,6 +48,7 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
             </select>
             <button className="rounded-lg bg-white px-3 py-1.5 text-sm ring-1 ring-ink-200 hover:bg-ink-50">Show</button>
             <Link href={`/delivery?date=${next.date}&slot=${next.slot}`} className="rounded-lg px-3 py-2 text-sm ring-1 ring-ink-200 hover:bg-ink-50">{SLOT_LABEL[next.slot]} →</Link>
+            <Link href={`/print/stickers?date=${date}&slot=${slot}`} className="rounded-lg px-3 py-2 text-sm ring-1 ring-ink-200 hover:bg-ink-50">🏷️ Stickers</Link>
             {(date !== now.date || slot !== now.slot) && (
               <Link href="/delivery" className="px-2 text-sm font-medium text-brand-700 hover:underline">Now</Link>
             )}
@@ -52,7 +59,11 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
       {error || !data ? (
         <Alert>{friendlyError(error)}</Alert>
       ) : (
-        <LiveBoardView key={`${date}:${slot}`} kitchenId={kitchen.kitchenId} initial={data as unknown as LiveBoard} isOwner={isOwner} />
+        <>
+          <DispatchPhotoCard kitchenId={kitchen.kitchenId} date={date} slot={slot}
+            runs={(board?.runs ?? []).map((r) => ({ id: r.id, route_name: r.route_name }))} photos={(photos ?? []) as DispatchPhoto[]} />
+          <LiveBoardView key={`${date}:${slot}`} kitchenId={kitchen.kitchenId} initial={board!} isOwner={isOwner} />
+        </>
       )}
     </>
   );

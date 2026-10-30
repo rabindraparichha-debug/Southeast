@@ -58,9 +58,18 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Tiffin OS takes photos of delivered tiffins as proof of delivery and of supplier bills for your stock records.",
+          "cameraPermission": "Tiffin OS uses the camera to scan tiffin stickers and to take photos of delivered tiffins, packed meals before dispatch and supplier bills for your kitchen's records.",
           "photosPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Tiffin OS uses the camera to scan tiffin stickers and to take photos of delivered tiffins, packed meals before dispatch and supplier bills for your kitchen's records.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
         }
       ]
     ],

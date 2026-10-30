@@ -7,6 +7,7 @@ import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, clearRiderError, loadRider, refreshRider, useRider, type RiderRun, type RiderStop } from '@/lib/rider-store';
+import { useAuth } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/i18n';
 
@@ -14,6 +15,7 @@ const STATUS_COLOR = { pending: colors.inkSoft, delivered: colors.veg, failed: c
 
 export default function Rider() {
   const rider = useRider();
+  const { memberships } = useAuth();
   const [runId, setRunId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,9 @@ export default function Rider() {
 
   if (!rider.loaded) return <Screen><Muted>…</Muted></Screen>;
 
+  // A rider shared by several kitchens gets runs from each: always say whose run it is then.
+  const manyKitchens = new Set(rider.runs.map((r) => r.kitchen_id)).size > 1 || memberships.length > 1;
+
   const done = run ? run.stops.filter((s) => s.status !== 'pending').length : 0;
   const allDone = run ? done === run.stops.length : false;
 
@@ -89,7 +94,7 @@ export default function Rider() {
         <View style={styles.chips}>
           {rider.runs.map((r) => (
             <Chip key={r.id} selected={r.id === run?.id} onPress={() => setRunId(r.id)}
-              label={`${SLOT_LABEL[r.slot]} · ${r.route_name}${rider.runs.some((x) => x.kitchen_id !== r.kitchen_id) ? ` · ${r.kitchen_name}` : ''}`} />
+              label={`${manyKitchens ? `${r.kitchen_name} · ` : ''}${SLOT_LABEL[r.slot]} · ${r.route_name}`} />
           ))}
         </View>
       )}
@@ -107,6 +112,7 @@ export default function Rider() {
           contentContainerStyle={{ gap: space(2), paddingBottom: space(6) }}
           ListHeaderComponent={
             <Card style={{ marginBottom: space(1) }}>
+              {manyKitchens && <Text style={styles.kitchen}>{run.kitchen_name}</Text>}
               <View style={styles.row}>
                 <Text style={styles.runTitle}>{SLOT_LABEL[run.slot]} · {run.route_name}</Text>
                 <Text style={styles.muted}>{run.planned_km ? t('rider.km', { km: run.planned_km }) : ''}</Text>
@@ -141,9 +147,10 @@ function StopRow({ stop }: { stop: RiderStop }) {
       style={({ pressed }) => [styles.stop, stop.status !== 'pending' && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}>
       <View style={styles.seq}><Text style={styles.seqText}>{stop.seq}</Text></View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.name}>{stop.name}</Text>
+        <Text style={styles.name}>{stop.office ? `🏢 ${stop.name}` : stop.name}</Text>
+        {stop.office && <Text style={styles.office}>{t('rider.officeMeals', { n: stop.meal_count })}</Text>}
         <Text style={styles.addr}>{[stop.line1, stop.landmark, stop.area].filter(Boolean).join(', ')}</Text>
-        <Text style={styles.small}>{t('rider.meals', { n: stop.meal_count })}{diets ? ` · ${diets}` : ''}
+        <Text style={styles.small}>{stop.office ? diets : `${t('rider.meals', { n: stop.meal_count })}${diets ? ` · ${diets}` : ''}`}
           {stop.tiffins_with_customer > 0 ? ` · ${t('rider.tiffinsHeld', { n: stop.tiffins_with_customer })}` : ''}</Text>
         {stop.delivery_notes ? <Text style={styles.note}>{t('rider.notes')}: {stop.delivery_notes}</Text> : null}
       </View>
@@ -166,6 +173,8 @@ function Banner({ text, tone }: { text: string; tone: 'warn' | 'info' }) {
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  kitchen: { fontSize: 13, fontWeight: '700', color: colors.brand, textTransform: 'uppercase' },
+  office: { fontSize: 14, fontWeight: '700', color: colors.brand },
   runTitle: { fontSize: 18, fontWeight: '600', color: colors.ink },
   muted: { color: colors.muted },
   small: { fontSize: 12, color: colors.muted },

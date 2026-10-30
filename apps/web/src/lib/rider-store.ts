@@ -34,6 +34,10 @@ export type RiderStop = {
   tiffins_returned: number;
   tiffins_with_customer: number;
   otp_sent: boolean;
+  /** P5: the code printed as a QR on the stop's sticker (checked again on the server). */
+  qr_token?: string | null;
+  /** P6: an office stop (name is the office's name). */
+  office?: boolean;
   queued?: boolean; // changed on this device, not synced yet
 };
 
@@ -65,6 +69,8 @@ export type QueuedOp = {
   hasPhoto?: boolean; // bytes stored in IndexedDB under photoKey(op)
   photoPath?: string;
   uploaded?: boolean;
+  /** P5: the sticker the rider scanned before handing over (optional; items queued before P5 have none). */
+  scanToken?: string;
 };
 
 type State = {
@@ -232,6 +238,7 @@ async function send(q: QueuedOp): Promise<SendResult> {
           ? supabase.rpc('complete_stop', {
               ...(q.args as Omit<CompleteArgs, 'p_stop'>),
               p_stop: q.stopId!, ...common, p_client_op: q.op, p_offline: q.offline, p_photo_path: q.photoPath,
+              ...(q.scanToken ? { p_scan_token: q.scanToken } : {}),
             })
           : supabase.rpc('fail_stop', {
               ...(q.args as Omit<FailArgs, 'p_stop'>),

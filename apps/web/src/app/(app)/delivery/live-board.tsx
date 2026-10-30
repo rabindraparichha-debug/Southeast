@@ -304,7 +304,7 @@ function StopRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-5 text-right text-xs text-ink-500">{s.seq}</span>
           {STATUS_ICON[s.status]}
-          <span className="font-medium text-ink-900" data-testid="stop-name">{s.customer_name}</span>
+          <span className="font-medium text-ink-900" data-testid="stop-name">{s.office_id ? '🏢 ' : ''}{s.customer_name}</span>
           {s.meal_count !== 1 && <span className="text-xs text-ink-500">× {s.meal_count}</span>}
           <Proof stop={s} isOwner={isOwner} photoUrl={photoUrl} />
           {s.done_at && <span className="text-xs text-ink-500">{formatIstTime(s.done_at)}</span>}

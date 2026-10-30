@@ -5,15 +5,19 @@ import { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { rupeesToPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components/ui';
+import { QrScanner } from '@/components/qr-scanner';
 import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, isNetworkError, keepPhoto, useRider, uuid } from '@/lib/rider-store';
+import { checkScan, normalizeScanToken } from '@/lib/rider-queue';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/i18n';
 
 const REASONS = ['not_home', 'wrong_address', 'refused', 'unreachable', 'kitchen_late', 'food_issue', 'missing_meal', 'rider_issue', 'other'] as const;
 const KITCHEN_FAULT = new Set(['kitchen_late', 'food_issue', 'missing_meal', 'rider_issue']);
 type Reason = (typeof REASONS)[number];
+// ok: matches the cached sticker code; unknown: no code cached, the server checks it; wrong: another stop's tiffin.
+type Scan = { token: string; result: 'ok' | 'unknown' | 'wrong' };
 
 /** Best-effort GPS fix: a recent known position, else a quick fresh one. Never blocks for long. */
 async function gps(): Promise<{ lat: number; lng: number; accuracy: number | null } | null> {
@@ -29,6 +33,11 @@ async function gps(): Promise<{ lat: number; lng: number; accuracy: number | nul
   } catch {
     return null;
   }
+}
+
+/** "2 veg, 1 non-veg" from the stop's diet counts. */
+function dietText(diets: Record<string, number> | null): string {
+  return Object.entries(diets ?? {}).map(([d, n]) => `${n} ${d === 'nonveg' ? 'non-veg' : d}`).join(', ');
 }
 
 function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
@@ -57,6 +66,8 @@ export default function StopScreen() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scan, setScan] = useState<Scan | null>(null);
 
   if (!found) {
     return <View style={styles.screen}><Muted>{t('errors.not_found')}</Muted></View>;
@@ -65,6 +76,16 @@ export default function StopScreen() {
   const out = tiffinsOut ?? stop.meal_count;
   const back = tiffinsBack ?? Math.min(stop.tiffins_with_customer, stop.meal_count);
   const canAct = stop.status === 'pending' && run.status !== 'done';
+  const wrongScan = scan?.result === 'wrong';
+
+  const onScanned = (data: string) => {
+    setScanning(false);
+    setError('');
+    const result = checkScan(stop.qr_token, data);
+    const token = normalizeScanToken(data);
+    if (result === 'empty' || !token) return setError(t('rider.scan.unreadable'));
+    setScan({ token, result });
+  };
 
   const navigate = () => {
     const dest = stop.lat != null && stop.lng != null
@@ -87,6 +108,7 @@ export default function StopScreen() {
 
   const deliver = async (proof: 'otp' | 'photo' | 'none') => {
     setError('');
+    if (wrongScan) return;
     if (proof === 'otp' && !/^\d{4}$/.test(otp.trim())) return setError(t('rider.otpWrong'));
     let photoUri: string | undefined;
     let photoPath: string | undefined;
@@ -103,6 +125,8 @@ export default function StopScreen() {
     const pos = await gps();
     const res = await act({
       op, kind: 'complete', runId: run.id, stopId: stop.id, photoUri, photoPath,
+      // Saved with the queued action, so an offline delivery still sends the scan when it syncs.
+      scanToken: scan?.token,
       args: {
         p_proof: proof, p_otp: proof === 'otp' ? otp.trim() : null, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null,
         p_accuracy: pos?.accuracy ?? null, p_tiffins_out: out, p_tiffins_returned: back, p_cash_paise: cashPaise,
@@ -110,6 +134,7 @@ export default function StopScreen() {
     });
     setBusy(false);
     if (res.otpWrong) return setError(t('rider.otpWrong'));
+    if (res.error === 'wrong_tiffin' && scan) return setScan({ ...scan, result: 'wrong' });
     if (res.error) return setError(friendlyError({ message: res.error }));
     router.back();
   };
@@ -132,10 +157,18 @@ export default function StopScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ gap: space(3), paddingBottom: space(10) }} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: `${stop.seq}. ${stop.name}` }} />
+      {scanning && <QrScanner visible onScanned={onScanned} onClose={() => setScanning(false)} />}
       <Card>
+        {stop.office && (
+          <View style={styles.office}>
+            <Text style={styles.officeTitle}>🏢 {t('rider.office', { name: stop.name })}</Text>
+            <Text style={styles.officeMeals}>{t('rider.officeMeals', { n: stop.meal_count })}</Text>
+            {dietText(stop.diets) ? <Muted>{dietText(stop.diets)}</Muted> : null}
+          </View>
+        )}
         <Text style={styles.addr}>{[stop.line1, stop.landmark, stop.area].filter(Boolean).join(', ')}</Text>
         {stop.delivery_notes ? <Text style={styles.note}>{t('rider.notes')}: {stop.delivery_notes}</Text> : null}
-        <Muted>{t('rider.meals', { n: stop.meal_count })}{stop.tiffins_with_customer > 0 ? ` · ${t('rider.tiffinsHeld', { n: stop.tiffins_with_customer })}` : ''}</Muted>
+        <Muted>{stop.office ? '' : t('rider.meals', { n: stop.meal_count })}{!stop.office && dietText(stop.diets) ? ` · ${dietText(stop.diets)}` : ''}{stop.tiffins_with_customer > 0 ? ` · ${t('rider.tiffinsHeld', { n: stop.tiffins_with_customer })}` : ''}</Muted>
         <Muted>{stop.phone_masked}</Muted>
         <View style={styles.row}>
           <View style={{ flex: 1 }}><Button title={t('rider.navigate')} onPress={navigate} /></View>
@@ -154,6 +187,32 @@ export default function StopScreen() {
 
       {canAct && !failing && (
         <Card>
+          <Label>{t('rider.scan.title')}</Label>
+          {!scan && (
+            <>
+              <Button title={`▣ ${t('rider.scan.button')}`} variant="secondary" onPress={() => { setError(''); setScanning(true); }} disabled={busy} />
+              <Muted>{t('rider.scan.optional')}</Muted>
+            </>
+          )}
+          {scan?.result === 'ok' && <Text style={styles.scanOk}>✓ {t('rider.scan.ok')}</Text>}
+          {scan?.result === 'unknown' && <Text style={styles.scanOk}>✓ {t('rider.scan.unknown')}</Text>}
+          {wrongScan && (
+            <View style={styles.wrong}>
+              <Text style={styles.wrongTitle}>✗ {t('rider.scan.wrong')}</Text>
+              <Text style={styles.wrongHint}>{t('rider.scan.wrongHint', { name: stop.name })}</Text>
+            </View>
+          )}
+          {scan && (
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}><Button title={t('rider.scan.again')} variant="secondary" onPress={() => { setError(''); setScanning(true); }} disabled={busy} /></View>
+              <View style={{ flex: 1 }}><Button title={t('rider.scan.skip')} variant="secondary" onPress={() => setScan(null)} disabled={busy} /></View>
+            </View>
+          )}
+        </Card>
+      )}
+
+      {canAct && !failing && (
+        <Card>
           <Stepper label={t('rider.tiffinsOut')} value={out} onChange={setTiffinsOut} />
           <Stepper label={t('rider.tiffinsReturned')} value={back} onChange={setTiffinsBack} />
           <Label>{t('rider.cash')}</Label>
@@ -162,9 +221,10 @@ export default function StopScreen() {
           <Muted>{stop.otp_sent ? t('rider.otpHint') : t('rider.otpNotSent')}</Muted>
           <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={4} placeholder="0000" />
           <ErrorText>{error}</ErrorText>
-          <Button title={t('rider.confirmOtp')} onPress={() => deliver('otp')} busy={busy} disabled={otp.trim().length !== 4} />
-          <Button title={t('rider.photo')} variant="secondary" onPress={() => deliver('photo')} disabled={busy} />
-          <Pressable onPress={() => deliver('none')} disabled={busy}><Text style={styles.link}>{t('rider.noProof')}</Text></Pressable>
+          {wrongScan && <ErrorText>{t('rider.scan.blocked')}</ErrorText>}
+          <Button title={t('rider.confirmOtp')} onPress={() => deliver('otp')} busy={busy} disabled={otp.trim().length !== 4 || wrongScan} />
+          <Button title={t('rider.photo')} variant="secondary" onPress={() => deliver('photo')} disabled={busy || wrongScan} />
+          <Pressable onPress={() => deliver('none')} disabled={busy || wrongScan}><Text style={[styles.link, wrongScan && { opacity: 0.4 }]}>{t('rider.noProof')}</Text></Pressable>
           <Pressable onPress={() => setFailing(true)}><Text style={[styles.link, { color: colors.danger }]}>{t('rider.fail')}</Text></Pressable>
         </Card>
       )}
@@ -196,6 +256,13 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
   status: { fontSize: 16, fontWeight: '600' },
   link: { textAlign: 'center', paddingVertical: space(2), color: colors.inkSoft, textDecorationLine: 'underline' },
+  office: { gap: 2, paddingBottom: space(2), borderBottomWidth: 1, borderBottomColor: colors.line },
+  officeTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
+  officeMeals: { fontSize: 22, fontWeight: '700', color: colors.brand },
+  scanOk: { fontSize: 15, fontWeight: '600', color: colors.veg },
+  wrong: { backgroundColor: '#FEE2E2', borderRadius: 10, padding: space(3), gap: space(1) },
+  wrongTitle: { fontSize: 17, fontWeight: '700', color: colors.danger },
+  wrongHint: { fontSize: 14, color: colors.inkSoft },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: space(3) },
   stepLabel: { flex: 1, fontSize: 15, color: colors.inkSoft },
   stepBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },

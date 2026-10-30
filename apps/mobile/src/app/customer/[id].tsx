@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
 import { friendlyError } from '@/lib/errors';
 import { Button, Card, Chip, DIET_COLOR, DIET_LABEL, ErrorText, Label, Muted } from '@/components/ui';
+import { CustomerExtras } from '@/components/customer-extras';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -213,6 +214,8 @@ export default function CustomerDetail() {
           </View>
         ))}
       </Card>
+
+      {kitchen.role !== 'rider' && <CustomerExtras customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} />}
 
       {c.notes ? (
         <Card>

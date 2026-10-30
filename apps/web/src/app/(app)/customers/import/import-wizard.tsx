@@ -19,7 +19,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Badge, Button, Card, LinkButton, Select } from '@/components/ui';
 
-type Sheet = { fileName: string; headers: string[]; rows: unknown[][] };
+export type Sheet = { fileName: string; headers: string[]; rows: unknown[][] };
 
 async function readFile(file: File): Promise<Sheet> {
   if (/\.xlsx$/i.test(file.name)) {
@@ -41,9 +41,15 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function ImportWizard({ kitchenId, planNames }: { kitchenId: string; planNames: string[] }) {
-  const [sheet, setSheet] = useState<Sheet | null>(null);
-  const [mapping, setMapping] = useState<ColumnMapping>({});
+/**
+ * `initial` hands rows from another source (the notebook-photo import) straight to step 3: they are
+ * checked, confirmed and saved through the same import_customers call as an uploaded file.
+ */
+export function ImportWizard({ kitchenId, planNames, initial }: {
+  kitchenId: string; planNames: string[]; initial?: { sheet: Sheet; mapping: ColumnMapping };
+}) {
+  const [sheet, setSheet] = useState<Sheet | null>(initial?.sheet ?? null);
+  const [mapping, setMapping] = useState<ColumnMapping>(initial?.mapping ?? {});
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -124,9 +130,12 @@ export function ImportWizard({ kitchenId, planNames }: { kitchenId: string; plan
     );
   }
 
+  // Rows handed over from the notebook photo: no file to choose and no columns to match.
+  const preset = Boolean(initial) && sheet === initial?.sheet;
+
   return (
     <div className="space-y-6">
-      <Card title="1. Choose file">
+      {!preset && <Card title="1. Choose file">
         <input type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} className="text-sm" />
         <p className="mt-2 text-xs text-ink-500">
           First row must be column names. Row numbers below count the header as row 1 (blank rows are skipped).{' '}
@@ -135,9 +144,10 @@ export function ImportWizard({ kitchenId, planNames }: { kitchenId: string; plan
           </button>
         </p>
         <div className="mt-2"><Alert>{error}</Alert></div>
-      </Card>
+      </Card>}
+      {preset && <Alert>{error}</Alert>}
 
-      {sheet && (
+      {sheet && !preset && (
         <Card title="2. Match columns">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {IMPORT_FIELDS.map((field) => (

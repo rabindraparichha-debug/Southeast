@@ -29,6 +29,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
     items.push({ href: '/money', label: 'Money', icon: '💰' });
     items.push({ href: '/reports/costs', label: 'Costs', icon: '📊' });
+    items.push({ href: '/insights', label: 'Insights', icon: '💡' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });
     items.push({ href: '/team', label: 'Team', icon: '🧑‍🍳' });

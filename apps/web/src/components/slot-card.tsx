@@ -2,10 +2,12 @@ import Link from 'next/link';
 import { SLOT_LABEL, formatIstShort, formatServiceDate } from '@tiffin/core';
 import type { SlotSummary } from '@tiffin/db';
 import { Badge } from './ui';
+import { healthLabel, type SlotTotalsP5 } from '@/lib/p5';
 
 /** One meal slot: locked or live count, diet split, skips, link to the kitchen sheet. */
 export function SlotCard({ s }: { s: SlotSummary }) {
-  const totals = s.locked && s.locked_totals ? s.locked_totals : s.live;
+  const totals: SlotTotalsP5 = s.locked && s.locked_totals ? s.locked_totals : s.live;
+  const health = Object.entries(totals.by_health ?? {});
   const lateAfterLock = s.locked ? s.live.late_skips - (s.locked_totals?.late_skips ?? 0) : 0;
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-ink-100">
@@ -33,6 +35,13 @@ export function SlotCard({ s }: { s: SlotSummary }) {
         <Badge tone="red">Non-veg {totals.by_diet.nonveg}</Badge>
         <Badge tone="amber">Jain {totals.by_diet.jain}</Badge>
       </div>
+      {((totals.veg_switched ?? 0) > 0 || health.length > 0) && (
+        <div className="mt-1.5 text-xs text-ink-600">
+          {(totals.veg_switched ?? 0) > 0 && <span className="text-green-800">{totals.veg_switched} switched to veg (veg day)</span>}
+          {(totals.veg_switched ?? 0) > 0 && health.length > 0 && ' · '}
+          {health.map(([t, n]) => `${healthLabel(t)} ${n}`).join(' · ')}
+        </div>
+      )}
       <div className="mt-2 text-xs text-ink-500">
         {s.live.skipped} skipped
         {s.live.late_skips > 0 && ` · ${s.live.late_skips} late skip${s.live.late_skips > 1 ? 's' : ''} (charged, don’t deliver)`}

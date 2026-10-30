@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
 import { Card, Muted, Title } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
+import { DispatchPhotoCard } from '@/components/dispatch-photo';
+import { AtRiskCard, SpecialsCard } from '@/components/insights';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -19,9 +21,11 @@ export default function Today() {
   const [changes, setChanges] = useState<Change[]>([]);
   const [todo, setTodo] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [version, setVersion] = useState(0); // reloads the cards below on focus and pull-to-refresh
 
   const load = useCallback(async () => {
     if (kitchen.role === 'rider') return;
+    setVersion((v) => v + 1);
     const today = istDate();
     const wanted: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];
     const [results, feed] = await Promise.all([
@@ -54,11 +58,14 @@ export default function Today() {
           <Muted>{t('checklist.web')}</Muted>
         </Card>
       )}
+      <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={kitchen.role === 'owner'} version={version} />
       <View style={styles.grid}>
         {slots.map((s) => (
           <SlotCard key={`${s.service_date}-${s.slot}`} s={s} onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })} />
         ))}
       </View>
+      <DispatchPhotoCard kitchenId={kitchen.kitchenId} version={version} />
+      {kitchen.role === 'owner' && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>
         <Text style={styles.cardTitle}>{t('today.changes')}</Text>
         {changes.length === 0 && <Muted>{t('today.noChanges')}</Muted>}

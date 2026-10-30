@@ -17,12 +17,15 @@ export default async function CustomersPage({ searchParams }: PageProps<'/custom
         title="Customers"
         subtitle={q ? `Results for “${q}”` : `${customers?.length ?? 0} customers`}
         actions={
-          isOwner && (
-            <>
-              <LinkButton href="/customers/import" variant="secondary">Import</LinkButton>
-              <LinkButton href="/customers/new">Add customer</LinkButton>
-            </>
-          )
+          <>
+            <LinkButton href="/customers/offices" variant="secondary">Offices</LinkButton>
+            {isOwner && (
+              <>
+                <LinkButton href="/customers/import" variant="secondary">Import</LinkButton>
+                <LinkButton href="/customers/new">Add customer</LinkButton>
+              </>
+            )}
+          </>
         }
       />
       <form className="mb-4 flex gap-2">

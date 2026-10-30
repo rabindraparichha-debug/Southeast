@@ -12,6 +12,8 @@ export type BoardStop = {
   seq: number;
   customer_id: string;
   customer_name: string;
+  /** P6: an office stop (customer_name is then the office name). */
+  office_id?: string | null;
   line1: string | null;
   area: string | null;
   landmark: string | null;

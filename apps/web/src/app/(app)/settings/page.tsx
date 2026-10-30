@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui';
 import { SettingsForm } from './settings-form';
 import { ListingForm } from './listing-form';
+import { CareForm } from './care-form';
 
 export default async function SettingsPage() {
   const { kitchen } = await requireKitchen(['owner']);
@@ -24,6 +25,7 @@ export default async function SettingsPage() {
       </div>
       <ListingForm kitchen={k} />
       <SettingsForm kitchen={k} settings={s} />
+      <CareForm settings={s} />
     </>
   );
 }

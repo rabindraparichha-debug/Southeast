@@ -10,6 +10,10 @@ import { EraseCustomer } from './erase-customer';
 import { SubscriptionActions } from './subscription-actions';
 import { MoneyPanel } from './money-panel';
 import { WhatsAppCard } from './whatsapp-card';
+import { FamilyCard } from './family-card';
+import { FoodHealthCard } from './food-health-card';
+import { ReferralCard } from './referral-card';
+import type { CustomerScore } from '@/lib/p5';
 
 const formatDate = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -59,6 +63,25 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
         supabase.from('kitchens').select('slug').eq('id', kitchen.kitchenId).single(),
       ])
     : [{ data: null }, { data: null }, { data: null }];
+  // P5/P6: food calendar opt-ins and health tags (owner + staff); payer, office, referral (owner).
+  const [{ data: extra }, { data: ks }, { data: health }] = await Promise.all([
+    supabase.from('customers').select('payer_customer_id, observes_veg_days, observes_kartika, referral_code, office_id').eq('id', id).single(),
+    supabase.from('kitchen_settings').select('veg_days, veg_days_enabled, kartika_veg_mode, referral_reward_meals').eq('kitchen_id', kitchen.kitchenId).single(),
+    supabase.from('customer_health').select('tags, consent_at, consent_basis').eq('customer_id', id).maybeSingle(),
+  ]);
+  const [{ data: everyone }, { data: offices }, { data: referral }, { data: score }, { count: recharges }] = isOwner
+    ? await Promise.all([
+        supabase.from('customers').select('id, name, payer_customer_id').eq('kitchen_id', kitchen.kitchenId).is('deleted_at', null).order('name'),
+        supabase.from('offices').select('id, name, active').eq('kitchen_id', kitchen.kitchenId).order('name'),
+        supabase.from('referrals').select('referrer_customer_id').eq('referee_customer_id', id).maybeSingle(),
+        supabase.rpc('customer_complaint_score', { p_customer: id }),
+        supabase.from('balance_entries').select('id', { count: 'exact', head: true }).eq('customer_id', id).eq('type', 'recharge'),
+      ])
+    : [{ data: null }, { data: null }, { data: null }, { data: null }, { count: null }];
+  const people = everyone ?? [];
+  const nameOf = (cid: string | null | undefined) => people.find((p) => p.id === cid)?.name ?? null;
+  const payerId = extra?.payer_customer_id ?? null;
+  const officeRow = (offices ?? []).find((o) => o.id === extra?.office_id) ?? null;
   const livePlan = (subscriptions ?? []).find((s) => s.status !== 'cancelled')?.plan ?? subscriptions?.[0]?.plan ?? null;
 
   return (
@@ -71,6 +94,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             {c.diet && <Badge tone={DIET_TONE[c.diet]}>{DIET_LABEL[c.diet]}</Badge>}
             {c.preferred_language && <Badge>{LANGUAGE_LABEL[c.preferred_language]}</Badge>}
             {c.platform_sourced && <Badge tone="blue">Platform customer</Badge>}
+            {officeRow && <Badge>Office: {officeRow.name}</Badge>}
           </span>
         }
       />
@@ -117,6 +141,37 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             <p className="text-sm text-ink-500">No meals in the last 3 or next 7 days.</p>
           )}
         </Card>
+
+        <FoodHealthCard
+          customerId={c.id!}
+          editable={isOwner}
+          vegDays={Boolean(extra?.observes_veg_days)}
+          kartika={Boolean(extra?.observes_kartika)}
+          kitchen={{ vegDaysEnabled: Boolean(ks?.veg_days_enabled), vegDays: ks?.veg_days ?? [], kartikaMode: Boolean(ks?.kartika_veg_mode) }}
+          health={{ tags: health?.tags ?? [], consentAt: health?.consent_at ?? null, basis: health?.consent_basis ?? null }}
+        />
+
+        {isOwner && (
+          <FamilyCard
+            customerId={c.id!}
+            payer={payerId ? { id: payerId, name: nameOf(payerId) ?? 'Payer' } : null}
+            dependents={people.filter((p) => p.payer_customer_id === c.id).map((p) => ({ id: p.id, name: p.name }))}
+            candidates={people.filter((p) => p.id !== c.id && !p.payer_customer_id).map((p) => ({ id: p.id, name: p.name }))}
+            office={officeRow ? { id: officeRow.id, name: officeRow.name } : null}
+            offices={(offices ?? []).filter((o) => o.active).map((o) => ({ id: o.id, name: o.name }))}
+          />
+        )}
+
+        {isOwner && (
+          <ReferralCard
+            customerId={c.id!}
+            code={extra?.referral_code ?? null}
+            referredBy={referral ? nameOf(referral.referrer_customer_id) ?? 'another customer' : null}
+            canApply={!referral && !recharges}
+            rewardMeals={ks?.referral_reward_meals ?? 0}
+            score={(score as unknown as CustomerScore | null) ?? null}
+          />
+        )}
 
         {isOwner && (
           <MoneyPanel

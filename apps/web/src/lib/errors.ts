@@ -134,6 +134,10 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
     consent_required: 'The caller must agree to be contacted.',
     no_plan: 'That kitchen has no active plan for these meal times.',
   },
+  // P5 / P6
+  health: { consent_required: 'Tick the box to confirm the customer agreed to share this health information.' },
+  special: { already_exists: 'A special with this name already exists for that meal.' },
+  office: { already_exists: 'An office with this name already exists.', invalid_payer: 'Choose who pays for this office (a customer of this kitchen).' },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */
