@@ -15,7 +15,7 @@ on:
         type: choice
         options: [test, store]
   push:
-    tags: ['mobile-v*']
+    tags: ['mobile-v*', 'apk-v*']   # apk-v* builds only the Android APK
 jobs:
   apk:
     runs-on: ubuntu-latest

@@ -10,7 +10,8 @@ const make = (url: string, key: string) =>
     auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
   });
 
-let client = make(SUPABASE_URL, SUPABASE_ANON_KEY);
+// A build without a baked-in server still opens (test builds then pick one on the login screen).
+let client = make(SUPABASE_URL || 'http://127.0.0.1:54321', SUPABASE_ANON_KEY || 'not-set');
 
 /** The app talks to whatever client is current (test builds can point at another server). */
 export const supabase = new Proxy({} as SupabaseClient<Database>, {
