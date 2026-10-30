@@ -10,6 +10,7 @@ import {
   type RiderRun, type RiderStop,
 } from '@/lib/rider-store';
 import { BigButton, Chip, ErrorText, FieldInput, Muted, Panel, Stepper } from '@/components/field-ui';
+import { ScanSticker } from './scan-sticker';
 
 // Rider mode (web port of apps/mobile/src/app/(tabs)/rider.tsx and stop/[id].tsx). One page with two
 // views (stop list, stop detail in the URL hash) so it keeps working offline without server round trips.
@@ -280,7 +281,8 @@ function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
         className={`flex w-full items-start gap-3 rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-ink-100 active:bg-ink-50 ${stop.status !== 'pending' ? 'opacity-60' : ''}`}>
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 font-bold text-brand-700">{stop.seq}</span>
         <span className="min-w-0 flex-1 space-y-0.5">
-          <span className="block text-base font-semibold text-ink-900">{stop.name}</span>
+          <span className="block text-base font-semibold text-ink-900">{stop.office ? '🏢 ' : ''}{stop.name}</span>
+          {stop.office && <span className="block text-xs font-medium text-brand-700">Office: hand all {plural(stop.meal_count, 'tiffin')} to reception</span>}
           <span className="block text-sm text-ink-600">{address(stop)}</span>
           <span className="block text-xs text-ink-500">
             {plural(stop.meal_count, 'meal')}{diets ? ` · ${diets}` : ''}
@@ -307,6 +309,7 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [scanned, setScanned] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
   const out = tiffinsOut ?? stop.meal_count;
@@ -351,7 +354,7 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
     }
     const pos = await gps();
     const res = await act({
-      op, kind: 'complete', runId: run.id, stopId: stop.id, hasPhoto: Boolean(photoPath), photoPath,
+      op, kind: 'complete', runId: run.id, stopId: stop.id, hasPhoto: Boolean(photoPath), photoPath, scanToken: scanned ?? undefined,
       args: {
         p_proof: proof, p_otp: proof === 'otp' ? otp.trim() : null, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null,
         p_accuracy: pos?.accuracy ?? null, p_tiffins_out: out, p_tiffins_returned: back, p_cash_paise: cashPaise,
@@ -359,7 +362,11 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
     });
     setBusy(false);
     if (res.otpWrong) return setError(friendlyError({ message: 'otp_wrong' }));
-    if (res.error) return setError(friendlyErrorIn('rider', { message: res.error }));
+    if (res.error) {
+      setScanned(null);
+      void refreshRider(); // the stop was not saved: show the server's state again
+      return setError(friendlyErrorIn('rider', { message: res.error }));
+    }
     onDone();
   };
 
@@ -395,8 +402,13 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
     <div className="space-y-3 pb-10">
       <div className="flex items-center gap-2">
         <button type="button" onClick={onDone} className="rounded-lg px-2 py-2 text-sm font-medium text-brand-700" data-testid="back-to-stops">← Stops</button>
-        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-ink-900">{stop.seq}. {stop.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-ink-900">{stop.seq}. {stop.office ? '🏢 ' : ''}{stop.name}</h1>
       </div>
+      {stop.office && (
+        <p className="rounded-xl bg-brand-50 px-3 py-2 text-sm text-ink-800 ring-1 ring-brand-100" data-testid="office-stop">
+          Office stop: {plural(stop.meal_count, 'tiffin')} for the office members. Hand them to reception or the office contact.
+        </p>
+      )}
 
       <Panel>
         <p className="text-base font-medium text-ink-900">{address(stop) || 'No address saved'}</p>
@@ -424,6 +436,8 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
           {stop.queued && <Muted>Saved on this phone, will sync.</Muted>}
         </Panel>
       )}
+
+      {canAct && !failing && stop.qr_token && <ScanSticker expected={stop.qr_token} value={scanned} onChange={setScanned} />}
 
       {canAct && !failing && (
         <Panel>
