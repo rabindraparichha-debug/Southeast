@@ -259,6 +259,8 @@ export const en = {
   'account.role': 'Role',
   'account.switch': 'Switch kitchen',
   'account.signOut': 'Log out',
+  'legal.privacy': 'Privacy policy',
+  'legal.terms': 'Terms',
   'account.unsynced': '{n} delivery action(s) are not synced yet. Connect to the internet before logging out.',
   'role.owner': 'Owner',
   'role.staff': 'Staff',

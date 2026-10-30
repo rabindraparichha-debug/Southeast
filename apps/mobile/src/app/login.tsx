@@ -5,6 +5,7 @@ import { formatPhone, normalizePhone } from '@tiffin/core';
 import { loadServerOverride, saveServerOverride, supabase } from '@/lib/supabase';
 import { friendlyError } from '@/lib/errors';
 import { ALLOW_SERVER_SWITCH, IS_DEV } from '@/lib/env';
+import { LegalLinks } from '@/components/legal-links';
 import { Button, Card, ErrorText, Input, Label, Muted, Title } from '@/components/ui';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
@@ -94,6 +95,7 @@ export default function Login() {
             </>
           )}
         </Card>
+        <LegalLinks />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

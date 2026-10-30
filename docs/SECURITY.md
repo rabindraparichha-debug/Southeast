@@ -37,7 +37,7 @@ Reviewed on 2026-10-30, at the end of M7. Scope: database, API, Edge Functions, 
 ## Before going live (checklist)
 
 - [ ] Create the Vault secrets in the hosted project (`phone_encryption_key`, `phone_hash_key`, `functions_base_url`, `service_role_key`, `public_web_url`) from a password manager; keep the two phone keys backed up offline.
-- [ ] Remove all `test_otp` entries; configure the production OTP channel (D-004).
+- [ ] Remove all `test_otp` entries; configure the production OTP channel (D-004). Only exception: one app-store reviewer number with a random code and a short expiry during a review, removed afterwards (D-114).
 - [ ] Set Edge Function secrets with `supabase secrets set` (never in code); keep `RAZORPAY_ALLOW_LIVE` unset until the owner approves live keys.
 - [ ] Restrict the Supabase dashboard to named team members with 2FA; use separate projects for staging and production.
 - [ ] Enable Supabase PITR or daily backups and run `pnpm db:restore-drill` against a copy monthly (docs/OPERATIONS.md).

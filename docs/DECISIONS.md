@@ -666,3 +666,8 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 - Razorpay refunds already use `reverse_all`, so the vendor's transferred share comes back and the platform pays back its own share; the ledger now matches.
 - `admin_commission_report` and `commission_statement` return gross, `reversed_paise` and net commission (reversals counted in the period they happen).
 - Refunds paid from the FIFO value without a linked online payment (`payment_id` null) reverse nothing: no commission was taken on cash.
+
+### D-114 App-store reviewer login
+- Apple and Google reviewers cannot receive an SMS, and a store build only reaches the production backend (the server switch exists only in test builds). During a review the production project gets **one** Supabase test phone number with a random code (never the seed `123456`) and an expiry that just covers the review; it owns a draft demo kitchen whose sample customers use numbers the business owns. It is removed after the review. This is the only exception to "no `test_otp` in production" (docs/SECURITY.md).
+- Never `supabase config push` this repo's `config.toml` to a hosted project: it carries the local seed test numbers and dummy SMS settings.
+

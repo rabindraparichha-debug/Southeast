@@ -3,6 +3,7 @@ import { useAuth, useKitchen } from '@/lib/session';
 import { Button, Card, Chip, Label, Muted, Screen } from '@/components/ui';
 import { colors, space } from '@/components/theme';
 import { useRider } from '@/lib/rider-store';
+import { LegalLinks } from '@/components/legal-links';
 import { t } from '@/i18n';
 
 export default function Account() {
@@ -30,6 +31,7 @@ export default function Account() {
       )}
       {queue.length > 0 && <Muted>{t('account.unsynced', { n: queue.length })}</Muted>}
       <Button title={t('account.signOut')} onPress={signOut} variant="secondary" disabled={queue.length > 0} />
+      <LegalLinks />
     </Screen>
   );
 }

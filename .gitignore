@@ -20,6 +20,11 @@ apps/mobile/android/
 apps/mobile/ios/
 *.jks
 *.keystore
+# Apple signing and API keys (never commit)
+*.p8
+*.p12
+*.mobileprovision
+credentials.json
 
 # supabase
 supabase/.branches/

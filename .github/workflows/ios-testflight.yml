@@ -1,9 +1,13 @@
 # Builds the iOS app on Expo's EAS (macOS in the cloud) and uploads it to TestFlight.
-# One-time setup: docs/RELEASE.md → "iOS and TestFlight". Secrets:
-#   EXPO_TOKEN                 expo.dev → Account settings → Access tokens
+# One-time setup (docs/RELEASE.md → "iOS and TestFlight"), including ONE interactive command on any
+# computer (`eas credentials:configure-build -p ios -e production`): EAS never creates the iOS
+# distribution certificate in a non-interactive run. Repeat it when the certificate expires (yearly).
+# Secrets (repository secrets):
+#   EXPO_TOKEN                 expo.dev → Account settings → Access tokens (same account that owns the project)
 #   APPLE_ASC_APP_ID           App Store Connect → the app → App Information → Apple ID (digits)
-#   APPLE_ASC_KEY_ID, APPLE_ASC_ISSUER_ID, APPLE_ASC_KEY_P8   App Store Connect API key (App Manager role)
-#   APPLE_TEAM_ID              developer.apple.com → Membership
+#   APPLE_ASC_KEY_ID, APPLE_ASC_ISSUER_ID, APPLE_ASC_KEY_P8   App Store Connect API TEAM key, Admin role
+#                              (P8 = the whole .p8 file, including the BEGIN/END lines)
+#   APPLE_TEAM_ID              developer.apple.com → Account → Membership details
 # Variable (optional): APPLE_TEAM_TYPE = INDIVIDUAL for a personal developer account.
 name: iOS TestFlight
 on:
@@ -49,11 +53,23 @@ jobs:
         env:
           P8: ${{ secrets.APPLE_ASC_KEY_P8 }}
           ASC_APP_ID: ${{ secrets.APPLE_ASC_APP_ID }}
+          ASC_KEY_ID: ${{ secrets.APPLE_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPLE_ASC_ISSUER_ID }}
         run: |
           test -n "$P8" || { echo "::error::APPLE_ASC_KEY_P8 secret is missing"; exit 1; }
           test -n "$ASC_APP_ID" || { echo "::error::APPLE_ASC_APP_ID secret is missing"; exit 1; }
           printf '%s\n' "$P8" > "$RUNNER_TEMP/asc.p8"
-          node -e "const f='eas.json',j=require('./'+f);j.submit.production.ios={...j.submit.production.ios,ascAppId:process.env.ASC_APP_ID};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+          chmod 600 "$RUNNER_TEMP/asc.p8"
+          grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/asc.p8" || { echo "::error::APPLE_ASC_KEY_P8 must be the whole .p8 file, including the BEGIN/END PRIVATE KEY lines"; exit 1; }
+          # EAS Submit reads its upload key from the submit profile (it ignores the EXPO_ASC_* variables).
+          ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" node -e "
+            const fs = require('fs'), j = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+            j.submit.production.ios = { ...j.submit.production.ios,
+              ascAppId: process.env.ASC_APP_ID.trim(),
+              ascApiKeyPath: process.env.ASC_KEY_PATH,
+              ascApiKeyId: process.env.ASC_KEY_ID.trim(),
+              ascApiKeyIssuerId: process.env.ASC_ISSUER_ID.trim() };
+            fs.writeFileSync('eas.json', JSON.stringify(j, null, 2));"
       - name: Link the EAS project
         run: |
           node -e "process.exit(require('./app.json').expo.extra?.eas?.projectId ? 0 : 1)" \
