@@ -82,21 +82,25 @@ export type LinkInput = {
   customerPhone?: string | null;
   linkedAccountId: string;
   kitchenName: string;
+  /** P6 Route split: what goes to the kitchen (amount − platform commission). Defaults to the whole amount. */
+  transferPaise?: number | null;
 };
 
 export type CreatedLink = { id: string; shortUrl: string; expiresAt: string };
 
-/** Creates a Payment Link whose full amount is routed to the kitchen's linked account. */
-export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): Promise<CreatedLink> {
-  const expireBy = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
-  if (cfg.mode === 'mock') {
-    return {
-      id: randomId('plink_mock_'),
-      shortUrl: `${cfg.publicFunctionsUrl}/razorpay-mock?payment_id=${input.paymentId}`,
-      expiresAt: new Date(expireBy * 1000).toISOString(),
-    };
-  }
-  const link = await api<{ id: string; short_url: string; expire_by: number }>(cfg, '/payment_links', {
+/**
+ * The Route transfer for a payment: the kitchen's share goes to its linked account; the platform
+ * keeps only the commission (0 unless the platform set a rate for platform-sourced customers).
+ */
+export function routeTransfer(amountPaise: number, transferPaise: number | null | undefined, linkedAccountId: string) {
+  const amount = transferPaise ?? amountPaise;
+  if (!Number.isInteger(amount) || amount <= 0 || amount > amountPaise) throw new Error('invalid_transfer');
+  return { account: linkedAccountId, amount, currency: 'INR', on_hold: 0 };
+}
+
+/** Request body for POST /payment_links (also built in mock mode, so tests can check it). */
+export function paymentLinkBody(input: LinkInput, expireBy: number): Record<string, unknown> {
+  return {
     amount: input.amountPaise,
     currency: 'INR',
     description: `${input.kitchenName}: ${input.description}`,
@@ -106,9 +110,23 @@ export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): 
     reminder_enable: false,
     expire_by: expireBy,
     notes: { payment_id: input.paymentId },
-    // Route: the whole amount goes to the kitchen; the platform holds nothing.
-    options: { order: { transfers: [{ account: input.linkedAccountId, amount: input.amountPaise, currency: 'INR', on_hold: 0 }] } },
-  });
+    // Route: the kitchen's share is transferred to its linked account; we hold no customer balance.
+    options: { order: { transfers: [routeTransfer(input.amountPaise, input.transferPaise, input.linkedAccountId)] } },
+  };
+}
+
+/** Creates a Payment Link whose amount (minus any platform commission) is routed to the kitchen. */
+export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): Promise<CreatedLink> {
+  const expireBy = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+  const body = paymentLinkBody(input, expireBy); // validates the transfer in every mode
+  if (cfg.mode === 'mock') {
+    return {
+      id: randomId('plink_mock_'),
+      shortUrl: `${cfg.publicFunctionsUrl}/razorpay-mock?payment_id=${input.paymentId}`,
+      expiresAt: new Date(expireBy * 1000).toISOString(),
+    };
+  }
+  const link = await api<{ id: string; short_url: string; expire_by: number }>(cfg, '/payment_links', body);
   return { id: link.id, shortUrl: link.short_url, expiresAt: new Date(link.expire_by * 1000).toISOString() };
 }
 

@@ -1,5 +1,7 @@
 // Creates a Razorpay Payment Link for N meals, routed to the kitchen's linked account.
-// Called by the signed-in owner (web or mobile) via supabase.functions.invoke.
+// Called by the signed-in owner (web or mobile) via supabase.functions.invoke, or from the customer
+// page with its token (P5: a payer passes dependent_id to pay for one of their dependents).
+// P6: for platform-sourced customers the Route transfer is the amount minus the platform commission.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
@@ -12,6 +14,7 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 type Record_ = {
   payment_id: string; amount_paise: number; meals: number; linked_account_id: string;
   customer_name: string; customer_phone: string | null; kitchen_name: string;
+  transfer_paise?: number | null; commission_paise?: number | null;
 };
 
 Deno.serve(async (req) => {
@@ -27,10 +30,13 @@ Deno.serve(async (req) => {
     return json({ error: String((e as Error).message).split(':')[0] }, 500);
   }
 
-  const { customer_id, meals, description, token } = await req.json().catch(() => ({}));
+  const { customer_id, meals, description, token, dependent_id } = await req.json().catch(() => ({}));
   // Step 1, as the caller: an owner (role + verified payout account checked), or a customer on
   // their own page (magic-link token checked). Creates our payment row.
-  const { data: rec, error } = token
+  const { data: rec, error } = token && dependent_id
+    ? await rpc<Record_>(SUPABASE_URL, ANON_KEY, `Bearer ${ANON_KEY}`, 'portal_dependent_payment_link_record',
+        { p_token: token, p_dependent: dependent_id, p_meals: meals })
+    : token
     ? await rpc<Record_>(SUPABASE_URL, ANON_KEY, `Bearer ${ANON_KEY}`, 'portal_payment_link_record', { p_token: token, p_meals: meals })
     : await rpc<Record_>(SUPABASE_URL, ANON_KEY, auth, 'create_payment_link_record',
         { p_customer: customer_id, p_meals: meals, p_description: description ?? null });
@@ -41,12 +47,13 @@ Deno.serve(async (req) => {
     const link = await createPaymentLink(cfg, {
       paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description ?? `${rec.meals} meals`,
       customerName: rec.customer_name, customerPhone: rec.customer_phone, linkedAccountId: rec.linked_account_id,
-      kitchenName: rec.kitchen_name,
+      kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
     });
     const attach = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'attach_payment_link',
       { p_payment: rec.payment_id, p_link_id: link.id, p_short_url: link.shortUrl, p_expires_at: link.expiresAt });
     if (attach.error) throw new Error(attach.error.message);
-    return json({ payment_id: rec.payment_id, amount_paise: rec.amount_paise, meals: rec.meals, short_url: link.shortUrl, mode: cfg.mode });
+    return json({ payment_id: rec.payment_id, amount_paise: rec.amount_paise, meals: rec.meals, short_url: link.shortUrl, mode: cfg.mode,
+      commission_paise: rec.commission_paise ?? 0 });
   } catch (e) {
     console.error('payment link failed', e);
     await reportError(monitor, e, { fn: 'razorpay-payment-link' });

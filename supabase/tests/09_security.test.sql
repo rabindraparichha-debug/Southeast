@@ -18,8 +18,11 @@ select is((select coalesce(array_agg(n.nspname || '.' || p.proname order by p.pr
 -- Anon (no login) can run only the public website and customer-page functions.
 select is((select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')),
-  array['kitchen_directory', 'kitchen_profile', 'lead_attach_gclid', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_change', 'portal_complaint',
-        'portal_get', 'portal_payment_link_record', 'portal_review', 'portal_set_language', 'submit_lead', 'submit_vendor_application'],
+  -- P5/P6 added the customer-page functions for payers, food prefs, referrals, health tags and kitchen switching.
+  array['kitchen_directory', 'kitchen_profile', 'lead_attach_gclid', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_apply_referral',
+        'portal_cancel_switch', 'portal_change', 'portal_complaint', 'portal_dependent_payment_link_record', 'portal_get',
+        'portal_payment_link_record', 'portal_request_switch', 'portal_review', 'portal_set_food_prefs', 'portal_set_health_tags',
+        'portal_set_language', 'portal_switch_options', 'submit_lead', 'submit_vendor_application'],
   'anon can execute only the allowlisted public functions');
 select is((select coalesce(array_agg(table_name || ':' || privilege_type order by table_name), '{}') from information_schema.role_table_grants
            where grantee = 'anon' and table_schema = 'public'), array['areas:SELECT'], 'anon can read only the areas list');
@@ -35,7 +38,7 @@ select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') 
 -- Service-role-only RPCs are not callable by users.
 select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and (p.proname like 'wa\_%' or p.proname in ('razorpay_process_event', 'attach_payment_link',
-             'mark_refund_submitted', 'lead_ingest'))
+             'mark_refund_submitted', 'lead_ingest', 'weather_kitchens', 'weather_record_alert'))
              and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))),
   '{}'::text[], 'webhook/service functions are not callable by users');
 
@@ -47,12 +50,14 @@ select is((select coalesce(array_agg(distinct table_name::text), '{}') from info
            where grantee = 'authenticated' and table_schema = 'public' and privilege_type in ('INSERT', 'UPDATE')
              and table_name in ('balance_entries', 'payments', 'refunds', 'stock_moves', 'supplier_payments', 'audit_log',
                                 'schedule_changes', 'count_snapshots', 'meal_orders', 'delivery_stops', 'tiffin_ledger', 'leads',
-                                'customers', 'webhook_events', 'notifications_outbox', 'lead_events')),
+                                'customers', 'webhook_events', 'notifications_outbox', 'lead_events', 'platform_commissions',
+                                'customer_health', 'referrals', 'kitchen_switch_requests', 'offices', 'platform_settings',
+                                'food_calendar', 'churn_risks', 'dispatch_photos', 'festival_specials', 'weather_alerts')),
   '{}'::text[], 'no direct inserts or updates on ledgers, money, orders, leads or customers (RPCs only)');
 
 -- Append-only ledgers refuse updates and deletes even for the database owner.
 select is((select coalesce(array_agg(t order by t), '{}') from unnest(array['audit_log', 'balance_entries', 'schedule_changes', 'count_snapshots',
-            'stock_moves', 'supplier_payments', 'tiffin_ledger', 'lead_events']) t
+            'stock_moves', 'supplier_payments', 'tiffin_ledger', 'lead_events', 'platform_commissions']) t
            where not exists (select 1 from pg_trigger tr join pg_class c on c.oid = tr.tgrelid
                              where c.relname = t and tr.tgfoid = 'private.forbid_mutation'::regproc)),
   '{}'::text[], 'every ledger has the append-only trigger');
@@ -67,7 +72,7 @@ select is((select array_agg(id order by id) from storage.buckets where public), 
 
 -- Phone numbers: encrypted columns only, never plain text on customer, lead or applicant tables.
 select is((select coalesce(array_agg(table_name || '.' || column_name order by table_name), '{}') from information_schema.columns
-           where table_schema = 'public' and table_name in ('customers', 'leads', 'vendor_applications', 'conversations')
+           where table_schema = 'public' and table_name in ('customers', 'leads', 'vendor_applications', 'conversations', 'offices')
              and column_name ~ 'phone' and column_name !~ '(_enc|_hash|_last4)$'), '{}'::text[],
   'customer, lead and applicant phones are stored encrypted (plus hash and last 4)');
 

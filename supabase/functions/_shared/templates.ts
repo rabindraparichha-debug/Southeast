@@ -19,6 +19,18 @@ function stockAlertText(p: Payload): string {
   return `${p.item} is low: ${qty(p.stock, p.unit)} left (minimum ${qty(p.min_qty, p.unit)})`;
 }
 
+function weatherKind(kind: unknown): string {
+  return kind === 'heat' ? 'Severe heat' : kind === 'rain_heat' ? 'Heavy rain and heat' : 'Heavy rain';
+}
+function weatherDetail(d: unknown): string {
+  const x = (d ?? {}) as { max_rain_mm?: number; max_temp_c?: number; max_feels_c?: number };
+  const parts: string[] = [];
+  if (x.max_rain_mm != null) parts.push(`rain up to ${x.max_rain_mm} mm/h`);
+  if (x.max_temp_c != null) parts.push(`up to ${x.max_temp_c}°C`);
+  if (x.max_feels_c != null) parts.push(`feels like ${x.max_feels_c}°C`);
+  return parts.join(', ') || 'forecast';
+}
+
 const VENDOR_STEP: Record<string, string> = {
   signup: 'log in with this WhatsApp number and create your kitchen',
   profile: 'add a short description and a photo of your food',
@@ -140,6 +152,100 @@ export const TEMPLATES: Record<string, Def> = {
     },
     params: (p, k) => [k, String(p.plan_name ?? ''), String(p.meals ?? ''), rupees(p.amount_paise), String(p.url ?? '')],
   },
+  // P5: money messages for an eater with a payer go to the payer (private.route_outbox_to_payer adds
+  // eater_name and url, the payer's page where they can pay for their dependents).
+  low_balance_reminder_payer: {
+    name: 'low_balance_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: {{2}} has {{3}} meals left. Pay for them here: {{4}}',
+      hi: '{{1}}: {{2}} के {{3}} खाने बाकी हैं। उनके लिए यहाँ भुगतान करें: {{4}}',
+      or: '{{1}}: {{2}}ଙ୍କର {{3}}ଟି ଖାଇବା ବାକି। ତାଙ୍କ ପାଇଁ ଏଠାରେ ପେମେଣ୍ଟ କରନ୍ତୁ: {{4}}',
+    },
+    params: (p, k) => [k, String(p.eater_name ?? ''), String(p.balance_meals ?? 0), String(p.url ?? '')],
+  },
+  dues_reminder_payer: {
+    name: 'dues_reminder_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: {{2}} is due for {{3}} ({{4}} meals). Pay here: {{5}}',
+      hi: '{{1}}: {{3}} के {{4}} खानों के {{2}} बाकी हैं। यहाँ भुगतान करें: {{5}}',
+      or: '{{1}}: {{3}}ଙ୍କ {{4}}ଟି ଖାଇବାର {{2}} ବାକି। ଏଠାରେ ପେମେଣ୍ଟ କରନ୍ତୁ: {{5}}',
+    },
+    params: (p, k) => [k, rupees(p.amount_owed_paise), String(p.eater_name ?? ''), String(p.meals_owed ?? ''), String(p.url ?? '')],
+  },
+  payment_receipt_payer: {
+    name: 'payment_receipt_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: payment of {{2}} received for {{3}} meals for {{4}}. Their balance: {{5}} meals. Thank you!',
+      hi: '{{1}}: {{4}} के {{3}} खानों के लिए {{2}} का भुगतान मिला। उनका बैलेंस: {{5}} खाने। धन्यवाद!',
+      or: '{{1}}: {{4}}ଙ୍କ {{3}}ଟି ଖାଇବା ପାଇଁ {{2}} ପେମେଣ୍ଟ ମିଳିଲା। ତାଙ୍କ ବାଲାନ୍ସ: {{5}}ଟି ଖାଇବା। ଧନ୍ୟବାଦ!',
+    },
+    params: (p, k) => [k, rupees(p.amount_paise), String(p.meals ?? ''), String(p.eater_name ?? ''), String(p.balance_meals ?? '')],
+  },
+  refund_notice_payer: {
+    name: 'refund_notice_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: a refund of {{2}} for {{3}} unused meals of {{4}} has been created. You will be told when it is paid.',
+      hi: '{{1}}: {{4}} के {{3}} बचे खानों के लिए {{2}} का रिफंड बनाया गया। भुगतान होने पर बताया जाएगा।',
+      or: '{{1}}: {{4}}ଙ୍କ {{3}}ଟି ବାକି ଖାଇବା ପାଇଁ {{2}} ରିଫଣ୍ଡ ତିଆରି ହେଲା। ପେମେଣ୍ଟ ହେଲେ ଜଣାଯିବ।',
+    },
+    params: (p, k) => [k, rupees(p.amount_paise), String(p.meals ?? ''), String(p.eater_name ?? '')],
+  },
+  refund_receipt_payer: {
+    name: 'refund_receipt_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: the refund of {{2}} for {{3}} has been paid ({{4}}).',
+      hi: '{{1}}: {{3}} का {{2}} का रिफंड दे दिया गया ({{4}})।',
+      or: '{{1}}: {{3}}ଙ୍କ {{2}} ରିଫଣ୍ଡ ଦିଆଗଲା ({{4}})।',
+    },
+    params: (p, k) => [k, rupees(p.amount_paise), String(p.eater_name ?? ''), String(p.method ?? '').replace('_manual', '')],
+  },
+  festival_special: {
+    name: 'festival_special_v1', category: 'MARKETING',
+    text: {
+      en: '{{1}}: festival special on {{2}} ({{3}}): {{4}}. {{5}}',
+      hi: '{{1}}: {{2}} ({{3}}) को त्योहार स्पेशल: {{4}}। {{5}}',
+      or: '{{1}}: {{2}} ({{3}})ରେ ପର୍ବ ସ୍ପେଶାଲ୍: {{4}}। {{5}}',
+    },
+    params: (p, k) => [k, day(p.service_date), p.slot === 'dinner' ? 'dinner' : 'lunch', String(p.name ?? ''),
+      p.addon_price_paise == null ? 'Included in your meal.' : `Add-on ${rupees(p.addon_price_paise)}: message the kitchen to order.`],
+  },
+  complaint_credit: {
+    name: 'complaint_credit_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: sorry about the problem ({{2}}). We have added {{3}} free meal to your balance. The kitchen will also reply.',
+      hi: '{{1}}: समस्या ({{2}}) के लिए माफ़ी। आपके बैलेंस में {{3}} मुफ़्त खाना जोड़ दिया गया है। किचन भी जवाब देगा।',
+      or: '{{1}}: ଅସୁବିଧା ({{2}}) ପାଇଁ କ୍ଷମା। ଆପଣଙ୍କ ବାଲାନ୍ସରେ {{3}}ଟି ମାଗଣା ଖାଇବା ଯୋଡ଼ାଗଲା। କିଚେନ୍ ମଧ୍ୟ ଉତ୍ତର ଦେବ।',
+    },
+    params: (p, k) => [k, String(p.category ?? 'complaint'), String(p.meals ?? 1)],
+  },
+  weather_delay_notice: {
+    name: 'weather_delay_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: {{2}} is expected around {{3}} time on {{4}}. Your tiffin may be a little late. Thank you for your patience.',
+      hi: '{{1}}: {{4}} को {{3}} के समय {{2}} की संभावना है। आपका टिफिन थोड़ा देर से आ सकता है। धैर्य के लिए धन्यवाद।',
+      or: '{{1}}: {{4}}ରେ {{3}} ସମୟରେ {{2}} ହେବାର ସମ୍ଭାବନା। ଆପଣଙ୍କ ଟିଫିନ୍ ଟିକେ ଡେରି ହୋଇପାରେ। ଧୈର୍ଯ୍ୟ ପାଇଁ ଧନ୍ୟବାଦ।',
+    },
+    params: (p, k) => [k, weatherKind(p.kind), p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date)],
+  },
+  referral_reward: {
+    name: 'referral_reward_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: thank you! {{2}} free meal(s) added to your balance {{3}}.',
+      hi: '{{1}}: धन्यवाद! आपके बैलेंस में {{2}} मुफ़्त खाना जोड़ा गया {{3}}।',
+      or: '{{1}}: ଧନ୍ୟବାଦ! ଆପଣଙ୍କ ବାଲାନ୍ସରେ {{2}}ଟି ମାଗଣା ଖାଇବା ଯୋଡ଼ାଗଲା {{3}}।',
+    },
+    params: (p, k) => [k, String(p.meals ?? 0),
+      p.role === 'referrer' ? `because ${String(p.friend_name ?? 'your friend')} joined with your code` : "for joining with a friend's code"],
+  },
+  kitchen_switch_approved: {
+    name: 'kitchen_switch_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: welcome! Your move from {{2}} is approved. Meals here start from {{3}} once your trial is paid. Your page: {{4}}',
+      hi: '{{1}}: स्वागत है! {{2}} से आपका बदलाव मंज़ूर हुआ। ट्रायल का भुगतान होने पर {{3}} से खाना शुरू होगा। आपका पेज: {{4}}',
+      or: '{{1}}: ସ୍ୱାଗତ! {{2}}ରୁ ଆପଣଙ୍କ ବଦଳ ମଞ୍ଜୁର ହେଲା। ଟ୍ରାଏଲ୍ ପେମେଣ୍ଟ ପରେ {{3}}ରୁ ଖାଇବା ଆରମ୍ଭ ହେବ। ଆପଣଙ୍କ ପେଜ୍: {{4}}',
+    },
+    params: (p, k) => [k, String(p.from_kitchen ?? ''), day(p.effective_date), String(p.url ?? '')],
+  },
   // Platform messages to people who are not a kitchen's customer yet (leads, vendor applicants).
   lead_welcome: {
     name: 'lead_welcome_v1', category: 'UTILITY',
@@ -202,6 +308,22 @@ export const TEMPLATES: Record<string, Def> = {
     name: 'stock_alert_v1', category: 'UTILITY',
     text: { en: '{{1}} stock alert: {{2}}. Details are in the app.' },
     params: (p, k) => [k, stockAlertText(p)],
+  },
+  weather_alert: {
+    name: 'weather_alert_v1', category: 'UTILITY',
+    text: { en: '{{1}}: {{2}} expected during {{3}} delivery on {{4}} ({{5}}). Plan riders and packing accordingly.' },
+    params: (p, k) => [k, weatherKind(p.kind), p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date), weatherDetail(p.detail)],
+  },
+  late_delivery_alert: {
+    name: 'late_delivery_v1', category: 'UTILITY',
+    text: { en: '{{1}}: {{2}} stop(s) on {{3}} ({{4}}) are still not delivered {{5}} minutes after the meals were packed.' },
+    params: (p, k) => [k, String(p.pending_stops ?? ''), String(p.route_name ?? 'a route'), String(p.rider_name ?? 'no rider'),
+      String(p.minutes ?? 90)],
+  },
+  customer_switched_out: {
+    name: 'customer_switched_out_v1', category: 'UTILITY',
+    text: { en: '{{1}}: {{2}} is moving to another kitchen from {{3}}. Their subscription ends before that date and unused meals are refunded automatically.' },
+    params: (p, k) => [k, String(p.customer_name ?? 'A customer'), day(p.effective_date)],
   },
   inbox_alert: {
     name: 'inbox_alert_v1', category: 'UTILITY',

@@ -451,3 +451,7 @@ verify_jwt = false
 
 [functions.whatsapp-webhook]
 verify_jwt = false
+
+# P5: started twice a day by pg_cron with the service role key (checked inside the function).
+[functions.weather-alerts]
+verify_jwt = false
