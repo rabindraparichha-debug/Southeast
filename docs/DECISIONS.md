@@ -660,3 +660,9 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 - Inventory variance alerts show the IST date of the stock-take.
 - `otp_sent` in `rider_today` was checked and is right: a queued, sending or sent "on the way" message means the customer got a code, and a cancelled one (not opted in) or failed one means they didn't. Seed runs read false because the seed cancels its own messages.
 
+
+### D-113 Refunds reverse the platform commission
+- A processed refund of an online payment that carried a commission writes one `platform_commission_reversals` row: commission × refund ÷ payment amount, rounded down, never more than what is left of that commission (`private.reverse_commission`, trigger on `refunds`). Append-only, owner/admin read.
+- Razorpay refunds already use `reverse_all`, so the vendor's transferred share comes back and the platform pays back its own share; the ledger now matches.
+- `admin_commission_report` and `commission_statement` return gross, `reversed_paise` and net commission (reversals counted in the period they happen).
+- Refunds paid from the FIFO value without a linked online payment (`payment_id` null) reverse nothing: no commission was taken on cash.

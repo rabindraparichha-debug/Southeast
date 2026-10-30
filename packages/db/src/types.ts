@@ -2678,6 +2678,52 @@ export type Database = {
         };
         Relationships: [];
       };
+      platform_commission_reversals: {
+        Row: {
+          commission_id: string;
+          created_at: string;
+          id: string;
+          kitchen_id: string;
+          refund_id: string;
+          refund_paise: number;
+          reversed_paise: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          commission_id: string;
+          created_at?: string;
+          id?: string;
+          kitchen_id: string;
+          refund_id: string;
+          refund_paise: number;
+          reversed_paise: number;
+        };
+        Update: {
+          commission_id?: string;
+          created_at?: string;
+          id?: string;
+          kitchen_id?: string;
+          refund_id?: string;
+          refund_paise?: number;
+          reversed_paise?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'platform_commission_reversals_commission_id_fkey';
+            columns: ['commission_id'];
+            isOneToOne: false;
+            referencedRelation: 'platform_commissions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'platform_commission_reversals_refund_id_kitchen_id_fkey';
+            columns: ['refund_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'refunds';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       platform_commissions: {
         Row: {
           amount_paise: number;
