@@ -17,6 +17,8 @@ on:
   push:
     tags: ['mobile-v*', 'apk-v*']   # apk-v* builds only the Android APK
     branches: ['apk/**']            # or push any branch named apk/<something>
+permissions:
+  contents: write   # to attach the APK to a pre-release (direct download on a phone)
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -59,3 +61,11 @@ jobs:
           name: tiffin-os-apk
           path: apps/mobile/dist/*.apk
           retention-days: 30
+      - name: Pre-release with the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: apk-build-${{ github.run_number }}
+        run: |
+          gh release create "$TAG" apps/mobile/dist/*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Tiffin OS test APK (build ${{ github.run_number }})" \
+            --notes "Test build from ${GITHUB_REF_NAME} (${GITHUB_SHA::7}). Install on Android: open this page on the phone, tap the .apk, allow installing from this source. Test builds let you choose the server on the login screen."
