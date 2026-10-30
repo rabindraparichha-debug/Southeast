@@ -64,7 +64,7 @@ export function Thread({ conversationId, customerId, title, handoffOpen, unread,
     <Card
       title={<span>{title} {handoffOpen && <Badge tone="amber">Bot paused · needs your reply</Badge>}</span>}
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {customerId && <a href={`/customers/${customerId}`} className="text-sm text-brand-700 hover:underline">Customer</a>}
           {handoffOpen && <Button variant="secondary" className="px-3 py-1" onClick={closeHandoff}>Done, hand back to bot</Button>}
         </div>
@@ -89,7 +89,7 @@ export function Thread({ conversationId, customerId, title, handoffOpen, unread,
       <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-lg bg-ink-50 p-3">
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.direction === 'out' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${m.direction === 'out' ? (m.handled_by === 'vendor' ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-ink-200') : 'bg-green-100'}`}>
+            <div className={`max-w-[80%] whitespace-pre-wrap rounded-2xl [overflow-wrap:anywhere] px-3 py-2 text-sm ${m.direction === 'out' ? (m.handled_by === 'vendor' ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-ink-200') : 'bg-green-100'}`}>
               {m.body}
               <div className={`mt-1 text-[10px] ${m.direction === 'out' && m.handled_by === 'vendor' ? 'text-brand-100' : 'text-ink-500'}`}>
                 {WHO[m.handled_by]} {formatIstShort(m.created_at)}{m.direction === 'out' ? ` · ${m.status}` : ''}
@@ -102,7 +102,7 @@ export function Thread({ conversationId, customerId, title, handoffOpen, unread,
 
       <div className="mt-3 space-y-2">
         <Textarea rows={2} placeholder="Write a reply (sent from the platform WhatsApp number with your kitchen name)" value={text} onChange={(e) => setText(e.target.value)} />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={send} disabled={busy || !text.trim()}>{busy ? 'Sending…' : 'Send'}</Button>
           <Alert>{error}</Alert>
         </div>

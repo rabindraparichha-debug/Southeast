@@ -1,20 +1,26 @@
+import { redirect } from 'next/navigation';
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
-import { signOut } from '@/app/actions';
 import { Nav, type NavItem } from '@/components/nav';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
+import { InstallApp } from '@/components/pwa';
+import { SignOutButton } from '@/components/sign-out-button';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
   const role = session.kitchen.role;
+  // Riders only use rider mode (phone-first, works offline).
+  if (role === 'rider') redirect('/rider');
 
   const items: NavItem[] = [{ href: '/', label: 'Today', icon: '📋' }];
   if (role === 'owner' || role === 'staff') {
     items.push({ href: '/customers', label: 'Customers', icon: '👥' });
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
     items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
+    if (role === 'owner') items.push({ href: '/rider', label: 'Deliver', icon: '📍' });
     items.push({ href: '/menu', label: 'Menu', icon: '📅' });
     items.push({ href: '/inventory', label: 'Inventory', icon: '📦' });
+    items.push({ href: '/stock-entry', label: 'Stock entry', icon: '📝' });
   }
   if (role === 'owner') {
     const supabase = await createClient();
@@ -38,20 +44,19 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
             <KitchenSwitcher memberships={session.memberships} current={session.kitchen} />
           </div>
         </div>
-        {role !== 'rider' && (
-          <form action="/customers" className="mb-3">
-            <input
-              name="q"
-              type="search"
-              placeholder="Search name, phone, area…"
-              className="w-full rounded-lg border-0 bg-ink-50 px-3 py-2 text-sm ring-1 ring-ink-200 focus:ring-2 focus:ring-brand-500"
-            />
-          </form>
-        )}
-        <Nav items={items} />
-        <form action={signOut} className="mt-3 md:absolute md:bottom-4 md:mt-0">
-          <button className="text-sm text-ink-500 hover:text-ink-800">Log out</button>
+        <form action="/customers" className="mb-3">
+          <input
+            name="q"
+            type="search"
+            placeholder="Search name, phone, area…"
+            className="w-full rounded-lg border-0 bg-ink-50 px-3 py-2 text-sm ring-1 ring-ink-200 focus:ring-2 focus:ring-brand-500"
+          />
         </form>
+        <Nav items={items} />
+        <div className="mt-3 flex items-start justify-between gap-3 md:absolute md:bottom-4 md:mt-0 md:block md:space-y-3">
+          <InstallApp />
+          <SignOutButton />
+        </div>
       </aside>
       <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
     </div>

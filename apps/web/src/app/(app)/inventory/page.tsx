@@ -3,7 +3,7 @@ import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, formatQty, formatSignedQty, type InventoryAlert } from '@/lib/inventory';
-import { Alert, Badge, Card, PageHeader } from '@/components/ui';
+import { Alert, Badge, Card, LinkButton, PageHeader } from '@/components/ui';
 import { PrintButton } from '@/components/print-button';
 import { InventoryTabs } from './tabs';
 import { StockList, type StockRow } from './stock-list';
@@ -37,7 +37,7 @@ export default async function InventoryPage() {
             {isOwner && ` · stock value ${formatPaise(totalValue)}`}
           </span>
         }
-        actions={<PrintButton />}
+        actions={<><LinkButton href="/stock-entry" variant="secondary">📝 Quick stock entry</LinkButton><PrintButton /></>}
       />
       <InventoryTabs />
       {error && <Alert>{friendlyError(error)}</Alert>}

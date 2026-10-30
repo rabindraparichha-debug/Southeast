@@ -213,7 +213,7 @@ function RunCard({
         </span>
       }
       actions={
-        <div className="w-48 shrink-0">
+        <div className="w-44 max-w-full shrink-0 sm:w-48">
         <Select
           aria-label={`Rider for ${run.route_name}`}
           value={run.rider_id ?? ''}

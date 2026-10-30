@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { addDays, istDate } from '@tiffin/core';
 import type { MealSlot, SlotSummary } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
@@ -12,14 +13,7 @@ export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
   const supabase = await createClient();
 
-  if (kitchen.role === 'rider') {
-    return (
-      <>
-        <PageHeader title="Today" />
-        <Card><p className="text-sm text-ink-600">Your stop list will appear in the rider mode of the mobile app.</p></Card>
-      </>
-    );
-  }
+  if (kitchen.role === 'rider') redirect('/rider');
 
   const today = istDate();
   const slots: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];

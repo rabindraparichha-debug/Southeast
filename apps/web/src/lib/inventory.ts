@@ -144,3 +144,11 @@ export type CostReport = {
   margin_pct: number | null;
   by_day: { date: string; meals: number; ingredients_paise: number }[];
 };
+
+const UNIT_FACTOR: Record<StockUnit, number> = { kg: 1000, g: 1, l: 1000, ml: 1, pc: 1 };
+
+/** Same conversion as private.convert_qty (only between compatible units: kg↔g, l↔ml). */
+export function convertQty(qty: number, from: StockUnit, to: StockUnit): number {
+  if (from === to) return qty;
+  return (qty * UNIT_FACTOR[from]) / UNIT_FACTOR[to];
+}

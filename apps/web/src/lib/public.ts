@@ -93,7 +93,7 @@ export function firstParam(v: string | string[] | undefined): string | undefined
 
 export const SOURCE_LABEL: Record<LeadSource, string> = {
   whatsapp: 'WhatsApp', website: 'Website', google_ads: 'Google Ads', instagram: 'Instagram', justdial: 'Justdial',
-  call: 'Call', referral: 'Referral', other: 'Other',
+  call: 'Call', referral: 'Referral', sulekha: 'Sulekha', other: 'Other',
 };
 
 export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {

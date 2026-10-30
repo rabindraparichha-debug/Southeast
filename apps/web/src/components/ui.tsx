@@ -53,7 +53,7 @@ export function Card({ title, actions, children, className }: { title?: ReactNod
   return (
     <section className={cx('rounded-xl bg-white p-5 shadow-sm ring-1 ring-ink-100', className)}>
       {(title || actions) && (
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           {title && <h2 className="text-base font-semibold text-ink-900">{title}</h2>}
           {actions}
         </div>

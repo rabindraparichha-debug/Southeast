@@ -71,6 +71,16 @@ const MESSAGES: Record<string, string> = {
   stock_take_closed: 'This stock-take is already closed.',
   // Admin and hardening (M8)
   fssai_locked: 'Your FSSAI number is verified. Ask Tiffin support to change it.',
+  // Installable web app: rider mode and stock entry on the phone (client-side codes)
+  network: 'No network. Try again when you are online.',
+  otp_wrong: 'Wrong code. Ask the customer again.',
+  otp_format: 'Enter the 4-digit code from the customer.',
+  photo_failed: 'This photo could not be read. Take it again.',
+  call_offline: 'Calling needs network. Try again when you are online.',
+  queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync before you log out.',
+  pick_item: 'Choose an item first.',
+  invalid_bill_amount: 'Enter the bill amount in rupees.',
+  qty_invalid_count: 'Enter the counted quantity as a number (0 is fine).',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -84,6 +94,8 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   item: { already_exists: 'An item with this name already exists.' },
   supplier: { already_exists: 'A supplier with this name already exists.' },
   dish: { already_exists: 'A dish with this name already exists.' },
+  // Rider mode: a run the rider may no longer act on (reassigned, or a day old).
+  rider: { forbidden: 'This run is not assigned to you any more, or it is from an earlier day. Ask the kitchen.' },
   stock_take: { reason_required: 'Some items are off by more than the allowed difference. Give a reason for each before closing.' },
   // Public website forms (customers and kitchen owners, not logged in).
   public: {
@@ -109,6 +121,8 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   if (!error) return '';
   const msg = error.message ?? '';
   if (MESSAGES[msg]) return MESSAGES[msg];
+  // The browser lost the connection (Chrome / Firefox / Safari wording).
+  if (!error.code && /failed to fetch|networkerror|load failed|network request failed/i.test(msg)) return MESSAGES.network!;
   const constraint = Object.keys(CONSTRAINT_MESSAGES).find((c) => msg.includes(c));
   if (constraint) return CONSTRAINT_MESSAGES[constraint]!;
   if (error.code === '23514') return 'One of the values is not allowed. Please check the form.';
