@@ -84,7 +84,7 @@ MAVEN_MIRROR=https://maven-central.storage-download.googleapis.com/maven2/ apps/
   `~/.tiffin/keystore.pass`. Android only installs an update signed with the same key, so keep both
   in your password manager; never commit them. For the Play Store, EAS signing is still the plan.
 - **CI:** `.github/workflows/android-apk.yml` (Actions → Android APK → Run workflow, or push a tag
-  `mobile-v1.0.1`) runs the same script and attaches the APK to the run. Secrets:
+  `mobile-v1.0.1`, or push a branch named `apk/<anything>`) runs the same script and attaches the APK to the run. Secrets:
   `ANDROID_KEYSTORE_BASE64` (`base64 -w0 ~/.tiffin/upload.keystore`), `ANDROID_KEY_PASSWORD`,
   `ANDROID_KEY_ALIAS`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 

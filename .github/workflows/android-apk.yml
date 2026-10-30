@@ -16,6 +16,7 @@ on:
         options: [test, store]
   push:
     tags: ['mobile-v*', 'apk-v*']   # apk-v* builds only the Android APK
+    branches: ['apk/**']            # or push any branch named apk/<something>
 jobs:
   apk:
     runs-on: ubuntu-latest
