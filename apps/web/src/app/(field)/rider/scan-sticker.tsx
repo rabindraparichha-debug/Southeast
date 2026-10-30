@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { friendlyError } from '@/lib/errors';
 import { scanToken } from '@/lib/p5';
 import { BigButton, FieldInput, Muted, Panel } from '@/components/field-ui';
@@ -9,6 +9,8 @@ import { BigButton, FieldInput, Muted, Panel } from '@/components/field-ui';
 type DetectedBarcode = { rawValue: string };
 type BarcodeDetectorLike = { detect(source: CanvasImageSource): Promise<DetectedBarcode[]> };
 type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike;
+
+const noSubscribe = () => () => undefined;
 
 function detectorCtor(): BarcodeDetectorCtor | null {
   if (typeof window === 'undefined') return null;
@@ -25,10 +27,9 @@ export function ScanSticker({ expected, value, onChange }: { expected: string | 
   const [typed, setTyped] = useState('');
   const [wrong, setWrong] = useState(false);
   const [camError, setCamError] = useState('');
-  const [canScan, setCanScan] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => setCanScan(Boolean(detectorCtor()) && Boolean(navigator.mediaDevices?.getUserMedia)), []);
+  const canScan = useSyncExternalStore(noSubscribe, () => Boolean(detectorCtor()) && Boolean(navigator.mediaDevices?.getUserMedia), () => false);
 
   function check(raw: string) {
     const token = scanToken(raw);
