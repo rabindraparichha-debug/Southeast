@@ -39,6 +39,12 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-092 | Monitoring without vendor SDKs (Sentry envelopes, optional PostHog) | Decided | M8 |
 | D-093 | Backups: Supabase backups + portable dump + monthly restore drill | Decided | M8 |
 | D-094 | Play Store via EAS, internal track first | ⏳ PENDING (accounts) | M8 |
+| D-095 | Odisha food calendar dates are approximate drafts | ⏳ PENDING (verify dates) | P5 |
+| D-099 | First complaint credited with 1 free meal (kitchen's cost) | ⏳ PENDING | P5 |
+| D-101 | Rain/heat thresholds and delivery windows | ⏳ PENDING | P5 |
+| D-105 | Commission only on online payments of platform customers, rounded down | ⏳ PENDING (legal/tax) | P6 |
+| D-106 | Kitchen switching: platform customers only, admin approves, flag off | ⏳ PENDING | P6 |
+| D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
 
 ---
 
@@ -551,3 +557,106 @@ Still deferred (see D-038).
 ### D-094 Play Store ⏳ PENDING (your accounts)
 - Android first via EAS: `development`, `preview` and `production` profiles; production goes to the internal track as a draft.
 - Needs your Expo account, a Google Play developer account and a service-account key (docs/RELEASE.md). No build has been made yet (expo.dev was unreachable from the sandbox).
+
+---
+
+## P5 and P6 (built 2026-10-30; P6 switched off)
+
+Your instruction: "build P5 and P6", and for P6 "build both, switched off". Everything below is on by default in P5 only where it costs the kitchen nothing; anything that moves money or meals is off or zero until someone turns it on.
+
+### D-095 Odisha food calendar ⏳ PENDING (verify dates)
+- One platform table (`food_calendar`): Kartika month as a date range per year, and festivals (some marked veg-only). The platform team edits it in the admin console (`admin_upsert_calendar_entry`, `admin_delete_calendar_entry`).
+- **Seeded 2026–2027 with approximate dates** (Purnimanta Odia calendar): Kartika 27 Oct – 24 Nov 2026 and 16 Oct – 14 Nov 2027 (day after Kumar Purnima to Kartika Purnima), plus Raja, Rath Yatra, Nuakhai, Durga Puja, Diwali, Prathamastami, the Manabasa Gurubar Thursdays, Pana Sankranti and others.
+- **Your call:** please check the dates against this year's Odia panjika (or ask a pilot vendor) before vendors rely on them.
+
+### D-096 Veg days and Kartika
+- **Kitchen settings:** veg days of the week (Tue/Thu by default, but **off** until the kitchen turns them on) and Kartika veg mode (off).
+- **Customer opt-ins** (off): "observes veg days" and "observes Kartika". The owner sets them, or the customer on their page.
+- On such a day a **non-veg** order is counted, cooked and packed as **veg** (`meal_orders.veg_override`). Jain and veg orders never change, and the price stays the plan's price.
+- A festival marked veg-only counts as a veg day for customers who observe veg days (in kitchens that have veg days on).
+- It happens inside `private.refresh_orders()`, so a slot past its cutoff or already locked is never changed, and the lock is still the only path that posts meal entries. Counts show `veg_switched`; the packing list and stickers mark the switched tiffins.
+
+### D-097 Parent pays, student eats
+- **Balances stay per eater.** The payer is another customer of the same kitchen (`set_payer`). Nobody pays for themselves, and there are no chains: a payer has no payer, and someone who pays for others can't get one (a database trigger enforces this for every path).
+- **Messages:** low-balance, dues, payment receipts and refund messages for the eater go to the payer, naming the eater and linking the payer's customer page (templates `*_payer_v1`). Menus, delivery codes and complaint replies still go to the eater.
+- **Payer's page** lists each dependent's balance and lets them pay for that dependent (`portal_dependent_payment_link_record`; Razorpay's contact is the payer). The payment and its meals belong to the eater.
+- Staff still never see phones or money.
+
+### D-098 Dispatch photo and QR stickers
+- Owner or staff record a photo of the packed meals per slot (or per run) in the private `dispatch` bucket. The **first** photo's time is the slot's "prepared" time; a retake keeps it.
+- Every stop gets a random 10-character sticker code (50 bits), stable while the run is rebuilt. The sticker sheet (owner + staff) has route order, name, flat/landmark, meal count, diets (veg-day switch marked), notes and the code. No phone numbers, no money.
+- **Scanning is optional.** `complete_stop` accepts `p_scan_token` (new last parameter; existing callers work unchanged) and refuses a mismatch with `wrong_tiffin`. The code is also in `rider_today()` so the app can check a scan offline before queueing.
+
+### D-099 First complaint credited ⏳ PENDING
+- A customer's **first** food or delivery complaint at a kitchen (late, quality, quantity, missing, hygiene, delivery) gets **1 free meal** at once, through the normal `credit` entry (valued ₹0, like credits given when resolving a complaint), once per complaint, then the balance status is re-checked and the customer is told (`complaint_credit_v1`).
+- Earlier billing, privacy or "other" complaints don't use up the first credit. Kitchen setting `auto_credit_first_complaint`, **on** by default.
+- **Your call:** this is the kitchen's cost. Is "on by default" right, or should kitchens opt in?
+
+### D-100 Complaint scores
+- **Kitchen:** complaints in the last 30 days per 100 meals served (locked and not skipped or failed), median minutes to the first response (the first inbox reply or resolution), unanswered and escalated counts, by category.
+- **Customer:** complaints in the last 90 days against their meals served.
+- Owners see their own; the platform team sees every kitchen (`admin_complaint_scores`).
+
+### D-101 Rain and heat alerts ⏳ PENDING
+- Twice a day (06:00 and 16:00 IST) the `weather-alerts` function reads Open-Meteo's free hourly forecast (no key) for each kitchen location.
+- **Windows:** lunch 11:00–14:00, dinner 19:00–22:00. **Heavy rain:** 7.5 mm or more in any hour of the window, or a thunderstorm/heavy-shower code with at least 60% probability. **Heat:** 40 °C, or feels-like 45 °C.
+- At most one alert per kitchen, date and slot. The owner is told (on by default); customers with a meal in that slot get "delivery may be late" only if the kitchen opts in (off).
+- `WEATHER_MODE=mock` is the default and needs no network. **Your call:** are these thresholds right for Bhubaneswar summers and monsoon?
+
+### D-102 Churn alerts
+- Nightly at 01:00 IST, per kitchen, customers with a live subscription are flagged with reasons: `balance_out` (0 meals or fewer and no recharge for 3 days), `skips` (3 or more skipped days in the last 7), `open_complaint`, `paused_long` (paused more than 7 days), `trial_not_converted` (platform customer whose trial is unpaid, or paid more than 3 days ago with no plan yet).
+- Owner-only list (`at_risk_customers`); the 10 pm summary payload carries the count (the approved template text is unchanged).
+
+### D-103 Referrals
+- Every customer has an 8-character code for their kitchen, shown on their page.
+- **Linking a new customer:** the owner (`apply_referral_code`, right after adding them), the customer on their page before their first payment, or a lead whose campaign is `ref-<CODE>` (the website `?ref=` link or "Hi TIFFIN ref-CODE" on WhatsApp) once they pick that same kitchen. Codes from another kitchen are ignored.
+- **Reward:** after the referee's first paid recharge (cash counts), both get N free meals. N is the kitchen setting `referral_reward_meals`, **default 0 (off)** because it is the vendor's money. Once per referral.
+
+### D-104 Prepared to delivered
+- A run is "prepared" at its dispatch photo (its own, else the slot's), else when it started. Every 5 minutes, runs with stops still pending that long after alert the owner **once per run** (`late_delivery_v1`).
+- Kitchen setting `late_alert_minutes`, default 90 (30–600).
+
+### D-105 Platform commission ⏳ PENDING (legal/tax)
+- A per-kitchen rate in basis points, set only by the platform team (default 0, at most 3000 = 30%).
+- It applies only to **online payments by platform-sourced customers**. A vendor's own customers and cash payments never pay commission.
+- Commission is rounded down. The Route transfer to the kitchen is the amount minus the commission, and the commission is recorded once per captured payment in an append-only ledger (`platform_commissions`).
+- With rate 0 (today) nothing changes.
+- **Gap:** a refund reverses the whole Route transfer but doesn't yet write a negative commission row.
+- **Your call:** confirm the GST/invoicing treatment with your CA before setting any rate.
+
+### D-106 Kitchen switching ⏳ PENDING
+- Behind the platform flag `kitchen_switching`, **off**. Every entry point (customer page and admin) refuses with `feature_disabled` while it's off.
+- **Who can switch:** only platform-sourced customers, so we never move a vendor's own customers.
+- **Flow:** the customer sees kitchens with the same meals, diet and exact price per meal and requests one; the platform team approves or rejects.
+- **On approval:** the old subscription ends at the first date with nothing frozen, through the normal cancel path, so unused meals are refunded by `private.create_refund` (we hold no money). The customer joins the new kitchen through the normal lead → customer path (platform-sourced, trial to pay the new kitchen directly). Both sides are told.
+- An open lead for the old kitchen is closed as lost ("Switched kitchen"); closed funnel stages are left alone.
+
+### D-107 Switch matching
+- Same eligibility as `private.match_kitchens` (active, taking platform leads, inside the kitchen's radius, a free place), plus the exact same plan slots, diet and price. Ranked by verified rating, then distance.
+- If the matching rules in D-078 change, change `private.switch_options()` too.
+
+### D-108 Shared riders
+- A rider can be a member of several kitchens (invite them in each). `rider_today()` and `my_run_ids()` already returned the caller's runs across kitchens: each run carries its kitchen's name. Tests now prove it: still only their own stops, phones masked, and each kitchen's rider-pay report counts only its own runs.
+
+### D-109 Office plans
+- **An office** has a name, delivery point, contact (phone encrypted) and a billing customer.
+- **Payment:** members' payer is the billing customer (reuses D-097), so balances and counts stay per person.
+- **Delivery:** route building puts all members' meals into **one stop per office** (meal count = sum, addressed to the office). A kitchen-fault failure credits each member their own meal.
+- **Monthly statement** for the owner: meals charged per member, payments and balances.
+
+### D-110 Health tags
+- **Fixed list:** diabetic, low salt, low oil, low spice, no onion/garlic, soft food. Stored only with consent (a `health_data` consent record); an empty list withdraws consent and deletes the data. Erasing a customer deletes it too.
+- **Who sees them:** owner and staff (packing list, stickers, count breakdown `by_health`), never riders.
+- **Who records them:** the owner, or the customer on their page.
+
+### D-111 Notebook-photo import
+- The owner uploads a photo of the paper register to the private `imports` bucket (5 MB, owner-only). The `notebook-import` function asks Claude to transcribe it, using `ANTHROPIC_MODEL` (default `claude-opus-5-5`, the same as the chat fallback), with a JSON schema.
+- **Guardrails** (`_shared/notebook.ts`): nothing invented, phones checked with the same rules as `@tiffin/core`, low-confidence rows flagged, meals left only as a suggestion. It returns a **preview only**; the owner confirms through `import_customers`, which re-validates.
+- Without an API key it returns a fixture (mock mode).
+- **Gap:** uploaded photos are not deleted automatically yet (retention to decide).
+
+### D-112 Review fixes in P5
+- Rider idempotency keys are now scoped to their stop: an op id already used on another stop is refused (`invalid_client_op`) instead of returning that stop's result.
+- Inventory variance alerts show the IST date of the stock-take.
+- `otp_sent` in `rider_today` was checked and is right: a queued, sending or sent "on the way" message means the customer got a code, and a cancelled one (not opted in) or failed one means they didn't. Seed runs read false because the seed cancels its own messages.
+

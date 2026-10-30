@@ -63,7 +63,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
-| 90000 00101 – 90000 00104 | Spare (used by the M1, M3, M7 and M6 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00101 – 90000 00105 | Spare (used by the M1, M3, M7, M6 and P5/P6 integration tests; test files run in parallel, so each suite needs its own number) |
 
 ## Conventions (follow these in every change)
 
@@ -148,6 +148,23 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Performance: `pnpm db:loadtest` (21:00 lock for 5,000 subscriptions must stay under 60 s). Anything you hang off the lock (`count_snapshots` triggers) must stay fast and must never raise.
 - Backups: `pnpm db:backup`, `pnpm db:restore-drill`. Edge Function errors go through `_shared/monitor.ts` (`reportError`, phones masked).
 
+**P5 / P6 (P6 ships switched off)**
+- **Parent pays:** balances stay per eater.
+  - Set payers only through `set_payer` (trigger `private.guard_payer`: same kitchen, no self, no chains).
+  - Money templates in `private.payer_templates()` are rerouted to the payer at outbox insert (`<template>_payer`); add a `_payer` template when you add one there.
+- **Veg days and Kartika** are decided only in `private.refresh_orders()` (`private.is_veg_day`, `meal_orders.veg_override`). Never change diet anywhere else, and never on frozen slots.
+- **Credits** (first complaint, referral) are `credit` rows with their own `ref_type` (`complaint_auto`, `referral_referee`/`referral_referrer`, `delivery_stop_order` for office stops), idempotent on the ref, followed by `sync_balance_status`.
+- **Dispatch photos** are prepared time for the late alert. `delivery_stops.qr_token` is the sticker code; `complete_stop` takes an optional `p_scan_token` (last parameter, `wrong_tiffin`).
+- **Commission:**
+  - only `private.payment_link_record` computes it (platform customers, online);
+  - `platform_commissions` is append-only, written once per captured payment;
+  - the Route transfer is `routeTransfer()` in `_shared/razorpay.ts`.
+- **Feature flags** live in `platform_settings`. Gate every entry point with `private.require_feature('<key>')` (`feature_disabled`), and test both flag states.
+- **Offices:** grouping happens in `private.build_runs()` (one stop per office, `delivery_stops.office_id`); counts and charges stay per customer.
+- **Health tags** (`customer_health`): consent required, owner + staff only, never in rider payloads.
+- **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
+- **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -203,6 +220,15 @@ Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLI
 Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 
 Vault also needs `public_web_url` (links in messages, e.g. `https://app.example.in`).
+
+P5/P6 Edge Function secrets (same file):
+
+| Variable | Notes |
+|---|---|
+| `WEATHER_MODE` | `mock` (default, no network) or `live` (Open-Meteo, no key) |
+| `WEATHER_MOCK_SCENARIO` | `none` (default), `rain` or `heat`, mock mode only |
+| `OPEN_METEO_URL` | Optional override of `https://api.open-meteo.com/v1/forecast` |
+| `NOTEBOOK_IMPORT_MODE` | Optional `mock` to force the fixture even with `ANTHROPIC_API_KEY` set; the model is `ANTHROPIC_MODEL` |
 
 Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the built-in optimiser is used) and `VROOM_USE_ROUTING` (`true` only if the VROOM server has its own OSRM/ORS).
 

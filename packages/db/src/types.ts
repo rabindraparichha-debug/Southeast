@@ -286,8 +286,52 @@ export type Database = {
           },
         ];
       };
+      churn_risks: {
+        Row: {
+          computed_at: string;
+          computed_on: string;
+          customer_id: string;
+          detail: NonNullable<Json>;
+          kitchen_id: string;
+          reasons: string[];
+        };
+        ComputedFields: never;
+        Insert: {
+          computed_at?: string;
+          computed_on: string;
+          customer_id: string;
+          detail?: NonNullable<Json>;
+          kitchen_id: string;
+          reasons: string[];
+        };
+        Update: {
+          computed_at?: string;
+          computed_on?: string;
+          customer_id?: string;
+          detail?: NonNullable<Json>;
+          kitchen_id?: string;
+          reasons?: string[];
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'churn_risks_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'churn_risks_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       complaints: {
         Row: {
+          auto_credit_entry_id: string | null;
           category: string;
           channel: string;
           conversation_id: string | null;
@@ -308,6 +352,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          auto_credit_entry_id?: string | null;
           category: string;
           channel: string;
           conversation_id?: string | null;
@@ -327,6 +372,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          auto_credit_entry_id?: string | null;
           category?: string;
           channel?: string;
           conversation_id?: string | null;
@@ -346,6 +392,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'complaints_auto_credit_entry_id_fkey';
+            columns: ['auto_credit_entry_id'];
+            isOneToOne: false;
+            referencedRelation: 'balance_entries';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'complaints_conversation_id_fkey';
             columns: ['conversation_id'];
@@ -554,6 +607,52 @@ export type Database = {
           },
         ];
       };
+      customer_health: {
+        Row: {
+          consent_at: string;
+          consent_basis: string;
+          customer_id: string;
+          kitchen_id: string;
+          recorded_by: string | null;
+          tags: string[];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          consent_at: string;
+          consent_basis: string;
+          customer_id: string;
+          kitchen_id: string;
+          recorded_by?: string | null;
+          tags: string[];
+          updated_at?: string;
+        };
+        Update: {
+          consent_at?: string;
+          consent_basis?: string;
+          customer_id?: string;
+          kitchen_id?: string;
+          recorded_by?: string | null;
+          tags?: string[];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'customer_health_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'customer_health_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       customer_magic_links: {
         Row: {
           created_at: string;
@@ -615,12 +714,16 @@ export type Database = {
           kitchen_id: string;
           name: string;
           notes: string | null;
+          observes_kartika: boolean;
+          observes_veg_days: boolean;
+          office_id: string | null;
           payer_customer_id: string | null;
           phone_enc: string | null;
           phone_hash: string | null;
           phone_last4: string | null;
           platform_sourced: boolean;
           preferred_language: Database['public']['Enums']['language_code'];
+          referral_code: string | null;
           source: Database['public']['Enums']['customer_source'];
           updated_at: string;
           whatsapp_opt_in: boolean;
@@ -637,12 +740,16 @@ export type Database = {
           kitchen_id: string;
           name: string;
           notes?: string | null;
+          observes_kartika?: boolean;
+          observes_veg_days?: boolean;
+          office_id?: string | null;
           payer_customer_id?: string | null;
           phone_enc?: string | null;
           phone_hash?: string | null;
           phone_last4?: string | null;
           platform_sourced?: boolean;
           preferred_language?: Database['public']['Enums']['language_code'];
+          referral_code?: string | null;
           source?: Database['public']['Enums']['customer_source'];
           updated_at?: string;
           whatsapp_opt_in?: boolean;
@@ -658,12 +765,16 @@ export type Database = {
           kitchen_id?: string;
           name?: string;
           notes?: string | null;
+          observes_kartika?: boolean;
+          observes_veg_days?: boolean;
+          office_id?: string | null;
           payer_customer_id?: string | null;
           phone_enc?: string | null;
           phone_hash?: string | null;
           phone_last4?: string | null;
           platform_sourced?: boolean;
           preferred_language?: Database['public']['Enums']['language_code'];
+          referral_code?: string | null;
           source?: Database['public']['Enums']['customer_source'];
           updated_at?: string;
           whatsapp_opt_in?: boolean;
@@ -675,6 +786,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'kitchens';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'customers_office_fk';
+            columns: ['office_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'offices';
+            referencedColumns: ['id', 'kitchen_id'];
           },
           {
             foreignKeyName: 'customers_payer_customer_id_kitchen_id_fkey';
@@ -825,12 +943,14 @@ export type Database = {
           kitchen_fault: boolean | null;
           kitchen_id: string;
           meal_count: number;
+          office_id: string | null;
           offline: boolean;
           otp: string | null;
           otp_attempts: number;
           otp_ok: boolean | null;
           photo_path: string | null;
           proof_type: Database['public']['Enums']['proof_type'] | null;
+          qr_token: string;
           run_id: string;
           seq: number;
           status: Database['public']['Enums']['stop_status'];
@@ -860,12 +980,14 @@ export type Database = {
           kitchen_fault?: boolean | null;
           kitchen_id: string;
           meal_count: number;
+          office_id?: string | null;
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
+          qr_token?: string;
           run_id: string;
           seq: number;
           status?: Database['public']['Enums']['stop_status'];
@@ -894,12 +1016,14 @@ export type Database = {
           kitchen_fault?: boolean | null;
           kitchen_id?: string;
           meal_count?: number;
+          office_id?: string | null;
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
+          qr_token?: string;
           run_id?: string;
           seq?: number;
           status?: Database['public']['Enums']['stop_status'];
@@ -928,6 +1052,13 @@ export type Database = {
             columns: ['customer_id', 'kitchen_id'];
             isOneToOne: false;
             referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'delivery_stops_office_fk';
+            columns: ['office_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'offices';
             referencedColumns: ['id', 'kitchen_id'];
           },
           {
@@ -977,6 +1108,162 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      dispatch_photos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kitchen_id: string;
+          photo_path: string;
+          run_id: string | null;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          taken_at: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id: string;
+          photo_path: string;
+          run_id?: string | null;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          taken_at: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          photo_path?: string;
+          run_id?: string | null;
+          service_date?: string;
+          slot?: Database['public']['Enums']['meal_slot'];
+          taken_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'dispatch_photos_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'dispatch_photos_run_id_kitchen_id_fkey';
+            columns: ['run_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_runs';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
+      festival_specials: {
+        Row: {
+          addon_price_paise: number | null;
+          calendar_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          description: string | null;
+          id: string;
+          kitchen_id: string;
+          name: string;
+          notified: number;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          addon_price_paise?: number | null;
+          calendar_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          id?: string;
+          kitchen_id: string;
+          name: string;
+          notified?: number;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Update: {
+          addon_price_paise?: number | null;
+          calendar_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          name?: string;
+          notified?: number;
+          service_date?: string;
+          slot?: Database['public']['Enums']['meal_slot'];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'festival_specials_calendar_id_fkey';
+            columns: ['calendar_id'];
+            isOneToOne: false;
+            referencedRelation: 'food_calendar';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'festival_specials_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      food_calendar: {
+        Row: {
+          created_at: string;
+          ends_on: string;
+          id: string;
+          kind: string;
+          name: string;
+          notes: string | null;
+          starts_on: string;
+          updated_at: string;
+          updated_by: string | null;
+          veg_only: boolean;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          ends_on: string;
+          id?: string;
+          kind: string;
+          name: string;
+          notes?: string | null;
+          starts_on: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          veg_only?: boolean;
+        };
+        Update: {
+          created_at?: string;
+          ends_on?: string;
+          id?: string;
+          kind?: string;
+          name?: string;
+          notes?: string | null;
+          starts_on?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          veg_only?: boolean;
+        };
+        Relationships: [];
       };
       import_batches: {
         Row: {
@@ -1119,6 +1406,7 @@ export type Database = {
       };
       kitchen_payout_accounts: {
         Row: {
+          commission_bps: number;
           created_at: string;
           kitchen_id: string;
           kyc_status: string;
@@ -1127,6 +1415,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          commission_bps?: number;
           created_at?: string;
           kitchen_id: string;
           kyc_status?: string;
@@ -1134,6 +1423,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          commission_bps?: number;
           created_at?: string;
           kitchen_id?: string;
           kyc_status?: string;
@@ -1211,47 +1501,71 @@ export type Database = {
       };
       kitchen_settings: {
         Row: {
+          auto_credit_first_complaint: boolean;
           broadcast_cap_monthly: number;
           credit_limit_meals: number;
           gas_paise_per_meal: number;
           grace_days: number;
+          kartika_veg_mode: boolean;
           kitchen_id: string;
+          late_alert_minutes: number;
           low_balance_meals: number;
           notice_days: number;
           packaging_paise_per_meal: number;
           phone_pause_close_time: string;
           price_jump_pct: number;
+          referral_reward_meals: number;
           updated_at: string;
           variance_reason_pct: number;
+          veg_days: number[];
+          veg_days_enabled: boolean;
+          weather_alerts: boolean;
+          weather_customer_notice: boolean;
         };
         ComputedFields: never;
         Insert: {
+          auto_credit_first_complaint?: boolean;
           broadcast_cap_monthly?: number;
           credit_limit_meals?: number;
           gas_paise_per_meal?: number;
           grace_days?: number;
+          kartika_veg_mode?: boolean;
           kitchen_id: string;
+          late_alert_minutes?: number;
           low_balance_meals?: number;
           notice_days?: number;
           packaging_paise_per_meal?: number;
           phone_pause_close_time?: string;
           price_jump_pct?: number;
+          referral_reward_meals?: number;
           updated_at?: string;
           variance_reason_pct?: number;
+          veg_days?: number[];
+          veg_days_enabled?: boolean;
+          weather_alerts?: boolean;
+          weather_customer_notice?: boolean;
         };
         Update: {
+          auto_credit_first_complaint?: boolean;
           broadcast_cap_monthly?: number;
           credit_limit_meals?: number;
           gas_paise_per_meal?: number;
           grace_days?: number;
+          kartika_veg_mode?: boolean;
           kitchen_id?: string;
+          late_alert_minutes?: number;
           low_balance_meals?: number;
           notice_days?: number;
           packaging_paise_per_meal?: number;
           phone_pause_close_time?: string;
           price_jump_pct?: number;
+          referral_reward_meals?: number;
           updated_at?: string;
           variance_reason_pct?: number;
+          veg_days?: number[];
+          veg_days_enabled?: boolean;
+          weather_alerts?: boolean;
+          weather_customer_notice?: boolean;
         };
         Relationships: [
           {
@@ -1260,6 +1574,104 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: 'kitchens';
             referencedColumns: ['id'];
+          },
+        ];
+      };
+      kitchen_switch_requests: {
+        Row: {
+          created_at: string;
+          customer_id: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_note: string | null;
+          effective_date: string | null;
+          from_kitchen_id: string;
+          id: string;
+          new_customer_id: string | null;
+          price_per_meal_paise: number;
+          reason: string | null;
+          status: string;
+          to_kitchen_id: string;
+          to_plan_id: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          customer_id: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          effective_date?: string | null;
+          from_kitchen_id: string;
+          id?: string;
+          new_customer_id?: string | null;
+          price_per_meal_paise: number;
+          reason?: string | null;
+          status?: string;
+          to_kitchen_id: string;
+          to_plan_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          customer_id?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          decision_note?: string | null;
+          effective_date?: string | null;
+          from_kitchen_id?: string;
+          id?: string;
+          new_customer_id?: string | null;
+          price_per_meal_paise?: number;
+          reason?: string | null;
+          status?: string;
+          to_kitchen_id?: string;
+          to_plan_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kitchen_switch_requests_customer_id_from_kitchen_id_fkey';
+            columns: ['customer_id', 'from_kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'kitchen_switch_requests_customer_id_from_kitchen_id_fkey';
+            columns: ['customer_id', 'from_kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'kitchen_switch_requests_new_customer_id_fkey';
+            columns: ['new_customer_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kitchen_switch_requests_new_customer_id_fkey';
+            columns: ['new_customer_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kitchen_switch_requests_to_kitchen_id_fkey';
+            columns: ['to_kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'kitchen_switch_requests_to_plan_id_to_kitchen_id_fkey';
+            columns: ['to_plan_id', 'to_kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'plans';
+            referencedColumns: ['id', 'kitchen_id'];
           },
         ];
       };
@@ -1485,6 +1897,7 @@ export type Database = {
           phone_hash: string | null;
           phone_last4: string | null;
           qualified_at: string | null;
+          referral_code: string | null;
           reminded_at: string | null;
           renewed_at: string | null;
           slots: Database['public']['Enums']['meal_slot'][] | null;
@@ -1526,6 +1939,7 @@ export type Database = {
           phone_hash?: string | null;
           phone_last4?: string | null;
           qualified_at?: string | null;
+          referral_code?: string | null;
           reminded_at?: string | null;
           renewed_at?: string | null;
           slots?: Database['public']['Enums']['meal_slot'][] | null;
@@ -1566,6 +1980,7 @@ export type Database = {
           phone_hash?: string | null;
           phone_last4?: string | null;
           qualified_at?: string | null;
+          referral_code?: string | null;
           reminded_at?: string | null;
           renewed_at?: string | null;
           slots?: Database['public']['Enums']['meal_slot'][] | null;
@@ -1631,6 +2046,7 @@ export type Database = {
           stop_seq: number | null;
           subscription_id: string;
           updated_at: string;
+          veg_override: boolean;
         };
         ComputedFields: never;
         Insert: {
@@ -1655,6 +2071,7 @@ export type Database = {
           stop_seq?: number | null;
           subscription_id: string;
           updated_at?: string;
+          veg_override?: boolean;
         };
         Update: {
           address_id?: string | null;
@@ -1678,6 +2095,7 @@ export type Database = {
           stop_seq?: number | null;
           subscription_id?: string;
           updated_at?: string;
+          veg_override?: boolean;
         };
         Relationships: [
           {
@@ -1987,10 +2405,102 @@ export type Database = {
           },
         ];
       };
+      offices: {
+        Row: {
+          active: boolean;
+          address_id: string | null;
+          area: string | null;
+          billing_customer_id: string;
+          contact_name: string | null;
+          contact_phone_enc: string | null;
+          contact_phone_last4: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kitchen_id: string;
+          landmark: string | null;
+          lat: number | null;
+          line1: string | null;
+          lng: number | null;
+          name: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          active?: boolean;
+          address_id?: string | null;
+          area?: string | null;
+          billing_customer_id: string;
+          contact_name?: string | null;
+          contact_phone_enc?: string | null;
+          contact_phone_last4?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id: string;
+          landmark?: string | null;
+          lat?: number | null;
+          line1?: string | null;
+          lng?: number | null;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          address_id?: string | null;
+          area?: string | null;
+          billing_customer_id?: string;
+          contact_name?: string | null;
+          contact_phone_enc?: string | null;
+          contact_phone_last4?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          landmark?: string | null;
+          lat?: number | null;
+          line1?: string | null;
+          lng?: number | null;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'offices_address_id_kitchen_id_fkey';
+            columns: ['address_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'addresses';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'offices_billing_customer_id_kitchen_id_fkey';
+            columns: ['billing_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'offices_billing_customer_id_kitchen_id_fkey';
+            columns: ['billing_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'offices_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       payments: {
         Row: {
           amount_paise: number;
           collected_by: string | null;
+          commission_bps: number;
+          commission_paise: number;
           confirmed_at: string | null;
           confirmed_by: string | null;
           created_at: string;
@@ -2012,12 +2522,15 @@ export type Database = {
           settled_to_account: string | null;
           short_url: string | null;
           status: Database['public']['Enums']['payment_status'];
+          transfer_paise: number | null;
           updated_at: string;
         };
         ComputedFields: never;
         Insert: {
           amount_paise: number;
           collected_by?: string | null;
+          commission_bps?: number;
+          commission_paise?: number;
           confirmed_at?: string | null;
           confirmed_by?: string | null;
           created_at?: string;
@@ -2039,11 +2552,14 @@ export type Database = {
           settled_to_account?: string | null;
           short_url?: string | null;
           status: Database['public']['Enums']['payment_status'];
+          transfer_paise?: number | null;
           updated_at?: string;
         };
         Update: {
           amount_paise?: number;
           collected_by?: string | null;
+          commission_bps?: number;
+          commission_paise?: number;
           confirmed_at?: string | null;
           confirmed_by?: string | null;
           created_at?: string;
@@ -2065,6 +2581,7 @@ export type Database = {
           settled_to_account?: string | null;
           short_url?: string | null;
           status?: Database['public']['Enums']['payment_status'];
+          transfer_paise?: number | null;
           updated_at?: string;
         };
         Relationships: [
@@ -2158,6 +2675,93 @@ export type Database = {
         Update: {
           created_at?: string;
           user_id?: string;
+        };
+        Relationships: [];
+      };
+      platform_commissions: {
+        Row: {
+          amount_paise: number;
+          commission_bps: number;
+          commission_paise: number;
+          created_at: string;
+          customer_id: string;
+          id: string;
+          kitchen_id: string;
+          payment_id: string;
+          razorpay_payment_id: string | null;
+          transfer_paise: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount_paise: number;
+          commission_bps: number;
+          commission_paise: number;
+          created_at?: string;
+          customer_id: string;
+          id?: string;
+          kitchen_id: string;
+          payment_id: string;
+          razorpay_payment_id?: string | null;
+          transfer_paise: number;
+        };
+        Update: {
+          amount_paise?: number;
+          commission_bps?: number;
+          commission_paise?: number;
+          created_at?: string;
+          customer_id?: string;
+          id?: string;
+          kitchen_id?: string;
+          payment_id?: string;
+          razorpay_payment_id?: string | null;
+          transfer_paise?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'platform_commissions_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'platform_commissions_customer_id_kitchen_id_fkey';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'platform_commissions_payment_id_kitchen_id_fkey';
+            columns: ['payment_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'payments';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
+      platform_settings: {
+        Row: {
+          enabled: boolean;
+          key: string;
+          updated_at: string;
+          updated_by: string | null;
+          value: NonNullable<Json>;
+        };
+        ComputedFields: never;
+        Insert: {
+          enabled?: boolean;
+          key: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          value?: NonNullable<Json>;
+        };
+        Update: {
+          enabled?: boolean;
+          key?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          value?: NonNullable<Json>;
         };
         Relationships: [];
       };
@@ -2305,6 +2909,105 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'items';
             referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
+      referrals: {
+        Row: {
+          code: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kitchen_id: string;
+          referee_customer_id: string;
+          referee_entry_id: string | null;
+          referrer_customer_id: string;
+          referrer_entry_id: string | null;
+          reward_meals: number;
+          rewarded_at: string | null;
+          source: string;
+          status: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          code: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id: string;
+          referee_customer_id: string;
+          referee_entry_id?: string | null;
+          referrer_customer_id: string;
+          referrer_entry_id?: string | null;
+          reward_meals?: number;
+          rewarded_at?: string | null;
+          source: string;
+          status?: string;
+        };
+        Update: {
+          code?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          referee_customer_id?: string;
+          referee_entry_id?: string | null;
+          referrer_customer_id?: string;
+          referrer_entry_id?: string | null;
+          reward_meals?: number;
+          rewarded_at?: string | null;
+          source?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'referrals_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'referrals_referee_customer_id_kitchen_id_fkey';
+            columns: ['referee_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referrals_referee_customer_id_kitchen_id_fkey';
+            columns: ['referee_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referrals_referee_entry_id_fkey';
+            columns: ['referee_entry_id'];
+            isOneToOne: false;
+            referencedRelation: 'balance_entries';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'referrals_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referrals_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referrals_referrer_entry_id_fkey';
+            columns: ['referrer_entry_id'];
+            isOneToOne: false;
+            referencedRelation: 'balance_entries';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -3020,6 +3723,48 @@ export type Database = {
           },
         ];
       };
+      weather_alerts: {
+        Row: {
+          created_at: string;
+          customers_notified: number;
+          detail: NonNullable<Json>;
+          id: string;
+          kind: string;
+          kitchen_id: string;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          customers_notified?: number;
+          detail?: NonNullable<Json>;
+          id?: string;
+          kind: string;
+          kitchen_id: string;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+        };
+        Update: {
+          created_at?: string;
+          customers_notified?: number;
+          detail?: NonNullable<Json>;
+          id?: string;
+          kind?: string;
+          kitchen_id?: string;
+          service_date?: string;
+          slot?: Database['public']['Enums']['meal_slot'];
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'weather_alerts_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       webhook_events: {
         Row: {
           event_id: string;
@@ -3152,6 +3897,8 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_commission_report: { Args: { p_from: string; p_to: string }; Returns: Json };
+      admin_complaint_scores: { Args: { p_days?: number }; Returns: Json };
       admin_create_lead: {
         Args: {
           p_area?: string;
@@ -3168,6 +3915,11 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_decide_switch: {
+        Args: { p_approve: boolean; p_note?: string; p_request: string };
+        Returns: Json;
+      };
+      admin_delete_calendar_entry: { Args: { p_id: string }; Returns: undefined };
       admin_hide_review: { Args: { p_hidden: boolean; p_review: string }; Returns: undefined };
       admin_import_leads: {
         Args: { p_rows: Json; p_source: Database['public']['Enums']['lead_source'] };
@@ -3188,6 +3940,7 @@ export type Database = {
       admin_reveal_lead_phone: { Args: { p_lead: string }; Returns: string };
       admin_reveal_vendor_phone: { Args: { p_id: string }; Returns: string };
       admin_reviews: { Args: { p_kitchen?: string; p_limit?: number }; Returns: Json };
+      admin_set_commission: { Args: { p_bps: number; p_kitchen: string }; Returns: undefined };
       admin_set_fssai: { Args: { p_fssai?: string; p_kitchen: string }; Returns: undefined };
       admin_set_lead_status: {
         Args: {
@@ -3197,6 +3950,8 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_set_platform_flag: { Args: { p_enabled: boolean; p_key: string }; Returns: undefined };
+      admin_switch_requests: { Args: { p_status?: string }; Returns: Json };
       admin_update_vendor_application: {
         Args: {
           p_id: string;
@@ -3204,6 +3959,18 @@ export type Database = {
           p_status?: Database['public']['Enums']['vendor_app_status'];
         };
         Returns: undefined;
+      };
+      admin_upsert_calendar_entry: {
+        Args: {
+          p_ends_on?: string;
+          p_id?: string;
+          p_kind?: string;
+          p_name?: string;
+          p_notes?: string;
+          p_starts_on?: string;
+          p_veg_only?: boolean;
+        };
+        Returns: string;
       };
       admin_vendor_applications: {
         Args: { p_status?: Database['public']['Enums']['vendor_app_status'] };
@@ -3224,7 +3991,18 @@ export type Database = {
         Args: { p_error?: string; p_id: string; p_ok: boolean; p_skip?: boolean };
         Returns: undefined;
       };
+      apply_referral_code: { Args: { p_code: string; p_customer: string }; Returns: string };
       assign_run: { Args: { p_rider?: string; p_run: string }; Returns: undefined };
+      at_risk_customers: {
+        Args: { p_kitchen: string; p_refresh?: boolean };
+        Returns: {
+          computed_on: string;
+          customer_id: string;
+          customer_name: string;
+          detail: Json;
+          reasons: string[];
+        }[];
+      };
       attach_payment_link: {
         Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
         Returns: undefined;
@@ -3250,6 +4028,10 @@ export type Database = {
       claim_invites: { Args: Record<PropertyKey, never>; Returns: number };
       close_conversation: { Args: { p_conversation: string }; Returns: undefined };
       close_stock_take: { Args: { p_stock_take: string }; Returns: Json };
+      commission_statement: {
+        Args: { p_from: string; p_kitchen: string; p_to: string };
+        Returns: Json;
+      };
       complete_stop: {
         Args: {
           p_accuracy?: number;
@@ -3262,6 +4044,7 @@ export type Database = {
           p_otp?: string;
           p_photo_path?: string;
           p_proof: Database['public']['Enums']['proof_type'];
+          p_scan_token?: string;
           p_stop: string;
           p_tiffins_out?: number;
           p_tiffins_returned?: number;
@@ -3282,6 +4065,18 @@ export type Database = {
           p_phone: string;
         };
         Returns: string;
+      };
+      create_festival_special: {
+        Args: {
+          p_addon_price_paise?: number;
+          p_date: string;
+          p_description?: string;
+          p_kitchen: string;
+          p_name: string;
+          p_notify?: boolean;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
       };
       create_item: {
         Args: {
@@ -3355,8 +4150,10 @@ export type Database = {
         };
         Returns: string;
       };
+      customer_complaint_score: { Args: { p_customer: string; p_days?: number }; Returns: Json };
       customer_page_link: { Args: { p_customer: string }; Returns: string };
       customer_phone: { Args: { p_customer: string }; Returns: string };
+      delete_festival_special: { Args: { p_special: string }; Returns: undefined };
       demand_gaps: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -3393,6 +4190,10 @@ export type Database = {
           p_stop: string;
           p_tiffins_returned?: number;
         };
+        Returns: Json;
+      };
+      festival_specials_list: {
+        Args: { p_from?: string; p_kitchen: string; p_to?: string };
         Returns: Json;
       };
       finish_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
@@ -3469,6 +4270,9 @@ export type Database = {
       };
       money_report: { Args: { p_from: string; p_kitchen: string; p_to: string }; Returns: Json };
       move_stop: { Args: { p_run: string; p_stop: string }; Returns: undefined };
+      notebook_import_context: { Args: { p_kitchen: string; p_path: string }; Returns: Json };
+      office_statement: { Args: { p_month: string; p_office: string }; Returns: Json };
+      offices_list: { Args: { p_kitchen: string }; Returns: Json };
       optimize_route: { Args: { p_route: string }; Returns: Json };
       packing_list: {
         Args: {
@@ -3483,13 +4287,16 @@ export type Database = {
           customer_notes: string;
           delivery_notes: string;
           diet: Database['public']['Enums']['diet_type'];
+          health_tags: string[];
           landmark: string;
           line1: string;
+          office_name: string;
           order_id: string;
           plan_name: string;
           qty: number;
           status: Database['public']['Enums']['order_status'];
           stop_seq: number;
+          veg_override: boolean;
         }[];
       };
       pay_supplier: {
@@ -3522,6 +4329,8 @@ export type Database = {
         };
         Returns: string;
       };
+      portal_apply_referral: { Args: { p_code: string; p_token: string }; Returns: Json };
+      portal_cancel_switch: { Args: { p_token: string }; Returns: undefined };
       portal_change: {
         Args: {
           p_address?: string;
@@ -3539,16 +4348,33 @@ export type Database = {
         Args: { p_category: string; p_description: string; p_token: string };
         Returns: string;
       };
+      portal_dependent_payment_link_record: {
+        Args: { p_dependent: string; p_meals: number; p_token: string };
+        Returns: Json;
+      };
       portal_get: { Args: { p_token: string }; Returns: Json };
       portal_payment_link_record: { Args: { p_meals: number; p_token: string }; Returns: Json };
+      portal_request_switch: {
+        Args: { p_kitchen: string; p_reason?: string; p_token: string };
+        Returns: string;
+      };
       portal_review: {
         Args: { p_comment?: string; p_rating: number; p_token: string };
         Returns: undefined;
+      };
+      portal_set_food_prefs: {
+        Args: { p_kartika?: boolean; p_token: string; p_veg_days?: boolean };
+        Returns: Json;
+      };
+      portal_set_health_tags: {
+        Args: { p_consent?: boolean; p_tags: string[]; p_token: string };
+        Returns: string[];
       };
       portal_set_language: {
         Args: { p_language: Database['public']['Enums']['language_code']; p_token: string };
         Returns: undefined;
       };
+      portal_switch_options: { Args: { p_token: string }; Returns: Json };
       production_plan: {
         Args: {
           p_date: string;
@@ -3560,6 +4386,17 @@ export type Database = {
       razorpay_process_event: { Args: { p_event_id: string; p_payload: Json }; Returns: string };
       record_cash_at_door: {
         Args: { p_amount_paise: number; p_meal_order: string; p_note?: string };
+        Returns: string;
+      };
+      record_dispatch_photo: {
+        Args: {
+          p_at?: string;
+          p_date: string;
+          p_kitchen: string;
+          p_photo_path: string;
+          p_run?: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
         Returns: string;
       };
       record_payment: {
@@ -3599,6 +4436,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      referrals_list: { Args: { p_kitchen: string }; Returns: Json };
       refund_for_gateway: { Args: { p_refund: string }; Returns: Json };
       refund_unused_meals: {
         Args: { p_customer: string; p_meals?: number; p_reason?: string };
@@ -3683,6 +4521,15 @@ export type Database = {
       };
       send_broadcast: { Args: { p_body: string; p_kitchen: string }; Returns: number };
       send_vendor_message: { Args: { p_body: string; p_conversation: string }; Returns: string };
+      set_customer_food_prefs: {
+        Args: { p_customer: string; p_kartika?: boolean; p_veg_days?: boolean };
+        Returns: Json;
+      };
+      set_customer_office: { Args: { p_customer: string; p_office?: string }; Returns: undefined };
+      set_health_tags: {
+        Args: { p_consent?: boolean; p_customer: string; p_tags: string[] };
+        Returns: string[];
+      };
       set_kitchen_status: {
         Args: { p_kitchen: string; p_status: Database['public']['Enums']['kitchen_status'] };
         Returns: undefined;
@@ -3691,6 +4538,7 @@ export type Database = {
         Args: { p_member: string; p_role: Database['public']['Enums']['member_role'] };
         Returns: undefined;
       };
+      set_payer: { Args: { p_customer: string; p_payer?: string }; Returns: undefined };
       set_payout_account: {
         Args: { p_account_id: string; p_kitchen: string; p_kyc_status: string };
         Returns: undefined;
@@ -3724,6 +4572,14 @@ export type Database = {
       };
       start_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
       start_stock_take: { Args: { p_kitchen: string }; Returns: string };
+      sticker_sheet: {
+        Args: {
+          p_date: string;
+          p_kitchen: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
+      };
       stock_levels: {
         Args: { p_kitchen: string };
         Returns: {
@@ -3830,6 +4686,22 @@ export type Database = {
         };
         Returns: string;
       };
+      upsert_office: {
+        Args: {
+          p_area?: string;
+          p_billing_customer: string;
+          p_contact_name?: string;
+          p_contact_phone?: string;
+          p_kitchen: string;
+          p_landmark?: string;
+          p_lat?: number;
+          p_line1?: string;
+          p_lng?: number;
+          p_name: string;
+          p_office?: string;
+        };
+        Returns: string;
+      };
       upsert_supplier: {
         Args: {
           p_kitchen: string;
@@ -3840,6 +4712,7 @@ export type Database = {
         };
         Returns: string;
       };
+      vendor_complaint_score: { Args: { p_days?: number; p_kitchen: string }; Returns: Json };
       wa_add_location_address: {
         Args: { p_conversation: string; p_label?: string; p_lat: number; p_lng: number };
         Returns: string;
@@ -3958,6 +4831,18 @@ export type Database = {
           p_subscribers: number;
         };
         Returns: string;
+      };
+      weather_alerts_list: { Args: { p_days?: number; p_kitchen: string }; Returns: Json };
+      weather_kitchens: { Args: Record<PropertyKey, never>; Returns: Json };
+      weather_record_alert: {
+        Args: {
+          p_date: string;
+          p_detail?: Json;
+          p_kind: string;
+          p_kitchen: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
       };
     };
     Enums: {

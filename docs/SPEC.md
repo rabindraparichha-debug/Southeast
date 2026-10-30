@@ -193,3 +193,21 @@ Balance is the sum of `balance_entries.meals` per customer per kitchen, and stoc
   - A named grievance contact, with complaints acknowledged within 48 hours.
 - **FSSAI:** show each kitchen's FSSAI number on its profile. A kitchen without one can't go live.
 - **Payments:** Razorpay test mode only until I explicitly approve live keys. Never put secrets in code; use `.env` and document every variable in `.env.example`.
+
+---
+
+### Phases P5 and P6 (added after the original spec)
+The original spec left room for "parent pays", Route-split commission and `platform_sourced` and called P5/P6 design-for only. On the product owner's instruction ("build P5 and P6"; P6 "build both, switched off") they are now built. The work packages are in `docs/PLAN.md` and the defaults in `docs/DECISIONS.md` D-095 – D-112.
+- **P5 (on, with safe defaults):**
+  - parent pays, student eats;
+  - Odisha food calendar (veg days, Kartika, festival specials);
+  - packed-meal photo and QR stickers;
+  - complaint scores and a first-complaint credit;
+  - rain/heat alerts, churn alerts, referrals (reward off by default);
+  - the 90-minute "prepared to delivered" alert.
+- **P6 (built, switched off):**
+  - platform commission via the Razorpay Route split (rate 0);
+  - kitchen switching at the same price (admin flag off);
+  - shared riders, office plans, health tags with consent;
+  - AI notebook-photo import (preview only).
+

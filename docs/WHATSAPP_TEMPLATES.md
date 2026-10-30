@@ -28,6 +28,16 @@ Meta only lets us message a customer outside the 24-hour customer-service window
 | `on_the_way_v1` | Utility | `{{1}}: your {{2}} is on the way with {{3}} (stop {{4}} of {{5}}). Delivery code: {{6}}. Share it only when you receive your tiffin.` | kitchen, lunch/dinner, rider first name, stop, stops, 4-digit code | – |
 | `trial_followup_v1` | Utility | `{{1}}: hope you are enjoying your trial meals! Continue with {{2}}: {{3}} meals for {{4}}. Pay here: {{5}}` | kitchen, plan, meals, amount, link | – |
 | `delivery_credit_v1` | Utility | `{{1}}: sorry, your {{2}} on {{3}} could not be delivered. {{4}} meal(s) have been added back to your balance.` | kitchen, lunch/dinner, date, meals | – |
+| `low_balance_payer_v1` | Utility | `{{1}}: {{2}} has {{3}} meals left. Pay for them here: {{4}}` | kitchen, eater name, meals, payer page link | – |
+| `dues_reminder_payer_v1` | Utility | `{{1}}: {{2}} is due for {{3}} ({{4}} meals). Pay here: {{5}}` | kitchen, amount, eater name, meals, payer page link | – |
+| `payment_receipt_payer_v1` | Utility | `{{1}}: payment of {{2}} received for {{3}} meals for {{4}}. Their balance: {{5}} meals. Thank you!` | kitchen, amount, meals, eater name, balance | – |
+| `refund_notice_payer_v1` | Utility | `{{1}}: a refund of {{2}} for {{3}} unused meals of {{4}} has been created. You will be told when it is paid.` | kitchen, amount, meals, eater name | – |
+| `refund_receipt_payer_v1` | Utility | `{{1}}: the refund of {{2}} for {{3}} has been paid ({{4}}).` | kitchen, amount, eater name, method | – |
+| `festival_special_v1` | Marketing | `{{1}}: festival special on {{2}} ({{3}}): {{4}}. {{5}}` | kitchen, date, lunch/dinner, dish, "Included in your meal." or "Add-on ₹X: message the kitchen to order." | – |
+| `complaint_credit_v1` | Utility | `{{1}}: sorry about the problem ({{2}}). We have added {{3}} free meal to your balance. The kitchen will also reply.` | kitchen, complaint category, meals | – |
+| `weather_delay_v1` | Utility | `{{1}}: {{2}} is expected around {{3}} time on {{4}}. Your tiffin may be a little late. Thank you for your patience.` | kitchen, "Heavy rain" / "Severe heat" / "Heavy rain and heat", lunch/dinner, date | – |
+| `referral_reward_v1` | Utility | `{{1}}: thank you! {{2}} free meal(s) added to your balance {{3}}.` | kitchen, meals, "for joining with a friend's code" or "because <name> joined with your code" | – |
+| `kitchen_switch_v1` | Utility | `{{1}}: welcome! Your move from {{2}} is approved. Meals here start from {{3}} once your trial is paid. Your page: {{4}}` | new kitchen, old kitchen, date, customer page link | – |
 
 ## Platform templates (people who are not a kitchen's customer yet)
 
@@ -49,12 +59,19 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 | `production_sheet_v1` | Utility | `{{1}} final count for {{2}} {{3}}: {{4}} meals (veg {{5}}, non-veg {{6}}, Jain {{7}}). Packing list is in the app.` | kitchen, date, slot, total, veg, non-veg, Jain |
 | `new_platform_customer_v1` | Utility | `{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.` | kitchen, customer, area, plan, trial meals |
 | `inbox_alert_v1` | Utility | `{{1}}: {{2}} needs a reply in your inbox ({{3}}).` | kitchen, customer, reason |
+| `weather_alert_v1` | Utility | `{{1}}: {{2}} expected during {{3}} delivery on {{4}} ({{5}}). Plan riders and packing accordingly.` | kitchen, kind, lunch/dinner, date, detail ("rain up to 12 mm/h, up to 41°C") |
+| `late_delivery_v1` | Utility | `{{1}}: {{2}} stop(s) on {{3}} ({{4}}) are still not delivered {{5}} minutes after the meals were packed.` | kitchen, pending stops, route, rider, minutes |
+| `customer_switched_out_v1` | Utility | `{{1}}: {{2}} is moving to another kitchen from {{3}}. Their subscription ends before that date and unused meals are refunded automatically.` | kitchen, customer, date |
 
 ## Still to add (later milestones)
 
 | Name | Category | Purpose |
 |---|---|---|
 | `otp_v1` | Authentication | Login codes, if WhatsApp OTP is chosen (D-004) |
+
+## P5 routing to payers
+
+When an eater has a payer (P5, D-097), the database rewrites low-balance, dues, receipt and refund messages for the eater into the `*_payer_v1` templates above, addressed to the payer. The payer's own opt-in and 24-hour window apply. `owner_summary_v1` is unchanged; its payload now also carries `at_risk_customers` for the app.
 
 ## Opt-in rules the code enforces
 

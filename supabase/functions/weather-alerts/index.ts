@@ -5,7 +5,7 @@
 // opted in, a "delivery may be late" notice to its customers.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { decideAlerts, loadWeatherConfig, mockForecast, openMeteoUrl, targetSlots, type Forecast } from '../_shared/weather.ts';
+import { decideAlerts, loadWeatherConfig, mockForecast, openMeteoUrl, targetSlots, type Forecast, type MockScenario } from '../_shared/weather.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -28,16 +28,19 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: String((e as Error).message) }, 500);
   }
-  const body = await req.json().catch(() => ({})) as { now?: string };
+  // Optional body (ops re-runs and tests): { now, kitchen_id, scenario (mock mode only) }.
+  const body = await req.json().catch(() => ({})) as { now?: string; kitchen_id?: string; scenario?: MockScenario };
   const now = body.now ? new Date(body.now) : new Date();
+  if (Number.isNaN(now.getTime())) return json({ error: 'invalid_now' }, 400);
+  const scenario = cfg.mode === 'mock' && body.scenario && ['none', 'rain', 'heat'].includes(body.scenario) ? body.scenario : cfg.scenario;
   const targets = targetSlots(now);
-  const kitchens = await call<KitchenRow[]>('weather_kitchens', {});
+  const kitchens = (await call<KitchenRow[]>('weather_kitchens', {})).filter((k) => !body.kitchen_id || k.kitchen_id === body.kitchen_id);
   const counts = { kitchens: kitchens.length, alerts: 0, duplicates: 0, errors: 0 };
   for (const k of kitchens) {
     try {
       let forecast: Forecast;
       if (cfg.mode === 'mock') {
-        forecast = mockForecast([...new Set(targets.map((t) => t.date))], cfg.scenario);
+        forecast = mockForecast([...new Set(targets.map((t) => t.date))], scenario);
       } else {
         const res = await fetch(openMeteoUrl(cfg.baseUrl, k.lat, k.lng));
         if (!res.ok) throw new Error(`open-meteo ${res.status}`);

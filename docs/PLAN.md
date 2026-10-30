@@ -1,6 +1,6 @@
 # Plan
 
-Build order: P1 → P4. P5 and P6 are design-for only. Status: ✅ done · 🟡 partial · ⬜ not started.
+Build order: P1 → P6 (P5 and P6 built 2026-10-30 on your instruction; P6 ships switched off). Status: ✅ done · 🟡 partial · ⬜ not started.
 
 ## P1: Vendor OS core (M1–M3)
 **Goal:** 5 pilot vendors run a full week with no paper register.
@@ -244,13 +244,58 @@ Known gaps carried forward:
 - **Load numbers come from the build sandbox's Docker database**, not a hosted Supabase instance. Re-run `pnpm db:loadtest` against staging before launch.
 - **CAPTCHA** on the public forms is recommended before running paid ads (docs/SECURITY.md #4).
 
-## P5 / P6: design-for only
-Schema room already left:
-- `customers.payer_customer_id` (parent pays, student eats);
-- `kitchen_payout_accounts` (Route split commission);
-- `platform_sourced`.
+## P5: Kitchen and customer extras ✅ (built 2026-10-30, backend; web/mobile screens in progress)
 
-Nothing else is built.
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 5.1 | Parent pays, student eats: payer rules, money messages to the payer, payer's page pays for dependents | ✅ | `set_payer`, `private.guard_payer`, `private.route_outbox_to_payer`, `portal_dependent_payment_link_record`, `*_payer_v1` templates (D-097) |
+| 5.2 | Odisha food calendar (Kartika, festivals, admin-editable), veg days, customer opt-ins, counted/packed as veg in the daily engine; festival specials announced | ✅ | `food_calendar`, `private.refresh_orders` (veg_override), `set_customer_food_prefs`, `portal_set_food_prefs`, `create_festival_special` (D-095, D-096) |
+| 5.3 | Packed-meal photo before dispatch, QR sticker codes, sticker sheet, wrong-tiffin check | ✅ | `record_dispatch_photo` (`dispatch` bucket), `delivery_stops.qr_token`, `sticker_sheet`, `complete_stop(…, p_scan_token)` (D-098) |
+| 5.4 | Complaint scores; first complaint auto-credited | ✅ | `vendor_complaint_score`, `customer_complaint_score`, `admin_complaint_scores`, `private.complaint_auto_credit` (D-099, D-100) |
+| 5.5 | Rain and heat alerts | ✅ mock | `_shared/weather.ts`, `weather-alerts` function, cron `tiffin-weather` (D-101) |
+| 5.6 | Churn alerts | ✅ | `private.compute_churn`, cron `tiffin-churn`, `at_risk_customers` (D-102) |
+| 5.7 | Referrals | ✅ (reward 0 = off) | `referrals`, `apply_referral_code`, `portal_apply_referral`, `ref-CODE` lead campaigns (D-103) |
+| 5.8 | 90-minute "prepared to delivered" alert | ✅ | `private.queue_late_delivery_alerts`, cron `tiffin-late-delivery` (D-104) |
+
+Acceptance tests (`supabase/tests/11_p5.test.sql`, 132 assertions; `tests/integration/p5p6*.test.ts`):
+- payer rules, routing and the payer's page;
+- veg days and Kartika switch non-veg to veg without touching a frozen slot, with one meal entry per order at the lock;
+- specials reach opted-in customers, and staff don't see the price;
+- the sticker sheet has no phones, and the wrong sticker is refused while old callers keep working;
+- the first complaint is credited once (not for "other" complaints, nor with the setting off);
+- weather alerts go out once per slot and only with the service role;
+- churn reasons, referral credits once each, the 90-minute alert once per run;
+- each feature checked per role (owner, staff, rider, other kitchen, admin, anon).
+
+Known gaps:
+- **Web and mobile screens** for these RPCs are being built by the UI work.
+- **The calendar dates** are approximate (D-095).
+- **Weather has only run in mock mode;** live Open-Meteo calls need outbound network from the Edge runtime.
+- **The new WhatsApp templates** need Meta approval (docs/WHATSAPP_TEMPLATES.md).
+
+## P6: Platform revenue and scale ✅ built, switched off (2026-10-30)
+
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 6.1 | Platform commission through the Razorpay Route split (platform customers, online payments), ledger, admin report | ✅ rate 0 | `kitchen_payout_accounts.commission_bps`, `platform_commissions`, `admin_set_commission`, `admin_commission_report`, `commission_statement`, `_shared/razorpay.ts` `routeTransfer` (D-105) |
+| 6.2 | Kitchen switching at the same price, admin approval | ✅ flag off | `platform_settings.kitchen_switching`, `portal_switch_options`, `portal_request_switch`, `admin_decide_switch` (D-106, D-107) |
+| 6.3 | Shared riders across kitchens | ✅ verified | `rider_today`, `my_run_ids`, `rider_stats` (D-108) |
+| 6.4 | Office plans: billing customer pays, one stop per office, monthly statement | ✅ | `offices`, `upsert_office`, `set_customer_office`, `office_statement`, `private.build_runs` (D-109) |
+| 6.5 | Health tags with consent: packing list, stickers, counts; never riders | ✅ | `customer_health`, `set_health_tags`, `portal_set_health_tags`, `packing_list`, `slot_totals.by_health` (D-110) |
+| 6.6 | AI notebook-photo import (preview only) | ✅ mock without a key | `notebook-import` function, `_shared/notebook.ts`, `notebook_import_context`, `imports` bucket (D-111) |
+
+Acceptance tests (`supabase/tests/12_p6.test.sql`, 106 assertions):
+- commission is charged once per captured payment and nothing changes at rate 0;
+- switching refuses in both flag states where it should, and an approved switch refunds through the cancel path and creates the customer through convert;
+- a shared rider sees both kitchens, and rider-pay reports stay separate;
+- an office gets one stop while meals stay per member, and a kitchen-fault failure credits each member;
+- health tags need consent and are hidden from riders;
+- the notebook-import context is owner-only.
+
+Known gaps:
+- **No refund reversal row** in the commission ledger yet (D-105).
+- **Live notebook reading is untested.** It has only run with the fixture: no API key in the sandbox.
+- **Notebook photos** are kept until retention is decided.
 
 ## Things to start outside code now
 These have external lead times:
