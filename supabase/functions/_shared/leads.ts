@@ -4,7 +4,7 @@
 // - Generic JSON (website partners, Zapier/Make from Meta or Instagram lead ads).
 
 export type ParsedLead = {
-  source: 'google_ads' | 'justdial' | 'instagram' | 'website' | 'referral' | 'other';
+  source: 'google_ads' | 'justdial' | 'sulekha' | 'instagram' | 'website' | 'referral' | 'other';
   external_id: string;
   name: string | null;
   phone: string | null;
@@ -12,6 +12,7 @@ export type ParsedLead = {
   campaign: string | null;
   whatsapp_opt_in: boolean;
   extra: { slots?: string[]; diet?: string; notes?: string };
+  gclid?: string | null;
 };
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -52,6 +53,7 @@ export function parseGoogleAdsLead(body: Json): ParsedLead {
     area: pick(/area|locality|location|STREET_ADDRESS/i) ?? pick(/POSTAL_CODE|CITY/i),
     campaign: body.campaign_id ? `gads-${body.campaign_id}` : null,
     whatsapp_opt_in: yes(pick(/whatsapp/i)),
+    gclid: body.gcl_id ? String(body.gcl_id) : null,
     extra: {
       slots: parseSlots(pick(/meal|lunch|dinner|time/i)),
       diet: parseDiet(pick(/diet|veg|food/i)),
@@ -95,4 +97,55 @@ export function safeEqual(a: string, b: string): boolean {
   let r = 0;
   for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Lead emails (Sulekha has no public lead API; Justdial and others also email every enquiry).
+// The inbound email service (Cloudflare Email Routing worker, Postmark, SendGrid or Mailgun)
+// forwards {from, subject, text, messageId}; we read "Label: value" lines.
+// ---------------------------------------------------------------------------
+export type LeadEmail = { from: string; subject: string; text: string; messageId?: string | null };
+
+const LABELS: Record<'name' | 'phone' | 'area' | 'need', RegExp> = {
+  name: /^(customer name|buyer name|contact person|caller name|user name|name)\s*[:\-]/i,
+  phone: /^(mobile( no\.?| number)?|phone( no\.?| number)?|contact( no\.?| number)?|caller number|call back number)\s*[:\-]/i,
+  area: /^(location|locality|area|address|city area|preferred location|service area)\s*[:\-]/i,
+  need: /^(requirement|requirements|category|service|looking for|details|enquiry|enquiry details|message|search(ed)? for)\s*[:\-]/i,
+};
+const MOBILE = /(?:\+?91[\s-]?)?([6-9]\d{4}[\s-]?\d{5})/;
+
+export function detectEmailSource(from: string): ParsedLead['source'] {
+  const f = from.toLowerCase();
+  if (f.includes('sulekha')) return 'sulekha';
+  if (f.includes('justdial')) return 'justdial';
+  return 'other';
+}
+
+/** Reads a lead out of a directory's enquiry email; null when no phone number is found. */
+export function parseLeadEmail(mail: LeadEmail): ParsedLead | null {
+  const fields: Partial<Record<keyof typeof LABELS, string>> = {};
+  const lines = mail.text.replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    for (const key of Object.keys(LABELS) as (keyof typeof LABELS)[]) {
+      if (fields[key] || !LABELS[key].test(line)) continue;
+      const value = line.replace(LABELS[key], '').trim() || lines[i + 1] || '';
+      if (value) fields[key] = value.slice(0, 200);
+    }
+  }
+  const phoneMatch = MOBILE.exec(fields.phone ?? '') ?? MOBILE.exec(mail.text) ?? MOBILE.exec(mail.subject);
+  if (!phoneMatch) return null;
+  const phone = phoneMatch[1]!.replace(/[\s-]/g, '');
+  const need = [fields.need, mail.subject].filter(Boolean).join(' · ');
+  const source = detectEmailSource(mail.from);
+  return {
+    source,
+    external_id: mail.messageId?.trim() || `email:${phone}:${mail.subject.slice(0, 60)}`,
+    name: fields.name ?? null,
+    phone,
+    area: fields.area ?? null,
+    campaign: source === 'other' ? 'email' : `${source === 'sulekha' ? 'sk' : 'jd'}-email`,
+    whatsapp_opt_in: false,
+    extra: { slots: parseSlots(need), diet: parseDiet(need), notes: need ? need.slice(0, 300) : undefined },
+  };
 }

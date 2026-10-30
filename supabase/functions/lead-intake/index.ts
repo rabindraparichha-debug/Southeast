@@ -1,7 +1,7 @@
 // Lead intake from ad forms and directories. Public URL, authenticated by shared keys:
 //   POST ?source=google_ads           Google Ads lead form webhook; body.google_key must equal GOOGLE_ADS_LEAD_KEY
 //   GET|POST ?source=justdial&key=…   Justdial lead push; key must equal LEAD_INTAKE_KEY
-//   POST ?source=instagram|website|referral|other&key=…   generic JSON (Zapier/Make from Meta lead ads, partners)
+//   POST ?source=sulekha|instagram|website|referral|other&key=…   generic JSON (a Sulekha partner push, Zapier/Make from Meta lead ads, partners)
 // Leads are idempotent on (source, external_id), matched to kitchens at once, and welcomed on
 // WhatsApp only when the person opted in.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
@@ -14,7 +14,7 @@ const LEAD_INTAKE_KEY = Deno.env.get('LEAD_INTAKE_KEY') ?? '';
 const GOOGLE_ADS_LEAD_KEY = Deno.env.get('GOOGLE_ADS_LEAD_KEY') ?? '';
 const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
-const GENERIC = new Set(['instagram', 'website', 'referral', 'other']);
+const GENERIC = new Set(['sulekha', 'instagram', 'website', 'referral', 'other']);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -53,8 +53,11 @@ Deno.serve(async (req) => {
       p_source: lead.source, p_external_id: lead.external_id, p_name: lead.name, p_phone: lead.phone, p_area: lead.area,
       p_campaign: lead.campaign, p_whatsapp_opt_in: lead.whatsapp_opt_in,
       p_extra: Object.fromEntries(Object.entries(lead.extra).filter(([, v]) => v !== undefined)),
+      p_gclid: lead.gclid ?? null,
     });
   if (error && error.message !== 'invalid_phone') await reportError(monitor, new Error(error.message), { fn: 'lead-intake', tags: { source: lead.source } });
   if (error) return json({ error: error.message }, error.message === 'invalid_phone' ? 422 : 500);
+  // Justdial's push API expects the plain text RECEIVED as the acknowledgement.
+  if (lead.source === 'justdial') return new Response('RECEIVED', { headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
   return json(data);
 });

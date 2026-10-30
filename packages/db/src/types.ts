@@ -3,6 +3,57 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      ad_conversions: {
+        Row: {
+          attempts: number;
+          created_at: string;
+          gclid: string;
+          id: string;
+          last_error: string | null;
+          lead_id: string;
+          occurred_at: string;
+          sent_at: string | null;
+          stage: string;
+          status: string;
+          value_paise: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          attempts?: number;
+          created_at?: string;
+          gclid: string;
+          id?: string;
+          last_error?: string | null;
+          lead_id: string;
+          occurred_at: string;
+          sent_at?: string | null;
+          stage: string;
+          status?: string;
+          value_paise?: number;
+        };
+        Update: {
+          attempts?: number;
+          created_at?: string;
+          gclid?: string;
+          id?: string;
+          last_error?: string | null;
+          lead_id?: string;
+          occurred_at?: string;
+          sent_at?: string | null;
+          stage?: string;
+          status?: string;
+          value_paise?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ad_conversions_lead_id_fkey';
+            columns: ['lead_id'];
+            isOneToOne: false;
+            referencedRelation: 'leads';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       addresses: {
         Row: {
           area: string | null;
@@ -1420,6 +1471,7 @@ export type Database = {
           diet: Database['public']['Enums']['diet_type'] | null;
           external_id: string | null;
           followed_up_at: string | null;
+          gclid: string | null;
           geo_point: unknown;
           id: string;
           language: Database['public']['Enums']['language_code'];
@@ -1460,6 +1512,7 @@ export type Database = {
           diet?: Database['public']['Enums']['diet_type'] | null;
           external_id?: string | null;
           followed_up_at?: string | null;
+          gclid?: string | null;
           geo_point?: never;
           id?: string;
           language?: Database['public']['Enums']['language_code'];
@@ -1499,6 +1552,7 @@ export type Database = {
           diet?: Database['public']['Enums']['diet_type'] | null;
           external_id?: string | null;
           followed_up_at?: string | null;
+          gclid?: string | null;
           geo_point?: never;
           id?: string;
           language?: Database['public']['Enums']['language_code'];
@@ -3082,6 +3136,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_ad_conversions: { Args: { p_limit?: number }; Returns: Json };
       admin_assign_lead: {
         Args: { p_kitchen: string; p_lead: string; p_plan?: string };
         Returns: Json;
@@ -3114,6 +3169,10 @@ export type Database = {
         Returns: Json;
       };
       admin_hide_review: { Args: { p_hidden: boolean; p_review: string }; Returns: undefined };
+      admin_import_leads: {
+        Args: { p_rows: Json; p_source: Database['public']['Enums']['lead_source'] };
+        Returns: Json;
+      };
       admin_kitchens: { Args: Record<PropertyKey, never>; Returns: Json };
       admin_lead_detail: { Args: { p_lead: string }; Returns: Json };
       admin_leads: {
@@ -3149,6 +3208,21 @@ export type Database = {
       admin_vendor_applications: {
         Args: { p_status?: Database['public']['Enums']['vendor_app_status'] };
         Returns: Json;
+      };
+      ads_claim_conversions: {
+        Args: { p_limit?: number };
+        Returns: {
+          attempts: number;
+          gclid: string;
+          id: string;
+          occurred_at: string;
+          stage: string;
+          value_paise: number;
+        }[];
+      };
+      ads_complete_conversion: {
+        Args: { p_error?: string; p_id: string; p_ok: boolean; p_skip?: boolean };
+        Returns: undefined;
       };
       assign_run: { Args: { p_rider?: string; p_run: string }; Returns: undefined };
       attach_payment_link: {
@@ -3339,6 +3413,7 @@ export type Database = {
       kitchen_checklist: { Args: { p_kitchen: string }; Returns: Json };
       kitchen_directory: { Args: { p_area?: string }; Returns: Json };
       kitchen_profile: { Args: { p_slug: string }; Returns: Json };
+      lead_attach_gclid: { Args: { p_gclid: string; p_token: string }; Returns: undefined };
       lead_choose: { Args: { p_kitchen: string; p_token: string }; Returns: Json };
       lead_funnel: {
         Args: { p_from?: string; p_to?: string };
@@ -3362,6 +3437,7 @@ export type Database = {
           p_campaign?: string;
           p_external_id: string;
           p_extra?: Json;
+          p_gclid?: string;
           p_name: string;
           p_phone: string;
           p_source: Database['public']['Enums']['lead_source'];
@@ -3921,7 +3997,8 @@ export type Database = {
         | 'justdial'
         | 'call'
         | 'referral'
-        | 'other';
+        | 'other'
+        | 'sulekha';
       lead_status:
         | 'new'
         | 'qualifying'
@@ -4100,6 +4177,7 @@ export const Constants = {
         'call',
         'referral',
         'other',
+        'sulekha',
       ],
       lead_status: [
         'new',

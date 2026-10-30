@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPhone, normalizePhone } from '@tiffin/core';
-import { supabase } from '@/lib/supabase';
+import { loadServerOverride, saveServerOverride, supabase } from '@/lib/supabase';
 import { friendlyError } from '@/lib/errors';
-import { IS_DEV } from '@/lib/env';
+import { ALLOW_SERVER_SWITCH, IS_DEV } from '@/lib/env';
 import { Button, Card, ErrorText, Input, Label, Muted, Title } from '@/components/ui';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
@@ -16,6 +16,13 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [server, setServer] = useState<{ url: string; anonKey: string } | null>(null);
+  const [editServer, setEditServer] = useState(false);
+  const [serverSaved, setServerSaved] = useState(false);
+
+  useEffect(() => {
+    if (ALLOW_SERVER_SWITCH) void loadServerOverride().then(setServer);
+  }, []);
 
   async function sendOtp() {
     setError('');
@@ -54,6 +61,25 @@ export default function Login() {
               <ErrorText>{error}</ErrorText>
               <Button title={busy ? t('login.sending') : t('login.sendOtp')} onPress={sendOtp} busy={busy} />
               {IS_DEV && <Muted>{t('login.devHint')}</Muted>}
+              {ALLOW_SERVER_SWITCH && server && !editServer && (
+                <Pressable onPress={() => setEditServer(true)}>
+                  <Muted>{t('login.server', { host: server.url.replace(/^https?:\/\//, '') })}</Muted>
+                </Pressable>
+              )}
+              {ALLOW_SERVER_SWITCH && server && editServer && (
+                <View style={{ gap: space(2) }}>
+                  <Label>{t('login.serverUrl')}</Label>
+                  <Input value={server.url} onChangeText={(url) => setServer({ ...server, url })} autoCapitalize="none" placeholder="http://192.168.1.20:54321" />
+                  <Label>{t('login.serverKey')}</Label>
+                  <Input value={server.anonKey} onChangeText={(anonKey) => setServer({ ...server, anonKey })} autoCapitalize="none" />
+                  <Button title={t('login.serverSave')} variant="secondary" onPress={async () => {
+                    await saveServerOverride({ url: server.url.trim().replace(/\/$/, ''), anonKey: server.anonKey.trim() });
+                    setServerSaved(true);
+                    setEditServer(false);
+                  }} />
+                </View>
+              )}
+              {serverSaved && <Muted>{t('login.serverRestart')}</Muted>}
             </>
           ) : (
             <>

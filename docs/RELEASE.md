@@ -1,4 +1,4 @@
-# Play Store release (M8, package 4.7)
+# Mobile releases: Play Store, test APK, TestFlight
 
 The vendor app (owners, staff and rider mode) ships to Android first. Builds run on Expo's EAS service. Nothing here has been run yet: it needs your Expo and Google Play accounts. expo.dev was unreachable from the build sandbox, so no build has been made.
 
@@ -65,3 +65,65 @@ Then promote internal → closed testing (pilot vendors) → production in the P
 - WhatsApp templates approved by Meta (docs/WHATSAPP_TEMPLATES.md).
 - Odia/Hindi texts reviewed by a native speaker (D-006, D-057).
 - Test on two or three low-end Android phones (2–3 GB RAM, Android 10+), including rider mode with mobile data switched off mid-run.
+
+## Test APK without EAS (M9)
+
+`apps/mobile/scripts/build-apk.sh` builds a signed APK on any Linux/macOS machine with Docker and
+Node (no Android Studio): `expo prebuild`, then Gradle inside `reactnativecommunity/react-native-android`.
+
+```bash
+apps/mobile/scripts/build-apk.sh                      # test APK → apps/mobile/dist/tiffin-os-<version>-test.apk
+APP_VARIANT=store apps/mobile/scripts/build-apk.sh    # no server switch
+MAVEN_MIRROR=https://maven-central.storage-download.googleapis.com/maven2/ apps/mobile/scripts/build-apk.sh  # if Maven Central rate-limits
+```
+
+- **Test builds** (`APP_VARIANT=test`, the default) show "Server: … (tap to change)" on the login
+  screen: enter a Supabase URL and anon key (your laptop's LAN IP, or a staging project), save and
+  restart the app. Store builds never show it (`EXPO_PUBLIC_ALLOW_SERVER_SWITCH` unset).
+- **Signing:** the first run creates `~/.tiffin/upload.keystore` and its password in
+  `~/.tiffin/keystore.pass`. Android only installs an update signed with the same key, so keep both
+  in your password manager; never commit them. For the Play Store, EAS signing is still the plan.
+- **CI:** `.github/workflows/android-apk.yml` (Actions → Android APK → Run workflow, or push a tag
+  `mobile-v1.0.1`) runs the same script and attaches the APK to the run. Secrets:
+  `ANDROID_KEYSTORE_BASE64` (`base64 -w0 ~/.tiffin/upload.keystore`), `ANDROID_KEY_PASSWORD`,
+  `ANDROID_KEY_ALIAS`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+
+## iOS and TestFlight (M9)
+
+iOS builds need macOS and an Apple Developer account, so they run on EAS (Expo's cloud Macs),
+triggered from GitHub Actions: `.github/workflows/ios-testflight.yml`.
+
+One-time setup:
+
+1. **Apple Developer Program** (paid yearly; an organisation needs a D-U-N-S number).
+2. **App Store Connect → Apps → +:** platform iOS, name "Tiffin OS", bundle id `in.tiffinos.vendor`
+   (register it first under Certificates, Identifiers & Profiles → Identifiers), SKU `tiffin-os`.
+   Note the app's **Apple ID** (App Information, digits).
+3. **App Store Connect API key:** Users and Access → Integrations → App Store Connect API → generate
+   a key with the *App Manager* role. Download the `.p8` (only once), note the Key ID and Issuer ID.
+4. **Expo:** `npx eas-cli@latest init` in `apps/mobile` (commit the `projectId` it writes to
+   `app.json`), then create an access token at expo.dev → Account settings → Access tokens.
+5. **First build once from your computer** so EAS creates and stores the distribution certificate
+   and provisioning profile: `cd apps/mobile && npx eas-cli@latest build -p ios --profile production`
+   (answer "yes" to letting EAS manage credentials; log in with your Apple ID).
+6. **Backend for the build:** `eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value … --environment production`
+   and the same for `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+7. **GitHub → Settings → Secrets and variables → Actions:**
+
+   | Secret | Value |
+   |---|---|
+   | `EXPO_TOKEN` | the Expo access token |
+   | `APPLE_ASC_APP_ID` | the app's Apple ID (digits) |
+   | `APPLE_ASC_KEY_ID`, `APPLE_ASC_ISSUER_ID` | from step 3 |
+   | `APPLE_ASC_KEY_P8` | the whole contents of the `.p8` file |
+   | `APPLE_TEAM_ID` | developer.apple.com → Membership |
+
+   Variable `APPLE_TEAM_TYPE=INDIVIDUAL` if it is a personal developer account.
+
+Each release: Actions → **iOS TestFlight** → Run workflow (or push a `mobile-v*` tag). The build takes
+20–40 minutes; the upload then appears in TestFlight after Apple's processing (about 10–30 minutes).
+Add testers in App Store Connect → TestFlight (internal testers need no review; external testers
+need a one-time beta review with a test login: a staging project with a `test_otp` number).
+
+iOS-specific settings already in `app.json`: bundle id, build number (EAS auto-increments it),
+`ITSAppUsesNonExemptEncryption = false` (only standard HTTPS), camera and location texts.

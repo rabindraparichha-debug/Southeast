@@ -18,7 +18,7 @@ select is((select coalesce(array_agg(n.nspname || '.' || p.proname order by p.pr
 -- Anon (no login) can run only the public website and customer-page functions.
 select is((select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')),
-  array['kitchen_directory', 'kitchen_profile', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_change', 'portal_complaint',
+  array['kitchen_directory', 'kitchen_profile', 'lead_attach_gclid', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_change', 'portal_complaint',
         'portal_get', 'portal_payment_link_record', 'portal_review', 'portal_set_language', 'submit_lead', 'submit_vendor_application'],
   'anon can execute only the allowlisted public functions');
 select is((select coalesce(array_agg(table_name || ':' || privilege_type order by table_name), '{}') from information_schema.role_table_grants

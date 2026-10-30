@@ -440,6 +440,12 @@ verify_jwt = false
 [functions.razorpay-mock]
 verify_jwt = false
 
+[functions.lead-email]
+verify_jwt = false
+
+[functions.ads-conversions]
+verify_jwt = false
+
 [functions.lead-intake]
 verify_jwt = false
 

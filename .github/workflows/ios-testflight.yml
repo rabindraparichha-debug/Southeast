@@ -1,0 +1,50 @@
+# Builds the iOS app on Expo's EAS (macOS in the cloud) and uploads it to TestFlight.
+# One-time setup: docs/RELEASE.md → "iOS and TestFlight". Secrets:
+#   EXPO_TOKEN                 expo.dev → Account settings → Access tokens
+#   APPLE_ASC_APP_ID           App Store Connect → the app → App Information → Apple ID (digits)
+#   APPLE_ASC_KEY_ID, APPLE_ASC_ISSUER_ID, APPLE_ASC_KEY_P8   App Store Connect API key (App Manager role)
+#   APPLE_TEAM_ID              developer.apple.com → Membership
+# Variable (optional): APPLE_TEAM_TYPE = INDIVIDUAL for a personal developer account.
+name: iOS TestFlight
+on:
+  workflow_dispatch:
+  push:
+    tags: ['mobile-v*']
+jobs:
+  testflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: App Store Connect key
+        env:
+          P8: ${{ secrets.APPLE_ASC_KEY_P8 }}
+          ASC_APP_ID: ${{ secrets.APPLE_ASC_APP_ID }}
+        run: |
+          test -n "$P8" || { echo "::error::APPLE_ASC_KEY_P8 secret is missing"; exit 1; }
+          test -n "$ASC_APP_ID" || { echo "::error::APPLE_ASC_APP_ID secret is missing"; exit 1; }
+          printf '%s\n' "$P8" > "$RUNNER_TEMP/asc.p8"
+          node -e "const f='eas.json',j=require('./'+f);j.submit.production.ios={...j.submit.production.ios,ascAppId:process.env.ASC_APP_ID};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+      - name: Build and submit to TestFlight
+        env:
+          EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/asc.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_ASC_ISSUER_ID }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_APPLE_TEAM_TYPE: ${{ vars.APPLE_TEAM_TYPE || 'COMPANY_OR_ORGANIZATION' }}   # or INDIVIDUAL
+        run: eas build --platform ios --profile production --non-interactive --auto-submit --wait

@@ -1,0 +1,60 @@
+# Builds a signed Android APK (apps/mobile/scripts/build-apk.sh) and attaches it to the run.
+# Secrets (Settings → Secrets and variables → Actions), all optional for a test APK:
+#   ANDROID_KEYSTORE_BASE64   base64 of your upload keystore (without it a throwaway key is made,
+#                             so phones must uninstall before installing the next build)
+#   ANDROID_KEY_PASSWORD      its password
+#   ANDROID_KEY_ALIAS         its alias (default tiffin-upload)
+#   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY   backend baked into the APK
+name: Android APK
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "test (server can be changed on the login screen) or store"
+        default: test
+        type: choice
+        options: [test, store]
+  push:
+    tags: ['mobile-v*']
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - name: Keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p ~/.tiffin
+          if [[ -n "$KEYSTORE_B64" ]]; then echo "$KEYSTORE_B64" | base64 -d > ~/.tiffin/upload.keystore; else echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing with a throwaway key"; fi
+      - name: Backend
+        env:
+          URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [[ -n "$URL" ]]; then printf 'EXPO_PUBLIC_SUPABASE_URL=%s\nEXPO_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$URL" "$KEY" > apps/mobile/.env.local; fi
+      - name: Build
+        env:
+          APP_VARIANT: ${{ inputs.variant || 'test' }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'tiffin-upload' }}
+        run: apps/mobile/scripts/build-apk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiffin-os-apk
+          path: apps/mobile/dist/*.apk
+          retention-days: 30

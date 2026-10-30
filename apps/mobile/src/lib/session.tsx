@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MemberRole } from '@tiffin/db';
 import { resetRider } from './rider-store';
-import { supabase } from './supabase';
+import { loadServerOverride, supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
 
@@ -50,7 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    let unsubscribe = () => {};
     (async () => {
+      // Pick the server first (test builds), then listen to that client.
+      await loadServerOverride();
+      if (!alive) return;
+      const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+        setSession(s);
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') void loadMemberships(s);
+      });
+      unsubscribe = () => sub.subscription.unsubscribe();
       const [{ data }, stored] = await Promise.all([supabase.auth.getSession(), AsyncStorage.getItem(KITCHEN_KEY)]);
       if (!alive) return;
       setKitchenId(stored);
@@ -58,13 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await loadMemberships(data.session);
       if (alive) setReady(true);
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') void loadMemberships(s);
-    });
     return () => {
       alive = false;
-      sub.subscription.unsubscribe();
+      unsubscribe();
     };
   }, [loadMemberships]);
 
