@@ -165,6 +165,11 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
 - **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
 
+**Channels, web app, builds (M9)**
+- Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).
+- The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
+- Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).

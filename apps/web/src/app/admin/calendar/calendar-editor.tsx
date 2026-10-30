@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
-import { shortDate } from '@/lib/p5';
 import { Alert, Badge, Button, Card, Field, Input, Select } from '@/components/ui';
+
+const shortDate = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 type Entry = { id: string; kind: string; name: string; starts_on: string; ends_on: string; veg_only: boolean; notes: string | null };
 type Form = { id: string | null; kind: 'festival' | 'kartika'; name: string; starts_on: string; ends_on: string; veg_only: boolean; notes: string };

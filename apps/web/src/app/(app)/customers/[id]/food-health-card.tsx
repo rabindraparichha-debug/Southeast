@@ -91,7 +91,7 @@ export function FoodHealthCard({ customerId, editable, vegDays, kartika, kitchen
                   );
                 })}
               </div>
-              {tags.length > 0 && (
+              {tags.length > 0 && tagsChanged && (
                 <label className="flex items-start gap-2">
                   <input type="checkbox" className="mt-1" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-testid="health-consent" />
                   <span>The customer agreed that my kitchen may record this health information to prepare their food.</span>

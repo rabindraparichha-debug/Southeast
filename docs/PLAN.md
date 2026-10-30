@@ -244,7 +244,7 @@ Known gaps carried forward:
 - **Load numbers come from the build sandbox's Docker database**, not a hosted Supabase instance. Re-run `pnpm db:loadtest` against staging before launch.
 - **CAPTCHA** on the public forms is recommended before running paid ads (docs/SECURITY.md #4).
 
-## P5: Kitchen and customer extras ✅ (built 2026-10-30, backend; web/mobile screens in progress)
+## P5: Kitchen and customer extras ✅ (built 2026-10-30: backend, web and mobile screens)
 
 | Pkg | Scope | Status | Where |
 |---|---|---|---|
@@ -268,7 +268,8 @@ Acceptance tests (`supabase/tests/11_p5.test.sql`, 132 assertions; `tests/integr
 - each feature checked per role (owner, staff, rider, other kitchen, admin, anon).
 
 Known gaps:
-- **Web and mobile screens** for these RPCs are being built by the UI work.
+- **Odia and Hindi texts** for the new web, customer-page and mobile screens are not written yet (English fallback).
+- **Dispatch photo retakes** leave the earlier photo in storage (the bucket is insert-only).
 - **The calendar dates** are approximate (D-095).
 - **Weather has only run in mock mode;** live Open-Meteo calls need outbound network from the Edge runtime.
 - **The new WhatsApp templates** need Meta approval (docs/WHATSAPP_TEMPLATES.md).
@@ -293,9 +294,34 @@ Acceptance tests (`supabase/tests/12_p6.test.sql`, 106 assertions):
 - the notebook-import context is owner-only.
 
 Known gaps:
-- **No refund reversal row** in the commission ledger yet (D-105).
+- Refund reversals of commission: done (D-113, `platform_commission_reversals`, `13_commission_reversals.test.sql`).
 - **Live notebook reading is untested.** It has only run with the fixture: no API key in the sandbox.
 - **Notebook photos** are kept until retention is decided.
+
+Screens (both P5 and P6): web customer detail cards, settings "care" form, festival specials, offices and
+statements, dispatch photo, printable QR stickers (`/print/stickers`), owner Insights, notebook import into
+the import wizard, web rider sticker check, admin calendar / quality / commission / switching, customer-page
+extras; mobile rider QR scan (expo-camera, works offline, queue backward compatible), office stops, dispatch
+photo, counts and packing list extras, customer extras, insights. Checked with Playwright (web) and
+`tests/integration/rider-queue.test.ts` (mobile queue).
+
+## M9: Channels, web app and app builds ✅ (2026-10-30)
+
+| Pkg | Scope | Status | Where |
+|---|---|---|---|
+| 9.1 | Google Ads lead forms + click ids + offline conversions (trial, plan, renewal with value) | ✅ mock until keys | `ad_conversions`, `ads-conversions` function, cron `tiffin-ad-conversions`, `/find?gclid=`, admin "Google Ads conversions" |
+| 9.2 | Justdial push (RECEIVED ack) and enquiry emails | ✅ | `lead-intake?source=justdial`, `lead-email` |
+| 9.3 | Sulekha: enquiry email forwarding, CSV import, partner JSON | ✅ | `lead-email`, `admin_import_leads`, Admin → Leads → Import |
+| 9.4 | Installable web app: rider mode with offline queue, stock entry | ✅ | `apps/web` manifest, `public/sw.js`, `(field)/rider`, `(field)/stock-entry` (docs/WEB_APP.md) |
+| 9.5 | Android test APK | ✅ | `apps/mobile/scripts/build-apk.sh`, `.github/workflows/android-apk.yml` (push `apk/*` → pre-release `apk-build-<n>`) |
+| 9.6 | iOS TestFlight | ✅ workflow, needs Apple/Expo accounts | `.github/workflows/ios-testflight.yml` (docs/RELEASE.md) |
+
+Setup steps: docs/LEAD_SOURCES.md, docs/RELEASE.md, docs/WEB_APP.md. Tests: `10_lead_channels.test.sql`, `tests/integration/lead-channels.test.ts`.
+
+Known gaps:
+- **The sandbox cannot build the APK** (dl.google.com is blocked); GitHub Actions builds it.
+- **iOS needs** an Apple Developer account, an App Store Connect API key and an Expo token (docs/RELEASE.md).
+- **Google Ads conversion upload** runs in mock mode until the developer token and OAuth are set.
 
 ## Things to start outside code now
 These have external lead times:

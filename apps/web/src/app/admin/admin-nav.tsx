@@ -10,13 +10,17 @@ const ITEMS = [
   { href: '/admin/funnel', label: 'Funnel & gaps' },
   { href: '/admin/vendors', label: 'Vendor applications' },
   { href: '/admin/reviews', label: 'Reviews' },
+  { href: '/admin/quality', label: 'Complaint scores' },
+  { href: '/admin/calendar', label: 'Food calendar' },
+  { href: '/admin/commission', label: 'Commission' },
+  { href: '/admin/switching', label: 'Kitchen switching' },
   { href: '/admin/audit', label: 'Audit log' },
 ];
 
 export function AdminNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-1 overflow-x-auto">
+    <nav className="flex min-w-0 gap-1 overflow-x-auto">
       {ITEMS.map((i) => {
         const active = i.href === '/admin' ? pathname === '/admin' : pathname.startsWith(i.href);
         return (

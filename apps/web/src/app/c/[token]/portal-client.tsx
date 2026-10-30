@@ -6,6 +6,10 @@ import { formatPaise, formatServiceDate, isoDow } from '@tiffin/core';
 import type { ChangeResult } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { tr, type Lang, type Key } from './i18n';
+import {
+  DependentsCard, FoodPrefsCard, HealthCardPortal, ReferralCardPortal, SpecialsCard, SwitchKitchenCard,
+  type Dependent, type FoodPrefs, type PortalFestival, type PortalSpecial, type ReferralInfo,
+} from './portal-extras';
 
 type Meal = { subscription_id: string; date: string; slot: 'lunch' | 'dinner'; qty: number; status: string; charged: boolean; skip_reason: string | null; locked: boolean; open: boolean };
 export type Portal = {
@@ -20,6 +24,17 @@ export type Portal = {
   addresses: { id: string; label: string | null; line1: string | null; area: string | null; landmark: string | null; is_default: boolean }[];
   payments: { date: string; amount_paise: number; meals: number; method: string; status: string; short_url: string | null }[];
   refunds: { date: string; meals: number; amount_paise: number; status: string }[];
+  // P5 / P6
+  payer?: { name: string } | null;
+  dependents?: Dependent[];
+  food_prefs?: FoodPrefs;
+  referral?: ReferralInfo;
+  specials?: PortalSpecial[];
+  festivals?: PortalFestival[];
+  health_tags?: string[];
+  health_tag_options?: string[];
+  office?: { name: string } | null;
+  kitchen_switching?: boolean;
 };
 
 const SLOT = { lunch: 'Lunch', dinner: 'Dinner' } as const;
@@ -131,6 +146,7 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
         <div>
           <h1 className="text-lg font-semibold">{p.kitchen.name}</h1>
           <p className="text-xs text-ink-500">{p.customer.name} · {p.phone_masked}{p.kitchen.fssai_no ? ` · FSSAI ${p.kitchen.fssai_no}` : ''}</p>
+          {p.office && <p className="text-xs text-ink-500">{t('office_member', { name: p.office.name })}</p>}
         </div>
         <select aria-label={t('language')} value={lang} onChange={(e) => changeLanguage(e.target.value as Lang)} className="rounded-lg px-2 py-1 text-sm ring-1 ring-ink-200">
           <option value="or">ଓଡ଼ିଆ</option><option value="hi">हिंदी</option><option value="en">English</option>
@@ -143,6 +159,7 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
         <div className="text-sm text-ink-500">{t('balance')}</div>
         <div className={`text-4xl font-semibold ${p.balance.meals < 0 ? 'text-red-700' : ''}`}>{p.balance.meals}</div>
         <div className="text-sm text-ink-500">{p.balance.meals < 0 ? t('owes', { n: -p.balance.meals }) : t('prepaid', { v: formatPaise(p.balance.value_paise) })}</div>
+        {p.payer && <p className="mt-2 text-sm text-ink-700" data-testid="paid-by">{t('paid_by', { name: p.payer.name })}</p>}
         <h2 className="mt-4 text-sm font-semibold">{t('pay')}</h2>
         {p.kitchen.online_payments && price ? (
           <>
@@ -159,6 +176,10 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
           <p className="mt-1 text-sm text-ink-600">{t('pay_offline')}</p>
         )}
       </section>
+
+      {(p.dependents?.length ?? 0) > 0 && (
+        <DependentsCard token={token} dependents={p.dependents!} onlinePayments={p.kitchen.online_payments} t={t} />
+      )}
 
       <section className={card}>
         <h2 className="mb-2 text-sm font-semibold">{t('upcoming')}</h2>
@@ -214,6 +235,12 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
           </ul>
         </section>
       )}
+
+      <SpecialsCard specials={p.specials ?? []} festivals={p.festivals ?? []} t={t} />
+      {p.food_prefs && <FoodPrefsCard token={token} prefs={p.food_prefs} t={t} />}
+      {p.health_tag_options && <HealthCardPortal token={token} tags={p.health_tags ?? []} options={p.health_tag_options} t={t} />}
+      {p.referral && <ReferralCardPortal token={token} referral={p.referral} kitchenName={p.kitchen.name} t={t} />}
+      {p.kitchen_switching === true && <SwitchKitchenCard token={token} t={t} />}
 
       <section className={card}>
         <h2 className="mb-2 text-sm font-semibold">{t('address')}</h2>
