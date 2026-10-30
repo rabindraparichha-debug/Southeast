@@ -120,7 +120,7 @@ One-time setup:
 
    Variable `APPLE_TEAM_TYPE=INDIVIDUAL` if it is a personal developer account.
 
-Each release: Actions → **iOS TestFlight** → Run workflow (or push a `mobile-v*` tag). The build takes
+Each release: Actions → **iOS TestFlight** → Run workflow, push a `mobile-v*` tag, or push a branch named `ios/<anything>`. The build takes
 20–40 minutes; the upload then appears in TestFlight after Apple's processing (about 10–30 minutes).
 Add testers in App Store Connect → TestFlight (internal testers need no review; external testers
 need a one-time beta review with a test login: a staging project with a `test_otp` number).

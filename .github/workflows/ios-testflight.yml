@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
   push:
     tags: ['mobile-v*']
+    branches: ['ios/**']   # or push any branch named ios/<something>
 jobs:
   testflight:
     runs-on: ubuntu-latest
@@ -27,6 +28,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         working-directory: .
+      - name: Check secrets
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          KEY_ID: ${{ secrets.APPLE_ASC_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_ASC_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for v in EXPO_TOKEN KEY_ID ISSUER TEAM; do [[ -n "${!v}" ]] || missing+=("$v"); done
+          if (( ${#missing[@]} )); then
+            echo "::error::Missing GitHub secrets (EXPO_TOKEN, APPLE_ASC_KEY_ID, APPLE_ASC_ISSUER_ID, APPLE_TEAM_ID; see docs/RELEASE.md): ${missing[*]}"
+            exit 1
+          fi
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
@@ -40,6 +54,10 @@ jobs:
           test -n "$ASC_APP_ID" || { echo "::error::APPLE_ASC_APP_ID secret is missing"; exit 1; }
           printf '%s\n' "$P8" > "$RUNNER_TEMP/asc.p8"
           node -e "const f='eas.json',j=require('./'+f);j.submit.production.ios={...j.submit.production.ios,ascAppId:process.env.ASC_APP_ID};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+      - name: Link the EAS project
+        run: |
+          node -e "process.exit(require('./app.json').expo.extra?.eas?.projectId ? 0 : 1)" \
+            || eas init --non-interactive --force
       - name: Build and submit to TestFlight
         env:
           EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/asc.p8
