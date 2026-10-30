@@ -31,6 +31,10 @@ export default async function LeadsPage({ searchParams }: PageProps<'/admin/lead
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
       <PageHeader title="Leads" subtitle="People looking for a tiffin, from every channel. Phone numbers are masked; reveals are logged." />
+      <div className="mb-4 flex flex-wrap gap-3 text-sm">
+        <Link href="/admin/leads/import" className="font-medium text-brand-700 hover:underline">Import CSV (Sulekha, Justdial…)</Link>
+        <Link href="/admin/leads/conversions" className="font-medium text-brand-700 hover:underline">Google Ads conversions</Link>
+      </div>
       <details className="mb-4 rounded-xl bg-white shadow-sm ring-1 ring-ink-100">
         <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-brand-700">+ New lead (call or walk-in)</summary>
         <div className="border-t border-ink-100 p-5">

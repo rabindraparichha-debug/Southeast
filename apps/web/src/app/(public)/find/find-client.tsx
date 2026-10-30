@@ -57,9 +57,9 @@ const DIETS: { value: DietType; label: string }[] = [
   { value: 'jain', label: 'Jain' },
 ];
 
-type Props = { areas: string[]; source: LeadSource; campaign: string | null; initialArea: string; kitchenSlug: string | null };
+type Props = { areas: string[]; source: LeadSource; campaign: string | null; initialArea: string; kitchenSlug: string | null; gclid?: string | null };
 
-export function FindClient({ areas, source, campaign, initialArea, kitchenSlug }: Props) {
+export function FindClient({ areas, source, campaign, initialArea, kitchenSlug, gclid }: Props) {
   const raw = useSyncExternalStore(store.subscribe, store.get, () => null);
   const saved = useMemo<Saved | null>(() => {
     if (!raw) return null;
@@ -72,10 +72,10 @@ export function FindClient({ areas, source, campaign, initialArea, kitchenSlug }
 
   if (saved?.choice) return <Chosen saved={saved} />;
   if (saved) return <Shortlist saved={saved} kitchenSlug={kitchenSlug} />;
-  return <LeadForm areas={areas} source={source} campaign={campaign} initialArea={initialArea} kitchenSlug={kitchenSlug} />;
+  return <LeadForm areas={areas} source={source} campaign={campaign} initialArea={initialArea} kitchenSlug={kitchenSlug} gclid={gclid} />;
 }
 
-function LeadForm({ areas, source, campaign, initialArea, kitchenSlug }: Props) {
+function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: Props) {
   const tomorrow = addDays(istDate(), 1);
   const knownArea = areas.find((a) => a.toLowerCase() === initialArea.toLowerCase()) ?? '';
   const [f, setF] = useState({
@@ -132,6 +132,8 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug }: Props) 
     setBusy(false);
     if (error) return setError(friendlyErrorIn('public', error));
     const result = data as unknown as SubmitLeadResult;
+    // Best effort: a lost click id only means this lead isn't reported back to Google Ads.
+    if (gclid) await supabaseBrowser().rpc('lead_attach_gclid', { p_token: result.token, p_gclid: gclid }).then(() => undefined, () => undefined);
     track('lead_submitted', { source, campaign, area: f.area || (coords ? 'shared_location' : null) });
     store.set({ token: result.token, result });
     window.scrollTo({ top: 0 });
