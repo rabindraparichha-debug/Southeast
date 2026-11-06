@@ -28,14 +28,20 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-/** Retries a call a few times (short pauses): used to record a send the provider already accepted. */
-async function withRetry(fn: () => Promise<unknown>, tries = 3): Promise<unknown> {
-  for (let i = 1; ; i++) {
+/**
+ * Pauses between attempts to record a send the provider already accepted: about 30 s in all, so a
+ * database blip (restart, deploy, a full pool) does not leave the row for the stuck-row job. Meta's
+ * status webhook is the second record (it answers 503 until the database takes it, so Meta retries).
+ */
+const RECORD_RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
+
+async function withRetry(fn: () => Promise<unknown>, delays: number[] = RECORD_RETRY_DELAYS_MS): Promise<unknown> {
+  for (let i = 0; ; i++) {
     try {
       return await fn();
     } catch (e) {
-      if (i >= tries) throw e;
-      await new Promise((r) => setTimeout(r, 300 * i));
+      if (i >= delays.length) throw e;
+      await new Promise((r) => setTimeout(r, delays[i]));
     }
   }
 }

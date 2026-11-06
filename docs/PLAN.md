@@ -355,7 +355,7 @@ Known gaps:
 
 ## Held-back items: billing-aware messages, import, outbox (2026-11-06)
 
-Built on `wave2/db` (branch `held/db`). Defaults in D-120.
+Built on `wave2/db` (branch `held/db`, review fixes on `held/db-final-r2`). Defaults in D-136 (renumbered from D-120, which wave 1 uses).
 
 | Item | Scope | Status | Where |
 |---|---|---|---|
@@ -371,6 +371,20 @@ Known gaps:
 - Refund notices and delivery or complaint credits still use meal wording for monthly customers.
 - The statement message has no link to a statement page (the customer page is a Phase 2 flag).
 - Mobile has no import (web only, as before) and no settings screen for `dues_overdue_days`.
+
+Overlaps with other waves (resolve at merge; see D-136 "Overlaps"):
+- `public.rider_today` (wave 1, `20261107000500`): not re-created here; `20261115000300` patches the
+  live body's otp_sent test and is a no-op on wave 1's body (keeps `changed`/`changed_at` and the
+  skipped filter).
+- `whatsapp-outbox/index.ts` (wave 1): keep wave 1's try/catch around `loadWaConfig`, drop its comment
+  "Mock mode still records a send as sent".
+- Import (wave 3 riders `Route` column; wave 2 web wizard and page): `importTemplateRows` fills the
+  example rows by header (a `Route` entry is ready); keep this `previewImportRows`/plans API and take
+  wave 2 web's `LEAD_ROLES` page guard and billing/dues preview columns.
+- Templates (wave 5 template pack): add `TEMPLATE_SAMPLES` entries for `payment_receipt_monthly`,
+  `statement_ready` and their `_payer` variants, then regenerate the CSV (`UPDATE_TEMPLATE_PACK=1`).
+- Push outbox (wave 3 riders): `push_complete_outbox` records mock pushes as `sent`; move it to `mock`
+  or record push as the exception.
 
 ## Things to start outside code now
 These have external lead times:

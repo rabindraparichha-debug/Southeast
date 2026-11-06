@@ -145,6 +145,7 @@ declare
   v_o public.notifications_outbox;
   v_conv uuid;
   v_status text := case when coalesce(p_mock, false) then 'mock' else 'sent' end;
+  v_wa_id text := nullif(p_wa_message_id, '');
 begin
   select * into v_o from public.notifications_outbox where id = p_id for update;
   if v_o.id is null then
@@ -153,13 +154,20 @@ begin
   -- Already sent (or recorded as mock): a repeated completion, a late failure report or a retry
   -- after a lost response changes nothing, so the message can never be queued and sent again.
   if v_o.status in ('sent', 'mock') or v_o.provider_message_id is not null then
-    return;
-  end if;
-  if p_skip then
+    -- One exception: Meta's status webhook can mark the row sent before the worker records it. The
+    -- worker's (late) success report for that same message still adds the conversation copy, once
+    -- (idempotent on the message id), so the owner sees what was sent and later statuses land on it.
+    if coalesce(p_ok, false) and not coalesce(p_skip, false) and v_wa_id is not null
+       and v_o.provider_message_id = v_wa_id
+       and not exists (select 1 from public.messages m where m.wa_message_id = v_wa_id) then
+      v_status := v_o.status;
+    else
+      return;
+    end if;
+  elsif p_skip then
     update public.notifications_outbox set status = 'cancelled', last_error = p_error where id = p_id;
     return;
-  end if;
-  if not coalesce(p_ok, false) then
+  elsif not coalesce(p_ok, false) then
     -- Only the claim that is still out can fail (a row the stuck sweep re-queued is left alone).
     update public.notifications_outbox
     set status = case when attempts >= 5 then 'failed' else 'pending' end,
@@ -167,12 +175,12 @@ begin
         send_after = private.now() + make_interval(mins => power(2, attempts)::integer)
     where id = p_id and status = 'sending';
     return;
+  else
+    -- The provider id is stored in the same statement that marks the row sent.
+    update public.notifications_outbox
+    set status = v_status, sent_at = private.now(), last_error = null, provider_message_id = v_wa_id
+    where id = p_id;
   end if;
-
-  -- The provider id is stored in the same statement that marks the row sent.
-  update public.notifications_outbox
-  set status = v_status, sent_at = private.now(), last_error = null, provider_message_id = nullif(p_wa_message_id, '')
-  where id = p_id;
 
   if v_o.recipient_type = 'customer' then
     -- The conversation log is a copy for the inbox: a failure here must not undo the send record.
@@ -219,53 +227,23 @@ end;
 $$;
 
 -- Riders: "the customer got a code" only when the 'on the way' message really went out (not
--- pending, not stuck, not mock). Only otp_sent changes.
-create or replace function public.rider_today()
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $$
+-- pending, not stuck, not mock). Only otp_sent changes, and rider_today is NOT re-created here:
+-- wave 1 (20261107000500_vendor_first_engine, item 8) redefines rider_today with the same
+-- otp_sent rule plus 'changed'/'changed_at' and skipped meals left out of 'diets'. Re-creating it
+-- from an older body would silently revert that on merge. So this patches the definition that is
+-- live (whichever migration made it): the older "pending/sent/sending" test becomes "sent". When
+-- the live body already counts only 'sent' (wave 1), nothing changes. Any other body fails loudly.
+do $$
+declare
+  v_def text := pg_get_functiondef('public.rider_today()'::regprocedure);
+  v_old text := 'n.status in (''pending'', ''sent'', ''sending'')';
+  v_new text := 'n.status = ''sent''';
 begin
-  if auth.uid() is null then
-    raise exception 'not_authenticated' using errcode = '28000';
+  if position(v_old in v_def) > 0 then
+    execute replace(v_def, v_old, v_new);
+  elsif position(v_new in v_def) = 0 then
+    raise exception 'rider_today: otp_sent rule not found; update 20261115000300 for the new body';
   end if;
-  return coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'id', dr.id, 'kitchen_id', dr.kitchen_id, 'kitchen_name', k.name, 'kitchen_lat', k.lat, 'kitchen_lng', k.lng,
-      'route_name', rt.name, 'service_date', dr.service_date, 'slot', dr.slot, 'status', dr.status,
-      'started_at', dr.started_at, 'finished_at', dr.finished_at, 'planned_km', dr.planned_km,
-      'stops', coalesce((
-        select jsonb_agg(jsonb_build_object(
-          'id', s.id, 'seq', s.seq, 'customer_id', s.customer_id, 'name', coalesce(ofc.name, cu.name), 'office', ofc.id is not null,
-          'phone_masked', 'XXXXXX' || coalesce(cu.phone_last4, '????'),
-          'line1', a.line1, 'area', a.area, 'landmark', a.landmark, 'delivery_notes', a.delivery_notes,
-          'lat', a.lat, 'lng', a.lng, 'meal_count', s.meal_count,
-          'diets', (select jsonb_object_agg(x.diet, x.n) from (
-                      select o.diet, sum(o.qty)::integer as n from public.meal_orders o
-                      where o.stop_id = s.id group by o.diet) x),
-          'status', s.status, 'proof_type', s.proof_type, 'otp_ok', s.otp_ok, 'done_at', s.done_at,
-          'failed_reason', s.failed_reason, 'tiffins_out', s.tiffins_out, 'tiffins_returned', s.tiffins_returned,
-          'tiffins_with_customer', coalesce((select sum(t.tiffins_out - t.tiffins_returned)::integer
-                                             from public.tiffin_ledger t
-                                             where t.kitchen_id = s.kitchen_id and t.customer_id = s.customer_id), 0),
-          'otp_sent', exists (select 1 from public.notifications_outbox n
-                              where n.dedupe_key like 'on_the_way:' || s.id || '%' and n.status = 'sent'),
-          'qr_token', s.qr_token
-        ) order by s.seq)
-        from public.delivery_stops s
-        join public.customers cu on cu.id = s.customer_id
-        left join public.offices ofc on ofc.id = s.office_id
-        left join public.addresses a on a.id = s.address_id
-        where s.run_id = dr.id), '[]'::jsonb)
-    ) order by dr.slot, k.name, rt.name)
-    from public.delivery_runs dr
-    join public.kitchens k on k.id = dr.kitchen_id
-    join public.delivery_routes rt on rt.id = dr.route_id
-    where dr.rider_id = auth.uid() and dr.service_date = private.ist_today()
-      and exists (select 1 from public.members m where m.kitchen_id = dr.kitchen_id and m.user_id = auth.uid())
-  ), '[]'::jsonb);
 end;
 $$;
 
@@ -282,8 +260,10 @@ declare
   v_stuck bigint;
 begin
   perform private.require_admin();
+  -- WhatsApp only, like release_stuck_outbox (other channels have their own claim and recovery).
   select count(*) into v_stuck from public.notifications_outbox
-  where status = 'sending' and coalesce(claimed_at, created_at) < private.now() - private.outbox_stuck_after();
+  where channel = 'whatsapp' and status = 'sending'
+    and coalesce(claimed_at, created_at) < private.now() - private.outbox_stuck_after();
   return jsonb_build_object(
     'kitchens', (select jsonb_build_object('total', count(*), 'active', count(*) filter (where status = 'active'),
                                            'draft', count(*) filter (where status = 'draft'),
@@ -320,7 +300,8 @@ begin
       'escalated_complaints', (select count(*) from public.complaints where status = 'escalated'),
       'vendor_applications', (select count(*) from public.vendor_applications where status in ('new', 'contacted', 'onboarding')),
       'waitlisted_leads', (select count(*) from public.leads where status = 'waitlist'),
-      'outbox_failed', (select count(*) from public.notifications_outbox where status = 'failed' and created_at >= v_from) + v_stuck,
+      'outbox_failed', (select count(*) from public.notifications_outbox
+                        where channel = 'whatsapp' and status = 'failed' and created_at >= v_from) + v_stuck,
       'outbox_stuck', v_stuck)
   );
 end;

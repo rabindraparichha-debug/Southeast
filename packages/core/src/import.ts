@@ -18,7 +18,9 @@ export const IMPORT_FIELDS = [
   { key: 'plan_2', label: 'Second plan', required: false, aliases: ['plan 2', 'plan2', 'second plan', '2nd plan', 'dinner plan', 'evening plan', 'night plan'] },
   { key: 'start_date', label: 'Start date', required: false, aliases: ['start date', 'start', 'from', 'joining date', 'date'] },
   { key: 'qty', label: 'Tiffins per meal', required: false, aliases: ['qty', 'quantity', 'tiffins', 'count'] },
-  { key: 'status', label: 'Status (active / paused / stopped)', required: false, aliases: ['status', 'active/paused', 'current status', 'state'] },
+  // Exact header matches only: 'Payment status' or an address 'State' column must never be taken as this.
+  { key: 'status', label: 'Status (active / paused / stopped)', required: false, exact: true,
+    aliases: ['status', 'status (active / paused / stopped)', 'active/paused', 'current status', 'subscription status', 'tiffin status'] },
   { key: 'paused_from', label: 'Paused from', required: false, aliases: ['paused from', 'pause from', 'paused since', 'paused on', 'pause date', 'pause start'] },
   { key: 'balance', label: 'Opening balance (meals)', required: false, aliases: ['balance', 'opening balance', 'meals left', 'advance meals', 'remaining meals'] },
   { key: 'billing', label: 'Billing (monthly / prepaid)', required: false, aliases: ['billing', 'billing mode', 'monthly/prepaid', 'pay later', 'prepaid'] },
@@ -145,7 +147,9 @@ export function guessMapping(headers: unknown[]): ColumnMapping {
         (h, i) =>
           !used.has(i) &&
           h !== '' &&
-          field.aliases.some((a) => (pass === 'exact' ? h === clean(a) : h.includes(clean(a)))),
+          field.aliases.some((a) =>
+            pass === 'exact' ? h === clean(a) : !('exact' in field && field.exact) && h.includes(clean(a)),
+          ),
       );
       if (idx >= 0) {
         mapping[field.key] = idx;
@@ -376,11 +380,20 @@ export function importTemplateRows(plans: (string | ImportPlan)[], todayIst: str
   const second = others.find((p) => p.diet === first.diet) ?? others[0];
   const dietLabel = first.diet === 'nonveg' ? 'Non-veg' : first.diet === 'jain' ? 'Jain' : 'Veg';
   const today = isIsoDate(todayIst) ? todayIst : '2026-11-02';
-  return [
-    IMPORT_TEMPLATE_HEADERS,
-    ['Asha Das', '9861012345', dietLabel, 'Odia', 'Flat 2A', 'Patia', 'Near KIIT gate', 'Call on arrival', 'Less oil', first.name,
-      second?.name ?? '', ddmmyyyy(today), '1', 'Paused', ddmmyyyy(addDays(today, 7)), '0', 'Monthly', '250'],
-    ['Ravi Nayak', '9861054321', '', 'English', 'Plot 14', 'Saheed Nagar', 'Behind the temple', '', '', first.name, '',
-      ddmmyyyy(today), '2', 'Active', '', '10', 'Prepaid', ''],
-  ];
+  // Keyed by header, so a column added to IMPORT_TEMPLATE_HEADERS only needs an entry here ('Route' is
+  // wave 3's column; unused until that header exists). A header with no entry stays blank.
+  const asha: Record<string, string> = {
+    Name: 'Asha Das', Phone: '9861012345', Diet: dietLabel, Language: 'Odia', 'Flat / house': 'Flat 2A', Area: 'Patia',
+    Landmark: 'Near KIIT gate', 'Delivery notes': 'Call on arrival', Notes: 'Less oil', Plan: first.name,
+    'Second plan': second?.name ?? '', 'Start date': ddmmyyyy(today), 'Tiffins per meal': '1',
+    'Status (active / paused / stopped)': 'Paused', 'Paused from': ddmmyyyy(addDays(today, 7)),
+    'Opening balance (meals)': '0', 'Billing (monthly / prepaid)': 'Monthly', 'Opening dues (₹)': '250', Route: 'Patia A',
+  };
+  const ravi: Record<string, string> = {
+    Name: 'Ravi Nayak', Phone: '9861054321', Language: 'English', 'Flat / house': 'Plot 14', Area: 'Saheed Nagar',
+    Landmark: 'Behind the temple', Plan: first.name, 'Start date': ddmmyyyy(today), 'Tiffins per meal': '2',
+    'Status (active / paused / stopped)': 'Active', 'Opening balance (meals)': '10', 'Billing (monthly / prepaid)': 'Prepaid',
+  };
+  const row = (r: Record<string, string>) => IMPORT_TEMPLATE_HEADERS.map((h) => r[h] ?? '');
+  return [IMPORT_TEMPLATE_HEADERS, row(asha), row(ravi)];
 }

@@ -258,8 +258,9 @@ select is((select r -> 'errors' from imp where k = 'c2'),
 select is((select (r ->> 'imported') || '/' || (r ->> 'customers') || '/' || (r ->> 'merged') || '/' || (r -> 'warnings')::text from imp where k = 'c2'),
   '3/2/1/[{"row": 7, "warnings": ["diet_differs_from_plan"]}]', 'chunk 2: 2 new customers, 1 repeated row added a plan, 1 diet warning');
 select is((select (r ->> 'already_done') || '/' || (r ->> 'imported') || '/' || (r ->> 'customers') || '/' || (r ->> 'merged') from imp where k = 'c2again'),
-  '10/3/0/0', 'a retried chunk creates nothing twice and reports the first outcome');
+  '10/3/2/1', 'a retried chunk creates nothing twice and reports the first outcome (new customers and merges)');
 select is((select r -> 'errors' from imp where k = 'c2again'), (select r -> 'errors' from imp where k = 'c2'), 'with the same errors');
+select is((select r -> 'warnings' from imp where k = 'c2again'), (select r -> 'warnings' from imp where k = 'c2'), 'and the same warnings');
 select is((select string_agg(name, ',' order by name) from public.customers
            where kitchen_id = 'b1600000-0000-4000-b000-00000000000a' and source = 'import' and name <> 'By Manager'),
   'Gopal Giri,Meera Mohanty,Rina Ray,Sanu Sahu,Vik', 'five imported customers in all');
@@ -307,7 +308,8 @@ from (values
   ('h3-mock', 'customer', (select cust from hx where name = 'Mona Monthly'), 'vendor_message'),
   ('h3-real', 'customer', (select cust from hx where name = 'Mona Monthly'), 'vendor_message'),
   ('h3-fail', 'customer', (select cust from hx where name = 'Mona Monthly'), 'vendor_message'),
-  ('h3-callback', 'member', 'b1600000-0000-4000-b000-000000000001'::uuid, 'owner_daily_summary')
+  ('h3-callback', 'member', 'b1600000-0000-4000-b000-000000000001'::uuid, 'owner_daily_summary'),
+  ('h3-race', 'customer', (select cust from hx where name = 'Mona Monthly'), 'vendor_message')
 ) as x(k, rt, rid, tpl);
 insert into public.conversations (kitchen_id, customer_id, wa_phone_hash, phone_enc, phone_last4)
 select kitchen_id, id, phone_hash, phone_enc, phone_last4 from public.customers where id = (select cust from hx where name = 'Mona Monthly');
@@ -315,9 +317,9 @@ select kitchen_id, id, phone_hash, phone_enc, phone_last4 from public.customers 
 create temp table cl as select * from public.wa_claim_outbox(100) where kitchen_id = 'b1600000-0000-4000-b000-00000000000a';
 create function pg_temp.oid_of(p text) returns uuid language sql as $$ select id from public.notifications_outbox where dedupe_key = p $$;
 create function pg_temp.st(p text) returns text language sql as $$ select status from public.notifications_outbox where dedupe_key = p $$;
-select is((select count(*) from cl join public.notifications_outbox o on o.id = cl.id where o.dedupe_key like 'h3-%'), 7::bigint,
-  'seven rows claimed');
-select is((select count(*) from public.notifications_outbox where dedupe_key like 'h3-%' and claimed_at = private.now()), 7::bigint,
+select is((select count(*) from cl join public.notifications_outbox o on o.id = cl.id where o.dedupe_key like 'h3-%'), 8::bigint,
+  'eight rows claimed');
+select is((select count(*) from public.notifications_outbox where dedupe_key like 'h3-%' and claimed_at = private.now()), 8::bigint,
   'the claim records when');
 
 -- Mock mode: recorded as mock, shown as mock in the conversation.
@@ -335,6 +337,19 @@ select is((select status || '/' || provider_message_id || '/' || attempts from p
   'sent/wamid.real_h3/1', 'sent once, with the provider id; a duplicate completion or failure report changes nothing');
 select is((select count(*) from public.messages where wa_message_id = 'wamid.real_h3'), 1::bigint, 'logged once');
 
+-- The status webhook records the send before the worker does: the worker's late success report
+-- changes no status but still logs the message in the conversation, once.
+select public.wa_message_status('wamid.race_h3', 'sent', 'outbox:' || pg_temp.oid_of('h3-race'));
+select public.wa_complete_outbox(pg_temp.oid_of('h3-race'), true, 'wamid.race_h3', null, 'Hello (race)');
+select public.wa_complete_outbox(pg_temp.oid_of('h3-race'), true, 'wamid.race_h3', null, 'Hello (race)');
+select is((select status || '/' || provider_message_id from public.notifications_outbox where dedupe_key = 'h3-race'),
+  'sent/wamid.race_h3', 'webhook first: the row stays sent with its provider id');
+select is((select count(*) || '/' || min(body) from public.messages where wa_message_id = 'wamid.race_h3'), '1/Hello (race)',
+  'and the late completion still logs it in the conversation, once');
+select public.wa_complete_outbox(pg_temp.oid_of('h3-race'), true, 'wamid.other', null, 'Other');
+select is((select count(*) from public.messages where wa_message_id = 'wamid.other'), 0::bigint,
+  'a completion with a different provider id logs nothing');
+
 -- A real failure is retried later.
 select public.wa_complete_outbox(pg_temp.oid_of('h3-fail'), false, null, 'timeout', null);
 select is((select status || '/' || attempts || '/' || (send_after > private.now()) from public.notifications_outbox where dedupe_key = 'h3-fail'),
@@ -350,14 +365,17 @@ select is(pg_temp.st('h3-stuck'), 'sending', 'a malformed callback or a failed s
 
 -- 11 minutes later the worker has not come back: stuck rows.
 update public.notifications_outbox set attempts = 5 where dedupe_key = 'h3-stuck5';
+insert into public.notifications_outbox (kitchen_id, channel, recipient_type, recipient_id, template, payload, dedupe_key, status, created_at)
+values ('b1600000-0000-4000-b000-00000000000a', 'push', 'member', 'b1600000-0000-4000-b000-000000000001', 'owner_daily_summary', '{}',
+        'h3-push', 'sending', private.now() - interval '1 hour');
 update public.notifications_outbox set provider_message_id = 'wamid.prov_h3' where dedupe_key = 'h3-provider';
 select set_config('app.now', '2026-12-16 03:11:00+05:30', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
 create temp table m as select public.platform_metrics() as j;
 select is((select (j -> 'open' ->> 'outbox_stuck')::int from m),
-  (select count(*)::int from public.notifications_outbox where status = 'sending'
+  (select count(*)::int from public.notifications_outbox where channel = 'whatsapp' and status = 'sending'
      and coalesce(claimed_at, created_at) < private.now() - interval '10 minutes'),
-  'admin metrics count stuck rows');
+  'admin metrics count stuck WhatsApp rows (not other channels)');
 select ok((select (j -> 'open' ->> 'outbox_failed')::int >= (j -> 'open' ->> 'outbox_stuck')::int and (j -> 'open' ->> 'outbox_stuck')::int >= 3 from m),
   'and the failure count includes them');
 select ok((select (j -> 'last_7_days' ->> 'whatsapp_mock')::int >= 1 from m), 'mock sends are counted apart from real ones');
@@ -368,6 +386,7 @@ select is((select status || '/' || last_error || '/' || attempts from public.not
 select is(pg_temp.st('h3-stuck5'), 'failed', 'after 5 attempts it is failed');
 select is(pg_temp.st('h3-provider'), 'sent', 'a stuck row with a provider id was sent: never again');
 select is(pg_temp.st('h3-callback'), 'sent', 'the webhook-confirmed row stays sent');
+select is(pg_temp.st('h3-push'), 'sending', 'the WhatsApp sweep leaves other channels alone');
 select is((select count(*) from cron.job where jobname = 'tiffin-outbox-stuck'), 1::bigint, 'the stuck-row job is scheduled');
 
 -- Riders see "code sent" only for a real send.

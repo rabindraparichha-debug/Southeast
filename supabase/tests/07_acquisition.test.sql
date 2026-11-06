@@ -300,6 +300,8 @@ reset role;
 
 -- Outbox: lead and applicant recipients resolve to their phone numbers.
 update public.notifications_outbox set status = 'cancelled' where status = 'pending' and template not in ('lead_welcome');
+-- Queued rows default send_after to the wall clock; this suite runs at app.now (in the past).
+update public.notifications_outbox set send_after = private.now() where status = 'pending' and template = 'lead_welcome';
 select is((select phone_e164 from public.wa_claim_outbox(100) where template = 'lead_welcome' limit 1), '+919861999003',
   'the outbox worker gets the lead''s number');
 

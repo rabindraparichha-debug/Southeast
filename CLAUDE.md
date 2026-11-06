@@ -111,7 +111,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
   - Monthly: the rupee balance Σ `amount_paise` is the truth; dues = −that. Payments carry 0 meals; credits are valued by the trigger `balance_entries_value_monthly`; adjustments take `p_amount_paise`.
   - Never value dues or statements with today's plan price: every meal carries its own `amount_paise`. `private.customer_unit_price` is only for turning rupees into meals.
   - Switch modes only with `set_billing_mode` (converts the balance once). Anything that suspends, cancels, reminds or flags on a low balance must skip monthly customers.
-  - Customer messages (D-120): monthly customers get the month-end `statement_ready` (Phase 2 flag only) instead of low-balance/dues reminders, and `payment_receipt_monthly` (rewritten at outbox insert). "Overdue" for monthly customers is `private.unpaid_through(customer, cutoff)` (oldest charges settled first) with `kitchen_settings.dues_overdue_days`; never flag a monthly customer just for owing.
+  - Customer messages (D-136): monthly customers get the month-end `statement_ready` (Phase 2 flag only) instead of low-balance/dues reminders, and `payment_receipt_monthly` (rewritten at outbox insert). "Overdue" for monthly customers is `private.unpaid_through(customer, cutoff)` (oldest charges settled first) with `kitchen_settings.dues_overdue_days`; never flag a monthly customer just for owing.
 - Payments: `record_payment` takes `p_client_op` (idempotency) and `p_paid_at` (backdate); mistakes are fixed with `void_payment` (append-only reversal), never a negative adjustment.
 - Every recharge, refund, credit and adjustment is one `balance_entries` row.
   - Recharges come only from `private.post_recharge()` (idempotent on the payment id).
@@ -131,7 +131,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The bot is pure logic with injected `BotDeps`; add flows there and unit-test them in `tests/integration/bot.test.ts`.
 - **Guardrails stay in code** (`_shared/ai.ts`: `needsHuman`, `guardReply`). Never let the AI state prices or make promises.
 - **Outbound:** always enqueue to `notifications_outbox`. Add a template to `_shared/templates.ts` **and** `docs/WHATSAPP_TEMPLATES.md`, and get it approved by Meta before use.
-- **Outbox states (D-120):** `pending → sending → sent | mock | failed | cancelled`. Mock sends are `mock`, never `sent`: anything that means "the customer got it" (e.g. `rider_today.otp_sent`, admin metrics) counts only `sent`. A sent row is final: `wa_complete_outbox` ignores later completions, and the row id goes to Meta as `biz_opaque_callback_data` (`outbox:<id>`), matched in `wa_message_status`. Rows stuck in `sending` over 10 minutes are re-queued by `tiffin-outbox-stuck`. Never report a failure after the provider accepted a message.
+- **Outbox states (D-136):** `pending → sending → sent | mock | failed | cancelled`. Mock sends are `mock`, never `sent`: anything that means "the customer got it" (e.g. `rider_today.otp_sent`, admin metrics) counts only `sent`. A sent row is final: `wa_complete_outbox` ignores later completions, and the row id goes to Meta as `biz_opaque_callback_data` (`outbox:<id>`), matched in `wa_message_status`. Rows stuck in `sending` over 10 minutes are re-queued by `tiffin-outbox-stuck`. Never report a failure after the provider accepted a message; `whatsapp-webhook` answers 503 when it cannot record an `outbox:` status (Meta retries). Admin stuck counts and the sweep are WhatsApp-only.
 - **Customer page:** `portal_*` RPCs are granted to anon and must start with `private.portal_customer(p_token)`.
 - **Inbox:** owner-only (D-060).
 
@@ -179,7 +179,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Offices:** grouping happens in `private.build_runs()` (one stop per office, `delivery_stops.office_id`); counts and charges stay per customer.
 - **Health tags** (`customer_health`): consent required, owner + staff only, never in rider payloads.
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
-- **Customer import (D-120):** `import_customers` takes chunks (`p_batch` client uuid, `p_first_row`, `p_total`) and is idempotent per row number; the web wizard sends `IMPORT_CHUNK_SIZE` (100) rows per call. Keep `packages/core/src/import.ts` (`previewImportRows`, error and warning codes) in step with the server: status, second plan, repeated rows (same phone + name in one batch add plans), diet warning.
+- **Customer import (D-136):** `import_customers` takes chunks (`p_batch` client uuid, `p_first_row`, `p_total`) and is idempotent per row number; the web wizard sends `IMPORT_CHUNK_SIZE` (100) rows per call. Keep `packages/core/src/import.ts` (`previewImportRows`, error and warning codes) in step with the server: status, second plan, repeated rows (same phone + name in one batch add plans), diet warning. A retried chunk reports the stored outcome (new or merged, `import_rows.warnings`). The Status column is mapped from exact headers only (never an address "State").
 - **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
 
 **Channels, web app, builds (M9)**

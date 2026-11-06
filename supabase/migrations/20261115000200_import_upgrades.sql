@@ -23,7 +23,13 @@
 --   * The default start date is the IST date (private.ist_today()), as before.
 --   * Result: batch_id, total, imported (rows), failed, errors, warnings, customers (new customers),
 --     merged (repeated rows that added a plan), already_done (rows skipped because this batch had them).
+--     A row this batch already saved reports what it did the first time: a new customer (the first
+--     saved row for that customer in the batch) or a merge, with its warnings (import_rows.warnings),
+--     so a retried chunk gives the same totals and warnings as the lost response would have.
 --   * Billing and opening-balance columns (wave 2) are unchanged.
+
+-- Warnings a saved row had (diet_differs_from_plan, stopped_plan_ignored), reported again on a retry.
+alter table public.import_rows add column warnings text[] not null default '{}';
 
 create or replace function private.parse_import_status(p text)
 returns text
@@ -148,6 +154,17 @@ begin
       v_already := v_already + 1;
       if v_done.status = 'imported' then
         v_imported := v_imported + 1;
+        -- The first saved row for a customer in this batch created it; later ones were merges.
+        if exists (select 1 from public.import_rows ir
+                   where ir.batch_id = v_batch and ir.customer_id = v_done.customer_id
+                     and ir.status = 'imported' and ir.row_number < v_idx) then
+          v_merged := v_merged + 1;
+        else
+          v_new := v_new + 1;
+        end if;
+        if cardinality(v_done.warnings) > 0 then
+          v_warn_report := v_warn_report || jsonb_build_object('row', v_idx, 'warnings', to_jsonb(v_done.warnings));
+        end if;
       else
         v_failed := v_failed + 1;
         v_report := v_report || jsonb_build_object('row', v_idx, 'errors', to_jsonb(v_done.errors));
@@ -394,8 +411,8 @@ begin
         v_new := v_new + 1;
       end if;
       v_saved := v_saved || v_customer;
-      insert into public.import_rows (batch_id, kitchen_id, row_number, raw, status, customer_id)
-      values (v_batch, p_kitchen, v_idx, v_raw, 'imported', v_customer);
+      insert into public.import_rows (batch_id, kitchen_id, row_number, raw, status, customer_id, warnings)
+      values (v_batch, p_kitchen, v_idx, v_raw, 'imported', v_customer, v_warnings);
       if cardinality(v_warnings) > 0 then
         v_warn_report := v_warn_report || jsonb_build_object('row', v_idx, 'warnings', to_jsonb(v_warnings));
       end if;

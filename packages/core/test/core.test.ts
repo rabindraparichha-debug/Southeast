@@ -223,6 +223,14 @@ describe('import upgrades: status, two plans, repeated rows, diet, chunks, templ
     expect(parseImportStatus('holiday')).toBeNull();
     expect(guessMapping(['Name', 'Mobile', 'Status', 'Paused from']).status).toBe(2);
     expect(guessMapping(['Name', 'Mobile', 'Status', 'Paused from']).paused_from).toBe(3);
+    expect(guessMapping(['Name', 'Mobile', 'Current Status']).status).toBe(2);
+  });
+
+  it('never takes an address State or a Payment status column as the status', () => {
+    // A contacts export that imported cleanly before the status column existed still does.
+    expect(guessMapping(['Name', 'Phone', 'Area', 'City', 'State']).status).toBeUndefined();
+    expect(guessMapping(['Name', 'Phone', 'Payment status']).status).toBeUndefined();
+    expect(guessMapping(['Name', 'Phone', 'Status (active / paused / stopped)']).status).toBe(2);
   });
 
   it('maps lunch plan and dinner plan columns to the two plans', () => {

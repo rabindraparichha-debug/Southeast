@@ -8,6 +8,8 @@ import { importChunks, istDate, previewImportRows, type ImportRow } from '@tiffi
 import type { ImportResult } from '@tiffin/db';
 import { renderOutbox, TEMPLATES } from '../../supabase/functions/_shared/templates.ts';
 import { parseWebhook, toGraphPayload } from '../../supabase/functions/_shared/whatsapp.ts';
+import { hmacSha256Hex } from '../../supabase/functions/_shared/razorpay.ts';
+import { handleWhatsAppWebhook, isOutboxProof } from '../../supabase/functions/whatsapp-webhook/handler.ts';
 import { loginAs, type Client } from './helpers';
 
 const run = String(Date.now()).slice(-6);
@@ -70,7 +72,16 @@ describe('Held-back: customer import in chunks', () => {
     // The response to chunk 2 was "lost": the wizard sends it again with the same batch id.
     const again = await call(chunks[1]!);
     expect(again.error).toBeNull();
-    expect(again.data).toMatchObject({ already_done: 100, imported: 100, customers: 0, merged: 0 });
+    // Nothing is created twice, and the retry reports what the lost response said (same totals).
+    expect(again.data).toMatchObject({ already_done: 100, imported: 100, customers: 100, merged: 0 });
+    // The last chunk again: its merge (row 241), its warnings and its error are reported as the first time.
+    const third = await call(chunks[2]!);
+    expect(third.error).toBeNull();
+    const first3 = results[2]!;
+    expect(third.data).toMatchObject({
+      already_done: 45, imported: first3.imported, failed: first3.failed, customers: first3.customers, merged: 1,
+      errors: first3.errors, warnings: first3.warnings,
+    });
 
     const { count: customers } = await owner.client.from('customers').select('id', { count: 'exact', head: true }).eq('kitchen_id', kitchenId);
     expect(customers).toBe(243);
@@ -115,5 +126,39 @@ describe('Held-back: billing-aware templates and the outbox key', () => {
       { id: 'wamid.a', status: 'sent', biz_opaque_callback_data: 'outbox:abc' }, { id: 'wamid.b', status: 'read' },
     ] } }] }] });
     expect(parsed.statuses).toEqual([{ id: 'wamid.a', status: 'sent', callbackData: 'outbox:abc' }, { id: 'wamid.b', status: 'read' }]);
+  });
+});
+
+describe('Held-back: a status that proves a send is never dropped', () => {
+  const cfg = { mode: 'mock' as const, appSecret: 'app', verifyToken: 'v', graphVersion: 'v21.0', publicWebUrl: 'https://x' };
+  const post = async (statuses: Record<string, string>[], failStatus: boolean) => {
+    const body = JSON.stringify({ entry: [{ changes: [{ value: { statuses } }] }] });
+    const calls: string[] = [];
+    const res = await handleWhatsAppWebhook(
+      new Request('https://f/whatsapp-webhook', {
+        method: 'POST', body, headers: { 'x-hub-signature-256': `sha256=${await hmacSha256Hex('app', body)}` },
+      }),
+      {
+        cfg,
+        rpc: async <T>(fn: string): Promise<T> => {
+          calls.push(fn);
+          if (failStatus && fn === 'wa_message_status') throw new Error('db_unavailable');
+          return null as T;
+        },
+        send: async () => ({ id: 'x' }),
+        createLink: async () => '',
+      },
+    );
+    return { status: res.status, calls };
+  };
+
+  it('answers 503 (Meta retries) when an outbox proof could not be recorded, 200 otherwise', async () => {
+    expect(isOutboxProof({ status: 'sent', callbackData: 'outbox:abc' })).toBe(true);
+    expect(isOutboxProof({ status: 'failed', callbackData: 'outbox:abc' })).toBe(false);
+    expect(isOutboxProof({ status: 'read' })).toBe(false);
+    expect((await post([{ id: 'wamid.p', status: 'sent', biz_opaque_callback_data: 'outbox:abc' }], true)).status).toBe(503);
+    expect((await post([{ id: 'wamid.q', status: 'read' }], true)).status).toBe(200); // a plain status is not worth a retry
+    expect(await post([{ id: 'wamid.r', status: 'sent', biz_opaque_callback_data: 'outbox:abc' }], false))
+      .toEqual({ status: 200, calls: ['wa_message_status'] });
   });
 });

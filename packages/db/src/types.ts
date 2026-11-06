@@ -1433,6 +1433,7 @@ export type Database = {
           raw: NonNullable<Json>;
           row_number: number;
           status: string;
+          warnings: string[];
         };
         ComputedFields: never;
         Insert: {
@@ -1444,6 +1445,7 @@ export type Database = {
           raw: NonNullable<Json>;
           row_number: number;
           status: string;
+          warnings?: string[];
         };
         Update: {
           batch_id?: string;
@@ -1454,6 +1456,7 @@ export type Database = {
           raw?: NonNullable<Json>;
           row_number?: number;
           status?: string;
+          warnings?: string[];
         };
         Relationships: [
           {
