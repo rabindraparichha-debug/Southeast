@@ -1,18 +1,20 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { requireAdmin } from '@/lib/session';
+import { getFlags } from '@/lib/flags';
 import { AdminNav } from './admin-nav';
 
 // Platform team console. Every page re-checks admin in its RPCs; this only adds the navigation.
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await requireAdmin();
+  const flags = await getFlags();
   return (
     <div className="min-h-screen">
       <header className="border-b border-ink-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 md:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm text-white" aria-hidden>🛡️</span>
-            <AdminNav />
+            <AdminNav flags={flags} />
           </div>
           {session.kitchen && <Link href="/" className="text-sm text-ink-500 hover:text-ink-800">My kitchen →</Link>}
         </div>

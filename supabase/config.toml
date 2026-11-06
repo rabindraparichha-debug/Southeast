@@ -313,6 +313,17 @@ max_frequency = "5s"
 919000000121 = "123456"
 # Wave 3 riders track (tests/integration/w3-riders.test.ts).
 919000000130 = "123456"
+# Wave 3 safety integration tests (tests/integration/w3-safety.test.ts uses 00140; 00141-00148 spare;
+# 00149 is wave 4's password sign-up number and never logs in with a code).
+919000000140 = "123456"
+919000000141 = "123456"
+919000000142 = "123456"
+919000000143 = "123456"
+919000000144 = "123456"
+919000000145 = "123456"
+919000000146 = "123456"
+919000000147 = "123456"
+919000000148 = "123456"
 # Wave 4 onboarding: 90000 00150 – 00159. Phase 2 hardening (wave 5): 90000 00160 – 00169.
 919000000150 = "123456"
 919000000151 = "123456"

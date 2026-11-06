@@ -1,6 +1,6 @@
 // Drains notifications_outbox (WhatsApp). Triggered every minute by pg_cron (private.kick_outbox)
 // and after vendor actions. Free-form inside the 24h window; approved templates outside it, and
-// only to customers who opted in.
+// only to customers who opted in (except CUSTOMER_TEMPLATES_WITHOUT_OPT_IN: lead_confirm, D-183).
 //
 // Never twice: each message carries its row id to Meta (biz_opaque_callback_data 'outbox:<id>'), so a
 // status webhook proves the send even if recording it here fails. Once the provider has accepted a
@@ -10,7 +10,7 @@
 import { corsHeaders, json, rpc as callRpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, previewOf, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
-import { renderOutbox } from '../_shared/templates.ts';
+import { CUSTOMER_TEMPLATES_WITHOUT_OPT_IN, renderOutbox } from '../_shared/templates.ts';
 import type { Lang } from '../_shared/bot-i18n.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         counts.skipped++;
         continue;
       }
-      if (r.recipient_type !== 'member' && !r.in_window && !r.opted_in) {
+      if (r.recipient_type !== 'member' && !r.in_window && !r.opted_in && !CUSTOMER_TEMPLATES_WITHOUT_OPT_IN.has(r.template)) {
         await complete(false, null, 'not_opted_in', null, true);
         counts.skipped++;
         continue;

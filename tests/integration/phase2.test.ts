@@ -44,13 +44,21 @@ describe('Phase 2 hardening over the API', () => {
   });
 
   it('the public join page is behind the customer_portal flag (off by default)', async () => {
+    // Since the wave 3 safety merge, other suites running in parallel switch customer_portal on (and
+    // never off), so check against the flag as it is now; 15_phase2_hardening tests both states.
+    const flags = (await anonClient().rpc('feature_flags')).data as { customer_portal?: boolean } | null;
     const { error } = await anonClient().rpc('referral_invite', { p_slug: 'maa-tarini-tiffin', p_code: otherCode });
-    expect(error?.message).toBe('feature_disabled');
     const join = await anonClient().rpc('referral_join', {
       p_slug: 'maa-tarini-tiffin', p_code: otherCode, p_name: 'X', p_phone: '9876543210',
       p_plan: '20000000-0000-4000-a000-0000000000a1', p_address: 'House 1', p_consent: true,
     });
-    expect(join.error?.message).toBe('feature_disabled');
+    if (flags?.customer_portal) {
+      expect(error?.message).not.toBe('feature_disabled');
+      expect(join.error?.message).not.toBe('feature_disabled');
+    } else {
+      expect(error?.message).toBe('feature_disabled');
+      expect(join.error?.message).toBe('feature_disabled');
+    }
   });
 
   it('owners cannot reach the team queue, the AI budget or payment-link cancelling', async () => {

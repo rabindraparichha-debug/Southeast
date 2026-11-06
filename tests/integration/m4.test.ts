@@ -2,7 +2,7 @@
 // the outbox worker and the customer page. WHATSAPP_MODE=mock (nothing is sent to Meta).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { hmacSha256Hex } from '../../supabase/functions/_shared/razorpay.ts';
-import { KITCHEN_A, anonClient, env, loginAs, setCustomerWhatsapp, type Client } from './helpers';
+import { KITCHEN_A, anonClient, enableFlags, env, loginAs, setCustomerWhatsapp, type Client } from './helpers';
 
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET ?? 'local-dev-app-secret';
 const ANKIT = '919861000002'; // seed customer of kitchen A
@@ -33,6 +33,8 @@ describe('M4: WhatsApp through the webhook', () => {
     owner = await loginAs('+919000000001');
     // The bot answers customers only with customer WhatsApp on (Phase 2 flag; reset after the run).
     await setCustomerWhatsapp(true);
+    // The customer page is a Phase 2 flag (off by default, D-180).
+    await enableFlags((await loginAs('+919000000099')).client, ['customer_portal']);
   });
 
   async function lastBotReply(): Promise<string> {

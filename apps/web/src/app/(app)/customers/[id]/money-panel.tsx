@@ -30,6 +30,8 @@ type Props = {
   valuePaise: number;
   unitPricePaise: number | null;
   onlineEnabled: boolean;
+  /** Platform flag online_payments (D-180): without it the Payment link tab is hidden. */
+  onlinePhase?: boolean;
   payments: Payment[];
   refunds: Refund[];
   /** Owner or manager. The accountant reads only. */
@@ -278,7 +280,10 @@ export function MoneyPanel(p: Props) {
       {p.canWrite && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           <Button variant={mode === 'cash' ? 'primary' : 'secondary'} className="px-3 py-1" onClick={() => open('cash')}>Record payment</Button>
-          {!monthly && <Button variant={mode === 'link' ? 'primary' : 'secondary'} className="px-3 py-1" onClick={() => open('link')}>Payment link</Button>}
+          {/* Online payment links: prepaid customers, and only with the online_payments phase flag (D-180). */}
+          {!monthly && p.onlinePhase !== false && (
+            <Button variant={mode === 'link' ? 'primary' : 'secondary'} className="px-3 py-1" onClick={() => open('link')}>Payment link</Button>
+          )}
           <Button variant={mode === 'entry' ? 'primary' : 'secondary'} className="px-3 py-1" onClick={() => open('entry')}>Credit / adjust</Button>
           <Button variant={mode === 'refund' ? 'primary' : 'secondary'} className="px-3 py-1" onClick={() => open('refund')}>Refund</Button>
           <Button variant={mode === 'billing' ? 'primary' : 'ghost'} className="px-3 py-1" onClick={() => open('billing')}>Billing: {monthly ? 'monthly' : 'prepaid'}</Button>

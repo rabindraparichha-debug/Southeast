@@ -8,6 +8,14 @@ import { CommissionForm } from './commission-form';
 
 export const metadata: Metadata = { title: 'Commission · Admin' };
 
+type Transfer = {
+  payment_id: string; kitchen_name: string; transfer_paise: number; paid_at: string; transfer_status: string;
+  transfer_error: string | null; expected_account: string | null; transfer_account: string | null; reason: 'failed' | 'reversed' | 'overdue' | 'account_mismatch';
+};
+const REASON: Record<Transfer['reason'], string> = {
+  failed: 'Failed', reversed: 'Reversed', overdue: 'No confirmation after 24 h', account_mismatch: 'Paid to another account',
+};
+
 type Report = {
   total_commission_paise: number;
   kitchens: { kitchen_id: string; kitchen_name: string; commission_bps: number; payments: number; gross_paise: number; commission_paise: number; transferred_paise: number }[];
@@ -22,11 +30,14 @@ export default async function AdminCommissionPage({ searchParams }: PageProps<'/
   const from = isIsoDate(sp.from) ? sp.from : `${today.slice(0, 8)}01`;
   const to = isIsoDate(sp.to) ? sp.to : today;
   const supabase = await createClient();
-  const [{ data: kitchens }, { data: accounts }, { data: reportRaw, error }] = await Promise.all([
+  const [{ data: kitchens }, { data: accounts }, { data: reportRaw, error }, { data: transfersRaw }] = await Promise.all([
     supabase.from('kitchens').select('id, name').order('name'),
     supabase.from('kitchen_payout_accounts').select('kitchen_id, commission_bps, kyc_status'),
     supabase.rpc('admin_commission_report', { p_from: from, p_to: to }),
+    // Route transfers that need a look (D-185): failed, reversed, unconfirmed after a day, wrong account.
+    supabase.rpc('admin_route_transfers', {}),
   ]);
+  const transfers = (transfersRaw ?? []) as unknown as Transfer[];
   const report = reportRaw as unknown as Report | null;
   const account = new Map((accounts ?? []).map((a) => [a.kitchen_id, a]));
 
@@ -85,6 +96,24 @@ export default async function AdminCommissionPage({ searchParams }: PageProps<'/
           )}
         </Card>
       </div>
+      <Card title={`Route transfers needing attention (${transfers.length})`} className="mt-6">
+        <p className="mb-2 text-sm text-ink-500">
+          Razorpay confirms each kitchen&apos;s share with transfer webhooks. A failed or missing transfer means the kitchen was not paid: check it in the Razorpay dashboard.
+        </p>
+        <ul className="divide-y divide-ink-100 text-sm" data-testid="route-transfers">
+          {transfers.map((t) => (
+            <li key={t.payment_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="min-w-0">
+                <span className="font-medium">{t.kitchen_name}</span> · {formatPaise(t.transfer_paise)} · paid {new Date(t.paid_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })}
+                {t.transfer_error && <span className="block text-xs text-red-700">{t.transfer_error}</span>}
+                {t.reason === 'account_mismatch' && <span className="block text-xs text-ink-500">Expected {t.expected_account}, went to {t.transfer_account}</span>}
+              </span>
+              <span className="text-xs font-medium text-red-700">{REASON[t.reason]}</span>
+            </li>
+          ))}
+          {!transfers.length && <li className="py-3 text-ink-500">Nothing to check.</li>}
+        </ul>
+      </Card>
     </main>
   );
 }

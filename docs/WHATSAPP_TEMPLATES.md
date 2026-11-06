@@ -55,6 +55,7 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 |---|---|---|---|---|
 | `lead_welcome_v1` | Utility | `Namaskar {{1}}! Thanks for your tiffin enquiry. Tap below and we will show you home kitchens near you with space.` | first name | `Find my tiffin` (`lead_start`) |
 | `lead_reminder_v1` | Marketing | `Namaskar! The kitchens we found near you still have space: {{1}}. Tap below to see them again.` | kitchen names | `Show kitchens` (`l_show`) |
+| `lead_confirm_v1` | Utility | `Namaskar {{1}}! To start your trial of {{2}} meals with {{3}}, open this link: {{4}} If you did not ask for this, ignore this message.` | first name, trial meals, kitchen, confirmation link (`/find/confirm/<token>`, 24 h) | – |
 | `vendor_welcome_v2` | Utility | `Namaskar {{1}}! Thank you for applying to Tiffin OS. It is free. Our team will call you to approve your number; after that, log in with this number to set up your kitchen: {{2}}` | first name, link | – |
 | `vendor_nudge_v1` | Utility | `Namaskar {{1}}! Your next step on Tiffin OS: {{2}}. Open: {{3}}` | first name, next step, link | – |
 
@@ -73,6 +74,7 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 | `inbox_alert_v1` | Utility | `{{1}}: {{2}} needs a reply in your inbox ({{3}}).` | kitchen, customer, reason |
 | `weather_alert_v1` | Utility | `{{1}}: {{2}} expected during {{3}} delivery on {{4}} ({{5}}). Plan riders and packing accordingly.` | kitchen, kind, lunch/dinner, date, detail ("rain up to 12 mm/h, up to 41°C") |
 | `late_delivery_v1` | Utility | `{{1}}: {{2}} stop(s) on {{3}} ({{4}}) are still not delivered {{5}} minutes after the meals were packed.` | kitchen, pending stops, route, rider, minutes |
+| `transfer_failed_v1` | Utility | `{{1}}: the transfer of {{2}} for an online payment on {{3}} to your bank account failed ({{4}}). Our team is looking into it.` | kitchen, amount, payment date, Razorpay's reason |
 | `customer_switched_out_v1` | Utility | `{{1}}: {{2}} is moving to another kitchen from {{3}}. Their subscription ends before that date and unused meals are refunded automatically.` | kitchen, customer, date |
 
 ## Authentication template (login)
@@ -92,4 +94,5 @@ When an eater has a payer (P5, D-097), the database rewrites low-balance, dues, 
 - **Templates go only to customers who opted in** (`customers.whatsapp_opt_in`). The bot asks once, on the customer's first message. Vendors can also share an invite link that opens a chat with the platform number.
 - **Opting out:** a customer who replies **STOP** (or "stop updates", "unsubscribe") is opted out at once, even while the kitchen is handling the chat; **UPDATES** opts back in. "Stop my tiffin" is a cancellation request and goes to the kitchen.
 - **Replies inside the 24-hour window are normal messages.** They need no opt-in, because the customer wrote first.
+- **The one exception (wave 3, D-183):** `lead_confirm_v1` goes out without WhatsApp opt-in, because the person just asked for it on our website by typing their number and agreeing to be contacted about the enquiry. Nothing else is in `CUSTOMER_TEMPLATES_WITHOUT_OPT_IN` (`_shared/templates.ts`).
 - **Announcements:** only to opted-in customers, and limited per kitchen per month (`kitchen_settings.broadcast_cap_monthly`, default 4, set by the platform).

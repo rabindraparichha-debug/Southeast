@@ -3,6 +3,8 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Phase 2 flags are off by default (D-180); this suite tests these features switched on.
+update public.platform_settings set enabled = true where key in ('marketplace');
 
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
 -- Only kitchen A takes platform leads here (kitchens opt in since D-119; others may be left by integration runs).
@@ -10,7 +12,7 @@ update public.kitchens set accepts_platform_leads = (id = '10000000-0000-4000-a0
 
 -- A Google Ads lead with a click id comes in, picks kitchen A and pays.
 create temp table t (k text primary key, v jsonb);
-grant select, insert on t to anon, authenticated;
+grant select, insert on t to anon, authenticated, service_role;
 insert into t values ('lead', public.lead_ingest('google_ads', 'gads-L1', 'Ads Person', '+919861555001', 'Patia', 'gads-777', false,
   '{"slots":["lunch"],"diet":"veg"}', 'EAIaIQclickid'));
 select is((select gclid from public.leads where id = (select (v ->> 'lead_id')::uuid from t where k = 'lead')), 'EAIaIQclickid',
@@ -70,9 +72,11 @@ reset role;
 select is((select status::text from public.leads where external_id = 'SK-1' and source = 'sulekha'), 'matched',
   'an imported Sulekha lead in Patia is matched straight away');
 
--- Website: the click id from the landing URL is attached with the lead token.
-set local role anon;
+-- Website: the click id from the landing URL is attached with the lead token. The form itself is
+-- sent through the public-forms Edge Function (service role); attaching the click id stays anon.
+set local role service_role;
 insert into t select 'web', public.submit_lead('Web Click', '9861555021', 'Patia', p_consent => true);
+set local role anon;
 select lives_ok(format($$ select public.lead_attach_gclid(%L, 'EAIaIQweb') $$, (select v ->> 'token' from t where k = 'web')), 'anon attaches the click id');
 select lives_ok($$ select public.lead_attach_gclid('wrong-token', 'EAIaIQevil') $$, 'a wrong token changes nothing');
 reset role;

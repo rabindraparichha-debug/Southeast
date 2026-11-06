@@ -40,10 +40,15 @@ export type Portal = {
 const SLOT = { lunch: 'Lunch', dinner: 'Dinner' } as const;
 const btn = 'rounded-lg px-3 py-2 text-sm font-medium ring-1 ring-ink-200 bg-white active:bg-ink-50 disabled:opacity-50';
 
-export function PortalClient({ token, initial, grievance }: { token: string; initial: Portal; grievance: string }) {
+export function PortalClient({ token, initial, grievance, onlinePayments = false }: {
+  token: string; initial: Portal; grievance: string;
+  /** Platform flag online_payments (D-180): pay buttons need it as well as a verified payout account. */
+  onlinePayments?: boolean;
+}) {
   const router = useRouter();
   const supabase = supabaseBrowser();
   const p = initial;
+  const canPayOnline = onlinePayments && p.kitchen.online_payments;
   const [lang, setLang] = useState<Lang>(p.language ?? 'en');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -161,7 +166,7 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
         <div className="text-sm text-ink-500">{p.balance.meals < 0 ? t('owes', { n: -p.balance.meals }) : t('prepaid', { v: formatPaise(p.balance.value_paise) })}</div>
         {p.payer && <p className="mt-2 text-sm text-ink-700" data-testid="paid-by">{t('paid_by', { name: p.payer.name })}</p>}
         <h2 className="mt-4 text-sm font-semibold">{t('pay')}</h2>
-        {p.kitchen.online_payments && price ? (
+        {canPayOnline && price ? (
           <>
             <p className="mt-1 text-xs text-ink-500">{t('pay_terms')}</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
@@ -178,7 +183,7 @@ export function PortalClient({ token, initial, grievance }: { token: string; ini
       </section>
 
       {(p.dependents?.length ?? 0) > 0 && (
-        <DependentsCard token={token} dependents={p.dependents!} onlinePayments={p.kitchen.online_payments} t={t} />
+        <DependentsCard token={token} dependents={p.dependents!} onlinePayments={canPayOnline} t={t} />
       )}
 
       <section className={card}>

@@ -4,7 +4,7 @@
 // flag staying off. Uses its own kitchen (spare number 90000 00105).
 import { execSync } from 'node:child_process';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { env, anonClient, loginAs, type Client } from './helpers';
+import { enableFlags, env, anonClient, loginAs, type Client } from './helpers';
 
 const run = Date.now().toString(36);
 const JPEG = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==', 'base64');
@@ -35,6 +35,8 @@ describe('P5/P6 over the API', () => {
   let parentToken: string;
 
   beforeAll(async () => {
+    // The customer page and online payments are Phase 2 flags (off by default, D-180).
+    await enableFlags((await loginAs('+919000000099')).client, ['customer_portal', 'online_payments']);
     owner = await loginAs('+919000000105');
     const { data: kitchen, error } = await owner.client.rpc('create_kitchen', {
       p_name: `P5 IT ${run}`, p_area: 'Patia', p_lat: 20.3553, p_lng: 85.8197,

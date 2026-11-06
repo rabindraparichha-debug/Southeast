@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL, formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { LEAD_ROLES } from '@/lib/roles';
+import { requireFlag } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatIstDateTime } from '@/lib/delivery';
@@ -20,6 +21,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 // Owner insights (P5/P6): customers who may leave, complaint score, referrals, weather alerts and,
 // only when the platform takes a commission, what it kept.
 export default async function InsightsPage() {
+  await requireFlag('extras'); // switched on by the platform (D-180)
   const { kitchen } = await requireKitchen(LEAD_ROLES);
   const supabase = await createClient();
   const today = istDate();

@@ -4,6 +4,7 @@ import { SLOT_LABEL, addDays, formatPaise, formatPhone, formatServiceDate, istDa
 import { requireKitchen } from '@/lib/session';
 import { CUSTOMER_ROLES, canReadMoney, isLead } from '@/lib/roles';
 import { BILLING_LABEL, BILLING_TONE } from '@/lib/money';
+import { getFlags } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { Badge, Card, DIET_LABEL, DIET_TONE, LANGUAGE_LABEL, PageHeader, STATUS_LABEL, STATUS_TONE } from '@/components/ui';
 import { AddressManager } from './address-manager';
@@ -36,6 +37,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const money = canReadMoney(kitchen.role);
   const accountant = kitchen.role === 'accountant';
   const billing = c.billing_mode ?? 'monthly';
+  const flags = await getFlags();
 
   const { data: addresses } = await supabase
     .from('addresses')
@@ -194,7 +196,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           />
         )}
 
-        {isOwner && (
+        {isOwner && flags.extras && (
           <ReferralCard
             customerId={c.id!}
             code={extra?.referral_code ?? null}
@@ -217,7 +219,8 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             balancePaise={balance?.amount_paise ?? 0}
             valuePaise={(value as { amount_paise?: number } | null)?.amount_paise ?? 0}
             unitPricePaise={livePlan?.price_per_meal_paise ?? null}
-            onlineEnabled={payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
+            onlineEnabled={flags.online_payments && payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
+            onlinePhase={flags.online_payments}
             payments={payments ?? []}
             refunds={refunds ?? []}
             canWrite={isOwner}
@@ -226,9 +229,10 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           />
         )}
 
-        {isOwner && (
+        {isOwner && (flags.customer_whatsapp || flags.customer_portal) && (
           <WhatsAppCard customerId={c.id!} customerName={c.name!} customerPhone={c.phone} kitchenName={kitchen.kitchenName}
-            kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null} />
+            kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null}
+            whatsapp={flags.customer_whatsapp} portal={flags.customer_portal} />
         )}
 
         {money && (

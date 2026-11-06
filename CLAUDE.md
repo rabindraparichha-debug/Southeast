@@ -77,6 +77,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00112 – 90000 00119 | Spare (00113–00115: the wave-2 integration test's owner, manager and accountant) |
 | 90000 00120 – 90000 00121 | Spare (used by the vendor-first wave 3 ops integration test: owner of its own kitchen, and an outsider) |
 | 90000 00130 | Spare (used by the wave 3 riders integration test, `tests/integration/w3-riders.test.ts`) |
+| 90000 00140 – 90000 00148 | Spare (wave 3 safety: `tests/integration/w3-safety.test.ts` uses 00140) |
 | 90000 00149 | Spare (wave 4: phone + password sign-up test; never logs in with a code) |
 | 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
 | 90000 00160 – 90000 00169 | Spare for the Phase 2 hardening tests (00160: `tests/integration/phase2.test.ts`) |
@@ -139,7 +140,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Razorpay is test/mock only.** `loadConfig()` refuses live keys unless `RAZORPAY_ALLOW_LIVE=true`. Never set that without the owner's explicit approval.
 - Hosted setup:
   - Webhook URL: `https://<project>.functions.supabase.co/razorpay-webhook`.
-  - Events: `payment_link.paid`, `payment.captured`, `payment.failed`, `payment_link.expired`, `payment_link.cancelled`, `refund.processed`, `refund.failed`.
+  - Events: `payment_link.paid`, `payment.captured`, `payment.failed`, `payment_link.expired`, `payment_link.cancelled`, `refund.processed`, `refund.failed`, and (Route, wave 3) `transfer.processed`, `transfer.settled`, `transfer.failed`, `transfer.reversed`.
 
 **WhatsApp (M4)**
 - One platform number. Inbound goes through `whatsapp-webhook` (Meta HMAC check, dedupe on message id). It calls service-role RPCs `wa_*`, then the bot (`_shared/bot.ts`).
@@ -185,8 +186,10 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Matching is `private.match_kitchens()`; change its rules there and in `docs/DECISIONS.md` D-078.
 - While the `customer_whatsapp` flag is off the webhook sends no bot replies (`wa_receive` returns `customer_messages: false`) and `wa_claim_outbox` cancels customer, lead and applicant rows. Integration suites that drive the bot call `setCustomerWhatsapp(true)` (reset after the run by `tests/integration/global-setup.ts`).
 - Unknown WhatsApp numbers go to `_shared/lead-bot.ts` (customer qualification, or vendor sign-up); unit-test flows in `tests/integration/lead-bot.test.ts`.
-- Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers.
-- Public anon RPCs (`submit_lead`, `lead_choose`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves.
+- Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers, except the templates in `CUSTOMER_TEMPLATES_WITHOUT_OPT_IN` (`_shared/templates.ts`: only `lead_confirm`, the confirmation link the person just asked for on the website). While `customer_whatsapp` is off, wave 2's outbox gate cancels every customer, lead and applicant row, so `lead_choose` (which only sends that link) also requires `customer_whatsapp` and answers `feature_disabled` otherwise: the marketplace needs both flags on (D-188).
+- Public RPCs validate everything themselves. Anon-callable (the `09_security` anon allowlist): `kitchen_profile`, `kitchen_directory` (flag `marketplace`), `lead_confirm` (the link from the confirmation message; the only path that turns a website lead into a customer), `lead_attach_gclid`, `list_areas`, `feature_flags`, `app_config`, `referral_invite` / `referral_join` (flag `customer_portal`) and the `portal_*` customer-page RPCs (incl. `portal_review`). Since wave 3, `submit_lead`, `lead_choose` and `submit_vendor_application` are service-role only, reached through the `public-forms` Edge Function (Turnstile, per-IP and per-phone limits; see Safety below): never grant them to anon again.
+p` and answers `feature_disabled` otherwise: the marketplace needs both flags on (D-188).
+- Public RPCs (`submit_lead`, `lead_choose`, `lead_confirm`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves. Since wave 3, `submit_lead`, `lead_choose` and `submit_vendor_application` are service-role only, reached through the `public-forms` Edge Function (see Safety below).
 
 **Hardening (M8)**
 - `supabase/tests/09_security.test.sql` pins schema-wide rules (RLS everywhere, definer hygiene, anon allowlist, no direct ledger writes, private buckets). If you add an anon RPC or a public bucket, update its allowlist deliberately.
@@ -259,6 +262,16 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Retention: days in `platform_settings` `retention` (`private.retention_days`, `admin_set_retention`); `private.purge_old_data()` (job `tiffin-purge`) for rows; storage objects only through the `storage-retention` function (SQL cannot delete them). Never purge ledgers, receipts or bills.
 - Hosted deploys only through `scripts/deploy.sh` (explicit function allowlist; `razorpay-mock` is never deployed; a new function must be added to `ALLOWLIST` or `NEVER`, or every deploy refuses; production needs `OPS_HEALTH_KEY`). A staging copy of production keeps its messaging jobs paused (`scripts/restore-drill.sh`). Its `service_role` ops RPCs are pinned in `09_security`.
 
+**Safety (vendor-first wave 3)**
+- **Phase flags** (D-180): `customer_whatsapp`, `customer_portal`, `online_payments`, `marketplace`, `growth`, `extras`, `kitchen_switching`, all off in Phase 1. Apps read them with `public.feature_flags()` (anon + signed in; a missing key is off): web `getFlags()` / `requireFlag()` in `apps/web/src/lib/flags.ts` (pages of a switched-off phase call `notFound()`), mobile `useFlags()` in `apps/mobile/src/lib/flags.ts`. Which screens each flag controls: `apps/web/src/lib/flag-keys.ts`. Database gates: `private.portal_customer` (customer_portal, so every `portal_*`), `private.payment_link_record` (online_payments, every payment link), `kitchen_profile`/`kitchen_directory`/`submit_lead`/`lead_choose`/`lead_confirm` (marketplace), `submit_vendor_application` (growth). A new Phase 2/3 screen or RPC gets its flag; tests switch flags on inside their transaction (pgTAP) or with `enableFlags()` (integration; never switch one off there).
+- **Public forms** (D-183): the website's lead form, kitchen pick and vendor sign-up go through `supabase/functions/public-forms` (Turnstile via `_shared/turnstile.ts`, required outside a local stack; caller IP passed as `x-tiffin-client-ip`, read by `clientIp()`: `cf-connecting-ip`, else X-Forwarded-For per `PUBLIC_FORMS_XFF_HOPS`, D-187). Rate limits are `private.rate_limit(bucket, subject, limit, window)` over `rate_limit_hits` (keyed hashes only). Picking a kitchen sends a `lead_confirm` WhatsApp link; only `lead_confirm` (the phone holder) converts, so the site never reveals whether a number is a kitchen's customer.
+- **Customer-page links** (D-182): owners revoke (`revoke_customer_page_links`) or rotate (`rotate_customer_page_link`); no automatic cap (links already queued or sent must keep working). A link the customer did not ask for again (e.g. reopening `lead_confirm`) must not mint a new one.
+- **Refunds to Razorpay** (D-184): always `claim_refund_for_gateway` first (one gateway call per refund); Razorpay idempotency key = `<refund id>-<attempt>` (`refundIdempotencyKey`; a stale claim keeps its attempt, a retry after a failure is a new one); `release_refund_claim` only on a definite refusal.
+- **Route transfers** (D-185): `payments.transfer_status` (pending at capture, then from `transfer.*` webhooks via `private.apply_transfer_event`); every payment-link path builds its Razorpay input with `linkInputFromRecord()` (commission included).
+- **Verified ≠ listed** (D-186): `kitchens.verified_at` (admin `admin_verify_kitchen`); a person can list (`status = 'active'`) only a verified kitchen, and the owner cannot change a verified FSSAI number.
+- **Vendor terms + DPA** (D-181): kitchen agreements are `consents` rows with `customer_id` null (purposes `vendor_terms`, `data_processing`, basis `kitchen_owner`); `accept_vendor_terms` / `vendor_terms_status`. Versions: `private.vendor_terms_versions()` = `apps/web/src/lib/legal-versions.ts` = `apps/mobile/src/lib/legal.ts`; bump all three (and the pages) together. Owners are sent to `/onboarding/terms` until they accept.
+- Legal env (web): `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_OPERATOR_ADDRESS`, `NEXT_PUBLIC_GRIEVANCE_OFFICER`, `NEXT_PUBLIC_GRIEVANCE_CONTACT`; a production build against a hosted Supabase URL fails without the operator name and the grievance contact (`apps/web/src/lib/legal-env.mjs`).
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -311,7 +324,7 @@ WhatsApp and AI Edge Function secrets (same file):
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 | `ANTHROPIC_CHAT_MODEL`, `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`, `AI_TIMEOUT_MS` | Chat model override and caps (D-148) |
 
-Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites), `NEXT_PUBLIC_GRIEVANCE_CONTACT` and `NEXT_PUBLIC_SUPPORT_WHATSAPP` (vendor support link; mobile: `EXPO_PUBLIC_SUPPORT_WHATSAPP`).
+Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites), the legal settings `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_OPERATOR_ADDRESS`, `NEXT_PUBLIC_GRIEVANCE_OFFICER`, `NEXT_PUBLIC_GRIEVANCE_CONTACT` (production builds for a hosted project need the name and the contact), and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public forms CAPTCHA; its secret `TURNSTILE_SECRET_KEY` is an Edge Function secret, required on hosted projects; `PUBLIC_FORMS_XFF_HOPS`, optional Edge Function secret, picks the trusted X-Forwarded-For entry for per-IP limits, D-187), and `NEXT_PUBLIC_SUPPORT_WHATSAPP` (vendor support link, wave 4; mobile: `EXPO_PUBLIC_SUPPORT_WHATSAPP`).
 
 Login channels (docs/LOGIN.md): `NEXT_PUBLIC_LOGIN_CHANNELS` (web) and `EXPO_PUBLIC_LOGIN_CHANNELS` (mobile, build time), e.g. `whatsapp,sms`; unset means `sms` (local test numbers). `NEXT_PUBLIC_LOGIN_DELIVERY` / `EXPO_PUBLIC_LOGIN_DELIVERY`: `channel` (default, built-in provider) or `hook` (Send SMS hook on: channel-neutral screens).
 

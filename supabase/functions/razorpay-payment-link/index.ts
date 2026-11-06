@@ -4,7 +4,7 @@
 // P6: for platform-sourced customers the Route transfer is the amount minus the platform commission.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { cancelPaymentLink, createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
+import { cancelPaymentLink, createPaymentLink, linkInputFromRecord, loadConfig, type LinkRecord } from '../_shared/razorpay.ts';
 import { createLinkOrCancel } from '../_shared/payment-link.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -12,11 +12,7 @@ const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-type Record_ = {
-  payment_id: string; amount_paise: number; meals: number; linked_account_id: string;
-  customer_name: string; customer_phone: string | null; kitchen_name: string;
-  transfer_paise?: number | null; commission_paise?: number | null;
-};
+type Record_ = LinkRecord;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -49,11 +45,8 @@ Deno.serve(async (req) => {
   // fails, the row is cancelled; if only attaching fails, the link is cancelled at Razorpay first (D-149, D-155).
   try {
     const link = await createLinkOrCancel(rec.payment_id, {
-      create: () => createPaymentLink(cfg, {
-        paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description ?? `${rec.meals} meals`,
-        customerName: rec.customer_name, customerPhone: rec.customer_phone, linkedAccountId: rec.linked_account_id,
-        kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
-      }),
+      // Every payment-link path builds its input with linkInputFromRecord (commission included, wave 3).
+      create: () => createPaymentLink(cfg, linkInputFromRecord(rec, description)),
       attach: async (created) => {
         const attach = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'attach_payment_link',
           { p_payment: rec.payment_id, p_link_id: created.id, p_short_url: created.shortUrl, p_expires_at: created.expiresAt });

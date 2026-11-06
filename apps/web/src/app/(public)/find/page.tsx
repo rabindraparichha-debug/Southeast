@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
+import { requireFlag } from '@/lib/flags';
 import { firstParam, webSource } from '@/lib/public';
 import { FindClient } from './find-client';
 
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 
 // Lead form → shortlist of 2–3 nearby kitchens → pick one → pay the trial. No login.
 export default async function FindPage({ searchParams }: PageProps<'/find'>) {
+  await requireFlag('marketplace'); // Phase 2/3 (D-180)
   const sp = await searchParams;
   const supabase = await createClient();
   const { data: areas } = await supabase.rpc('list_areas');
@@ -24,6 +26,7 @@ export default async function FindPage({ searchParams }: PageProps<'/find'>) {
       initialArea={firstParam(sp.area) ?? ''}
       kitchenSlug={firstParam(sp.kitchen) ?? null}
       gclid={gclid}
+      turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null}
     />
   );
 }

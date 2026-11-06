@@ -5,6 +5,8 @@ import { addDays, formatIstShort, formatServiceDate, istDate } from '@tiffin/cor
 import type { Database, MealSlot, SlotSummary } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
+import { refreshFlags, useFlags, visibleChecklistKey } from '@/lib/flags';
+import { VendorTermsCard } from '@/components/vendor-terms';
 import { Card, Muted, Title } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
 import { DispatchPhotoCard } from '@/components/dispatch-photo';
@@ -24,6 +26,7 @@ type Change = Database['public']['Functions']['change_feed']['Returns'][number];
 
 export default function Today() {
   const kitchen = useKitchen();
+  const flags = useFlags();
   const [slots, setSlots] = useState<SlotSummary[]>([]);
   const [changes, setChanges] = useState<Change[]>([]);
   const [todo, setTodo] = useState<string[]>([]);
@@ -35,6 +38,7 @@ export default function Today() {
   const load = useCallback(async () => {
     if (kitchen.role === 'rider') return;
     setVersion((v) => v + 1);
+    void refreshFlags();
     if (kitchen.role === 'accountant') return; // money home: no counts or kitchen orders
     const today = istDate();
     const wanted: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];
@@ -86,15 +90,17 @@ export default function Today() {
     >
       <Title>{kitchen.kitchenName}</Title>
       <StaleBanner stale={stale} />
-      {todo.length > 0 && (
+      {kitchen.role === 'owner' && <VendorTermsCard kitchenId={kitchen.kitchenId} version={version} />}
+      {todo.filter((key) => visibleChecklistKey(key, flags)).length > 0 && (
         <Card>
           <Text style={styles.cardTitle}>{t('checklist.title')}</Text>
-          {todo.map((key) => <Muted key={key}>• {t(`checklist.${key}`)}</Muted>)}
+          {todo.filter((key) => visibleChecklistKey(key, flags)).map((key) => <Muted key={key}>• {t(`checklist.${key}`)}</Muted>)}
           <Muted>{t('checklist.web')}</Muted>
         </Card>
       )}
       {isLead(kitchen.role) && <LeadCards kitchenId={kitchen.kitchenId} version={version} />}
-      <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={isLead(kitchen.role)} version={version} />
+      {/* Specials and churn insights are 'extras' (D-180). */}
+      {flags.extras && <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={isLead(kitchen.role)} version={version} />}
       <View style={styles.grid}>
         {slots.map((s) => (
           <SlotCard
@@ -112,7 +118,7 @@ export default function Today() {
       {isLead(kitchen.role) && <SyncRejectsCard kitchenId={kitchen.kitchenId} version={version} />}
       {/* Wave 3 riders: stop credits to approve, rider cash handovers (owner or manager, D-117). */}
       {isLead(kitchen.role) && <OwnerDesk kitchenId={kitchen.kitchenId} version={version} />}
-      {isLead(kitchen.role) && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
+      {isLead(kitchen.role) && flags.extras && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>
         <Text style={styles.cardTitle}>{t('today.changes')}</Text>
         {changes.length === 0 && <Muted>{t('today.noChanges')}</Muted>}

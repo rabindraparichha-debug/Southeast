@@ -5,6 +5,8 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Phase 2 flags are off by default (D-180); this suite tests these features switched on.
+update public.platform_settings set enabled = true where key in ('customer_portal', 'online_payments', 'marketplace');
 
 -- ===========================================================================
 -- Setup: two live kitchens 100 m apart with the same Veg Lunch price; a rider who works for both.

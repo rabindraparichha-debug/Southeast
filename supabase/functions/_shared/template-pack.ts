@@ -39,6 +39,7 @@ export const TEMPLATE_SAMPLES: Record<string, { audience: Audience; payload: Pay
   referral_reward: { audience: 'customer', payload: { meals: 2, role: 'referrer', friend_name: 'Priya' } },
   kitchen_switch_approved: { audience: 'customer', payload: { from_kitchen: 'Saheed Nagar Mess', effective_date: '2026-11-20', url: 'https://app.example.in/c/Rs56Ef' } },
   lead_welcome: { audience: 'platform', payload: { name: 'Asha' } },
+  lead_confirm: { audience: 'platform', payload: { name: 'Asha', kitchen_name: 'Maa Tarini Tiffin', trial_meals: 2, url: 'https://app.example.in/find/confirm/Ab12Cd34' } },
   lead_reminder: { audience: 'platform', payload: { kitchens: [{ name: 'Maa Tarini Tiffin' }, { name: 'Infocity Home Kitchen' }] } },
   vendor_welcome: { audience: 'platform', payload: { name: 'Sunita', url: 'https://app.example.in/login' } },
   vendor_nudge: { audience: 'platform', payload: { name: 'Sunita', next_step: 'plans', url: 'https://app.example.in/plans' } },
@@ -52,6 +53,7 @@ export const TEMPLATE_SAMPLES: Record<string, { audience: Audience; payload: Pay
   late_delivery_alert: { audience: 'owner', payload: { pending_stops: 3, route_name: 'Patia', rider_name: 'Bapi', minutes: 90 } },
   customer_switched_out: { audience: 'owner', payload: { customer_name: 'Asha Das', effective_date: '2026-11-20' } },
   inbox_alert: { audience: 'owner', payload: { customer_name: 'Asha Das', reason: 'asked to talk to the kitchen' } },
+  transfer_failed: { audience: 'owner', payload: { amount_paise: 182000, paid_at: '2026-11-16T07:30:00Z', error: 'Linked account is not active' } },
 };
 
 /** Sample kitchen name ({{1}} of most templates). */

@@ -5,6 +5,8 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Phase 2 flags are off by default (D-180); this suite tests these features switched on.
+update public.platform_settings set enabled = true where key in ('marketplace', 'growth', 'customer_portal', 'online_payments');
 
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
 -- Keep every other kitchen (seed, or left by integration runs) out of the way.
@@ -58,8 +60,9 @@ end $$;
 -- M7 test 1: a Patia lead matches only kitchens within 3 km that have capacity.
 -- ===========================================================================
 create temp table t (k text primary key, v jsonb);
-grant select, insert on t to anon, authenticated;
-set local role anon;
+grant select, insert on t to anon, authenticated, service_role;
+-- The website form reaches submit_lead only through the public-forms Edge Function (service role).
+set local role service_role;
 select throws_ok($$ select public.submit_lead('Asha', '9861999001', 'Patia', p_consent => false) $$, '22023', 'consent_required',
   'the website form needs consent');
 select throws_ok($$ select public.submit_lead('Asha', '12345', 'Patia', p_consent => true) $$, '22023', 'invalid_phone',
@@ -68,11 +71,12 @@ insert into t values ('lead', public.submit_lead('Asha Pattnaik', '9861999001', 
   '2026-11-04', p_consent => true, p_whatsapp_opt_in => true, p_campaign => 'web-test'));
 select ok((select v ->> 'token' from t where k = 'lead') is not null, 'the browser gets a lead token');
 select is((select v ->> 'status' from t where k = 'lead'), 'matched', 'a Patia lead with meal times is qualified and matched');
+set local role anon;
 select throws_ok($$ select count(*) from public.leads $$, '42501', null, 'anon cannot read leads');
 reset role;
 
 create temp table lead as select id from public.leads where phone_last4 = '9001' and source = 'website';
-grant select on lead to anon, authenticated;
+grant select on lead to anon, authenticated, service_role;
 select is((select lat || ',' || lng from public.leads where id = (select id from lead)), '20.3553,85.8197',
   'the typed area "Patia" gives the area centre (no geocoding API)');
 select is(
@@ -120,18 +124,34 @@ select is((select count(*) from public.notifications_outbox where template = 'le
 -- ===========================================================================
 -- M7 test 2: a converted lead keeps platform_sourced = true, and the vendor can't change it.
 -- ===========================================================================
-set local role anon;
+set local role service_role;
 select throws_ok(format($$ select public.lead_choose(%L, '83000000-0000-4000-f000-000000000003') $$, (select v ->> 'token' from t where k = 'lead')),
   '22023', 'kitchen_not_available', 'a lead can only pick a kitchen from its shortlist');
 select throws_ok($$ select public.lead_choose('not-a-token', '83000000-0000-4000-f000-000000000001') $$, '22023', 'invalid_link',
   'a wrong token is refused');
-insert into t select 'chose', public.lead_choose((select v ->> 'token' from t where k = 'lead'), '83000000-0000-4000-f000-000000000001');
+-- Picking sends a confirmation link to the phone; nothing is created until the phone holder opens it.
+insert into t select 'pick', public.lead_choose((select v ->> 'token' from t where k = 'lead'), '83000000-0000-4000-f000-000000000001');
+select is((select v ->> 'status' from t where k = 'pick'), 'confirm_sent', 'picking a kitchen sends a confirmation to the phone');
+select is((select customer_id from public.leads where id = (select id from lead)), null, 'and creates no customer yet');
+reset role;
+insert into t select 'confirm', jsonb_build_object('token', substring(payload ->> 'url' from '/find/confirm/(.+)$'))
+from public.notifications_outbox where template = 'lead_confirm' and recipient_type = 'lead' and recipient_id = (select id from lead);
+select ok((select v ->> 'token' from t where k = 'confirm') is not null, 'the lead_confirm WhatsApp carries the link');
+set local role anon;
+select throws_ok($$ select public.lead_confirm('not-a-token') $$, '22023', 'invalid_link', 'a wrong confirmation link is refused');
+insert into t select 'chose', public.lead_confirm((select v ->> 'token' from t where k = 'confirm'));
 select is((select (v ->> 'trial_amount_paise')::int from t where k = 'chose'), 18000, 'trial: 2 meals × ₹90');
 select ok((select v ->> 'portal_url' like '%/c/%' from t where k = 'chose'), 'and a customer-page link to pay');
-select throws_ok(format($$ select public.lead_choose(%L, '83000000-0000-4000-f000-000000000001') $$, (select v ->> 'token' from t where k = 'lead')),
-  '22023', 'already_converted', 'picking twice is refused');
-select is((public.submit_lead('Asha Pattnaik', '9861999001', 'Patia', p_consent => true) -> 'kitchens' -> 0 ->> 'name'), 'Patia Near',
-  'submitting the form again after picking shows the chosen kitchen with its name');
+select is((public.lead_confirm((select v ->> 'token' from t where k = 'confirm')) ->> 'customer_id'), (select v ->> 'customer_id' from t where k = 'chose'),
+  'opening the link again shows the same booking (with a fresh page link)');
+reset role;
+set local role service_role;
+select is((public.lead_choose((select v ->> 'token' from t where k = 'lead'), '83000000-0000-4000-f000-000000000001') ->> 'status'), 'confirm_sent',
+  'picking again answers the same way (it never says the number is already booked)');
+select is((select count(*) from public.notifications_outbox where template = 'lead_confirm' and recipient_id = (select id from lead)), 1::bigint,
+  'but sends nothing more');
+select is((public.submit_lead('Asha Pattnaik', '9861999001', 'Patia', p_consent => true) -> 'kitchens' -> 0 ->> 'name'), 'Wide Radius',
+  'submitting the form again after picking shows an ordinary shortlist, never the kitchen that number picked');
 reset role;
 create temp table cust as select (v ->> 'customer_id')::uuid as id from t where k = 'chose';
 grant select on cust to authenticated;
@@ -226,7 +246,7 @@ select is((select count(*) from public.notifications_outbox where template = 'le
            and recipient_id = (select id from public.leads where phone_last4 = '9020')), 1::bigint, 'exactly one');
 
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
-set local role anon;
+set local role service_role;
 select throws_ok($$ select public.submit_vendor_application('Gita', '9861999030', p_consent => true, p_fssai => '123') $$, '22023', 'invalid_fssai',
   'a wrong FSSAI number is caught at sign-up');
 insert into t select 'app', to_jsonb(public.submit_vendor_application('Gita Sahu', '9777000002', 'Gita''s Kitchen', 'Khandagiri', 30,
@@ -251,7 +271,7 @@ reset role;
 select is((select status::text || '/' || (kitchen_id is not null)::text from public.vendor_applications
            where id = (select (v #>> '{}')::uuid from t where k = 'app')), 'onboarding/true', 'signing up links the application (onboarding)');
 select ok(jsonb_array_length(private.kitchen_checklist((select (v ->> 'id')::uuid from t where k = 'kitchen'))) = 9, 'the onboarding checklist has 9 steps');
-update public.kitchens set fssai_no = '12026001009999', status = 'active' where id = (select (v ->> 'id')::uuid from t where k = 'kitchen');
+update public.kitchens set fssai_no = '12026001009999', verified_at = private.now(), status = 'active' where id = (select (v ->> 'id')::uuid from t where k = 'kitchen');
 select is((select status::text from public.vendor_applications where id = (select (v #>> '{}')::uuid from t where k = 'app')), 'live',
   'going live closes the application');
 

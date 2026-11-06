@@ -220,10 +220,13 @@ select is((select customer_id from public.conversations where id = (select (r ->
   (select v from rx where k = 'sib1'), 'to the oldest customer on that phone (deterministic)');
 select is(public.wa_select_kitchen((select (r ->> 'conversation_id')::uuid from wa where k = 'in'), 'c1500000-0000-4000-c000-00000000000a'),
   (select (r ->> 'conversation_id')::uuid from wa where k = 'in'), 'picking the kitchen keeps the same conversation');
+-- Merge with wave 3 safety: the customer page is gated by customer_portal (private.portal_customer).
+update public.platform_settings set enabled = true where key = 'customer_portal';
 select is((select (public.portal_get(private.issue_magic_link((select v from rx where k = 'sib2'))) -> 'customer' ->> 'name')),
   'Younger Sibling', 'the younger sibling''s page shows their own data');
 select is((select (public.portal_get(private.issue_magic_link((select v from rx where k = 'sib1'))) -> 'customer' ->> 'name')),
   'Elder Sibling', 'and the elder''s page theirs');
+update public.platform_settings set enabled = false where key = 'customer_portal';
 select is((select count(*) from public.conversations where kitchen_id = 'c1500000-0000-4000-c000-00000000000a'
            and wa_phone_hash = (select phone_hash from public.customers where id = (select v from rx where k = 'sib1'))), 1::bigint,
   'one conversation for the shared phone');

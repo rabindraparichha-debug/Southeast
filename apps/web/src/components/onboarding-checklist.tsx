@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { CHECKLIST, type ChecklistItem } from '@/lib/checklist';
 import { Card } from './ui';
 
-// Owner's "get ready for platform customers" card on Today, shown until every item is done.
+// Owner's "get your kitchen ready" card on Today, shown until every item is done (items filtered by
+// phase in phaseChecklist, lib/checklist.ts).
 export function OnboardingChecklist({ items }: { items: ChecklistItem[] }) {
   const done = items.filter((i) => i.done).length;
   if (!items.length || done === items.length) return null;

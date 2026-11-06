@@ -4,7 +4,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from '@/lib/supabase/env';
 
 // Public website (M7): lead form, kitchen pages, directory and the vendor sign-up need no login.
 // Legal pages (M8): privacy policy and terms.
-const PUBLIC_PATHS = ['/login', '/c', '/find', '/k', '/kitchens', '/vendors', '/privacy', '/terms'];
+// Wave 3: vendor terms and the data processing agreement (/legal/*), readable before signing up.
+const PUBLIC_PATHS = ['/login', '/c', '/find', '/k', '/kitchens', '/vendors', '/privacy', '/terms', '/legal'];
 
 // Refreshes the Supabase session cookie on every request and sends signed-out
 // users to /login. Authorization itself is enforced by RLS, not here.

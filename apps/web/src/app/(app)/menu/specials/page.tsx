@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL, addDays, formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { KITCHEN_ROLES, isLead } from '@/lib/roles';
+import { requireFlag } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { shortDate, type FestivalSpecial } from '@/lib/p5';
@@ -11,6 +12,7 @@ import { SpecialForm, DeleteSpecial } from './special-form';
 // Festival specials (P5): a special dish for a date and meal, announced to the kitchen's customers.
 // Owner creates and deletes; staff see the list (without the add-on price, which is money).
 export default async function SpecialsPage() {
+  await requireFlag('extras'); // customers see specials only once extras are on (D-180)
   const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const isOwner = isLead(kitchen.role); // owner or manager
   const supabase = await createClient();

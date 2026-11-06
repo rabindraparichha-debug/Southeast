@@ -1,12 +1,14 @@
 import { addDays, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
 import { KITCHEN_ROLES } from '@/lib/roles';
+import { getFlags } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { LinkButton, PageHeader } from '@/components/ui';
 import { MenuEditor } from './menu-editor';
 
 export default async function MenuPage() {
   const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const flags = await getFlags();
   const supabase = await createClient();
   const today = istDate();
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
@@ -18,7 +20,7 @@ export default async function MenuPage() {
   return (
     <>
       <PageHeader title="Menu" subtitle="Next 7 days. Shown on the kitchen sheet, and to customers on WhatsApp later."
-        actions={<LinkButton href="/menu/specials" variant="secondary">Festival specials</LinkButton>} />
+        actions={flags.extras ? <LinkButton href="/menu/specials" variant="secondary">Festival specials</LinkButton> : undefined} />
       <MenuEditor kitchenId={kitchen.kitchenId} days={days} weeklyOff={k?.weekly_off ?? []} menus={menus ?? []} />
     </>
   );

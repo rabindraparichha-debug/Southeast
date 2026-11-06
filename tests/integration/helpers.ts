@@ -77,3 +77,26 @@ export async function setCustomerWhatsapp(enabled: boolean): Promise<void> {
   const { error } = await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: enabled });
   if (error) throw error;
 }
+
+/**
+ * Phase 2 flags are off by default (wave 3, D-180). A suite that tests those features switches them
+ * on as an admin; suites never switch one off again (test files run in parallel).
+ */
+export async function enableFlags(admin: Client, keys: string[]): Promise<void> {
+  for (const key of keys) {
+    const { error } = await admin.rpc('admin_set_platform_flag', { p_key: key, p_enabled: true });
+    if (error) throw error;
+  }
+}
+
+/** Calls the public-forms Edge Function like the website does (no CAPTCHA on a local stack). */
+export async function publicForm<T = unknown>(action: string, args: Record<string, unknown>, ip?: string) {
+  const { url, anonKey } = env();
+  const res = await fetch(`${url}/functions/v1/public-forms`, {
+    method: 'POST',
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) },
+    body: JSON.stringify({ action, args }),
+  });
+  const body = (await res.json()) as { data?: T; error?: string };
+  return { status: res.status, data: body.data as T, error: body.error };
+}

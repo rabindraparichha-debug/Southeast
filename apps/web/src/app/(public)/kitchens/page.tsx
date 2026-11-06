@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { formatPaise } from '@tiffin/core';
 import { createClient } from '@/lib/supabase/server';
+import { requireFlag } from '@/lib/flags';
 import { firstParam, photoUrl, ratingLabel, type DirectoryKitchen } from '@/lib/public';
 
 export const metadata: Metadata = {
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function KitchensPage({ searchParams }: PageProps<'/kitchens'>) {
+  await requireFlag('marketplace'); // Phase 2/3 (D-180)
   const area = firstParam((await searchParams).area);
   const supabase = await createClient();
   const [{ data: list }, { data: areas }] = await Promise.all([

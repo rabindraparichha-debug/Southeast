@@ -561,6 +561,28 @@ Known gaps:
 - **Managers** (wave 2, D-117) should be added to the credit and cash RPCs, and get pushes once `notify_owners` includes them.
 - Read/unread for alerts, a per-member choice between push and WhatsApp, and the `x-app-version` header are not built.
 
+## Vendor-first wave 3 — safety (2026-11-06)
+
+Merged into `m9-p5-p6` (last of the wave 3 tracks) with `20261130000500_merge_safety.sql`: `lead_choose` also needs `customer_whatsapp` (D-188), the push text for `transfer_failed`. Fixtures: wave 2's shared-phone portal checks switch `customer_portal` on; safety's suite switches `customer_whatsapp` on with the marketplace. `09_security`: anon list = riders' `app_config` + safety's `feature_flags`, `lead_confirm` + wave 5's referral RPCs, without the three form RPCs. Test logins: safety keeps 90000 00140 – 00148 (00149 is wave 4's password sign-up number). Tests: `21_merge_safety.test.sql`.
+
+From docs/VENDOR_FIRST_AUDIT.md "Recommended work order" items 27, 33 and 37–41. Defaults: D-180 – D-186.
+Migrations `20261112000100` – `20261112000700`; pgTAP `14_safety_wave3.test.sql` (113 checks); integration
+`tests/integration/w3-safety.test.ts` and `public-forms.test.ts` (unit).
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 27 | Phase flags reach the screens: `feature_flags()`; gated RPCs (portal, payment links, public pages, lead and vendor forms); web nav, pages (404), settings and customer cards, admin nav and an admin "Phase switches" page; mobile inbox tab, home cards, checklist | ✅ | `20261112000100_phase_flags.sql`, `apps/web/src/lib/flags.ts`, `apps/mobile/src/lib/flags.ts` (D-180) |
+| 33 | Legal: operator and grievance officer from env, production build fails without them; vendor terms and DPA pages (drafts), accepted at onboarding (web and mobile) and recorded in `consents`; owners asked until they accept | ✅ (text needs a lawyer) | `20261112000500_vendor_terms.sql`, `/legal/vendor-terms`, `/legal/dpa`, `/onboarding/terms`, `next.config.ts` (D-181) |
+| 37 | Customer-page links: revoke all, rotate (no automatic cap) | ✅ | `20261112000200_portal_link_revoke.sql`, customer page card (D-182) |
+| 38 | Refund claimed before Razorpay: one gateway refund per click storm; idempotency key | ✅ | `20261112000300_refund_claim.sql`, `razorpay-refund` (D-184) |
+| 39 | Public forms behind the `public-forms` function: Turnstile, per-IP/phone/overall limits; lead pick confirmed on the phone (no number oracle); lead token expires | ✅ (needs a Turnstile key on hosted) | `20261112000400_public_forms.sql`, `supabase/functions/public-forms`, `/find/confirm/[token]` (D-183) |
+| 40 | Route transfers confirmed (`transfer.*` webhooks, owner alert, admin list); commission on the WhatsApp payment path | ✅ mock/test | `20261112000700_route_transfers.sql`, `_shared/razorpay.ts` `linkInputFromRecord` (D-185) |
+| 41 (part) | Verified separate from listed (admin Verify, listing needs it, FSSAI locked once verified) | ✅ | `20261112000600_kitchen_verification.sql`, admin Kitchens (D-186) |
+
+Review fixes (wave 3 final): submit_lead no longer echoes or matches on an earlier enquiry's area, budget or start date; the lead confirmation is used up (no new page link on reopen); refunds retry with a new attempt and key after a failure (no stuck `processing`); transfers also match the payment link's order id; no automatic link cap; configurable trusted X-Forwarded-For hop (D-187). Rebased onto m9-p5-p6 and decisions renumbered D-180 – D-187.
+
+Left for others: outbox rows stuck in `sending` (item 41, second half) belong to the outbox work (wave 2 / outbox reliability). Founder actions: D-181 (legal text, operator, grievance officer), D-183 (Turnstile keys).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

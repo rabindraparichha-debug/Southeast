@@ -29,7 +29,7 @@ source scripts/lib/pg.sh
 # Edge Functions that may be deployed. razorpay-mock (the local test payment page) is never deployed.
 ALLOWLIST=(ops-health storage-retention whatsapp-outbox whatsapp-webhook razorpay-payment-link razorpay-refund
            razorpay-webhook notebook-import route-optimize lead-intake lead-email ads-conversions weather-alerts
-           auth-send-sms admin-change-phone push-outbox)
+           auth-send-sms admin-change-phone push-outbox public-forms)
 NEVER=(razorpay-mock)
 # Vault secrets every project needs (CLAUDE.md > Secrets, docs/OPERATIONS.md).
 VAULT=(phone_encryption_key phone_hash_key functions_base_url service_role_key public_web_url)

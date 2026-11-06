@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { requireKitchen } from '@/lib/session';
+import { getFlags } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { Nav, type NavItem } from '@/components/nav';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const { lang, t } = await getTranslator(); // D-130: nav and Today only so far
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
+  const flags = await getFlags();
 
   // D-117/D-156: managers get every owner page except the owner-only ones (inbox, settings, team);
   // accountants get the money pages, read-only.
@@ -41,9 +43,16 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/stock-entry', label: 'Stock entry', icon: '📝' });
   }
   if (role === 'owner') {
-    const { count: needsReply } = await supabase.from('conversations').select('id', { count: 'exact', head: true })
-      .eq('kitchen_id', session.kitchen.kitchenId).or('unread_count.gt.0,handoff_open.eq.true');
-    items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
+    // Vendor terms and the data processing agreement (D-181): the owner accepts the current
+    // versions once, before using the dashboard.
+    const { data: terms } = await supabase.rpc('vendor_terms_status', { p_kitchen: session.kitchen.kitchenId });
+    if (terms && (terms as { accepted?: boolean }).accepted === false) redirect('/onboarding/terms');
+    // Phase 2/3 screens appear only when the platform switches them on (D-180). Inbox: owner only (D-060).
+    if (flags.customer_whatsapp) {
+      const { count: needsReply } = await supabase.from('conversations').select('id', { count: 'exact', head: true })
+        .eq('kitchen_id', session.kitchen.kitchenId).or('unread_count.gt.0,handoff_open.eq.true');
+      items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
+    }
   }
   if (canReadMoney(role)) {
     items.push({ href: '/money', label: 'Money', icon: '💰' });
@@ -51,7 +60,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/reports/costs', label: 'Costs', icon: '📊' });
   }
   if (lead) {
-    items.push({ href: '/insights', label: 'Insights', icon: '💡' });
+    if (flags.extras) items.push({ href: '/insights', label: 'Insights', icon: '💡' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
   }
   if (role === 'owner') {

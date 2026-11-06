@@ -3,7 +3,7 @@
 // through the lead-intake Edge Function. Mock Razorpay and WhatsApp. Needs a fresh `pnpm db:reset`.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { hmacSha256Hex, mockEvent } from '../../supabase/functions/_shared/razorpay.ts';
-import { anonClient, env, loginAs, setCustomerWhatsapp, type Client } from './helpers';
+import { anonClient, enableFlags, env, loginAs, publicForm, setCustomerWhatsapp, type Client } from './helpers';
 
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET ?? 'local-dev-app-secret';
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET ?? 'local-dev-webhook-secret';
@@ -47,6 +47,8 @@ describe('M7: acquisition over the API', () => {
     [admin, owner] = await Promise.all([loginAs('+919000000099'), loginAs('+919000000103')]);
     // The lead bot answers only with customer WhatsApp on (Phase 2 flag; reset after the run).
     await setCustomerWhatsapp(true);
+    // Phase 2/3 flags (off by default, D-180); the WhatsApp "Hi VENDOR" sign-up is growth.
+    await enableFlags(admin.client, ['marketplace', 'growth', 'customer_portal', 'online_payments']);
     const { data: kitchen, error } = await owner.client.rpc('create_kitchen', { p_name: `Lead IT ${run}`, p_area: 'Patia' });
     expect(error).toBeNull();
     kitchenId = (kitchen as { id: string }).id;
@@ -57,24 +59,39 @@ describe('M7: acquisition over the API', () => {
     expect(plan.error).toBeNull();
     const payout = await admin.client.rpc('set_payout_account', { p_kitchen: kitchenId, p_account_id: `acc_TestM7${run}`, p_kyc_status: 'verified' });
     expect(payout.error).toBeNull();
+    // Wave 3: the platform verifies the FSSAI certificate before listing (verified ≠ listed).
+    const verified = await admin.client.rpc('admin_verify_kitchen', { p_kitchen: kitchenId, p_verified: true });
+    expect(verified.error).toBeNull();
     const live = await admin.client.rpc('set_kitchen_status', { p_kitchen: kitchenId, p_status: 'active' });
     expect(live.error).toBeNull();
   });
 
-  it('website: form → 2–3 kitchens → pick → pay the trial online → trial stage', async () => {
+  it('website: form → 2–3 kitchens → pick → confirm on WhatsApp → pay the trial online → trial stage', async () => {
     const anon = anonClient();
-    const { data, error } = await anon.rpc('submit_lead', {
-      p_name: 'Web Lead', p_phone: '9861000971', p_area: 'Patia', p_slots: ['lunch'], p_diet: 'veg', p_budget_paise: 7000,
-      p_consent: true, p_whatsapp_opt_in: true, p_source: 'instagram', p_campaign: `ig-it-${run}`,
-    });
-    expect(error).toBeNull();
-    const res = data as { token: string; status: string; kitchens: { kitchen_id: string; name: string; profile_url: string }[] };
+    // The form goes through the public-forms Edge Function (CAPTCHA off locally); anon cannot call it directly.
+    const direct = await anon.rpc('submit_lead', { p_name: 'X', p_phone: '9861000970', p_area: 'Patia', p_consent: true });
+    expect(direct.error).not.toBeNull();
+    const { data: res, error, status } = await publicForm<{ token: string; status: string; kitchens: { kitchen_id: string; name: string; profile_url: string }[] }>(
+      'submit_lead', {
+        p_name: 'Web Lead', p_phone: '9861000971', p_area: 'Patia', p_slots: ['lunch'], p_diet: 'veg', p_budget_paise: 7000,
+        p_consent: true, p_whatsapp_opt_in: true, p_source: 'instagram', p_campaign: `ig-it-${run}`,
+      }, `198.51.100.${(Date.now() % 200) + 1}`);
+    expect(error).toBeUndefined();
+    expect(status).toBe(200);
     expect(res.status).toBe('matched');
     expect(res.kitchens.length).toBeGreaterThanOrEqual(1);
     expect(res.kitchens.length).toBeLessThanOrEqual(3);
     expect(res.kitchens.map((k) => k.kitchen_id)).toContain(kitchenId);
 
-    const chose = await anon.rpc('lead_choose', { p_token: res.token, p_kitchen: kitchenId });
+    // Picking sends a confirmation link to the phone (it never says whether the number is a customer).
+    const pick = await publicForm<{ status: string }>('lead_choose', { p_token: res.token, p_kitchen: kitchenId });
+    expect(pick.data).toMatchObject({ status: 'confirm_sent' });
+    const { data: leads } = await admin.client.rpc('admin_leads', { p_search: `ig-it-${run}` });
+    const leadId = (leads as { id: string }[])[0]!.id;
+    const { data: msg } = await admin.client.from('notifications_outbox').select('payload')
+      .eq('template', 'lead_confirm').eq('recipient_id', leadId).single();
+    const confirmToken = /\/find\/confirm\/(.+)$/.exec((msg!.payload as { url: string }).url)![1]!;
+    const chose = await anon.rpc('lead_confirm', { p_token: confirmToken });
     expect(chose.error).toBeNull();
     const c = chose.data as { portal_token: string; trial_meals: number; trial_amount_paise: number; customer_id: string };
     expect(c.trial_meals).toBe(2);

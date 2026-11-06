@@ -2,7 +2,7 @@
 import { handleWhatsAppWebhook } from './handler.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
-import { cancelPaymentLink, createPaymentLink, loadConfig as loadRazorpay } from '../_shared/razorpay.ts';
+import { cancelPaymentLink, createPaymentLink, linkInputFromRecord, loadConfig as loadRazorpay, type LinkRecord } from '../_shared/razorpay.ts';
 import { loadAiConfig, makeClaudeComplete, type SdkModule } from '../_shared/ai-claude.ts';
 import { createLinkOrCancel } from '../_shared/payment-link.ts';
 import { rpc as callRpc } from '../_shared/http.ts';
@@ -49,13 +49,11 @@ Deno.serve(async (req) => {
     // first (D-149, D-155).
     createLink: async (record) => {
       // Loaded inside create(), so a missing key (payments_not_configured) also cancels the row.
+      // Same input as every other payment-link path: the Route transfer is the kitchen's share
+      // (amount minus any platform commission), not the whole amount (wave 3, audit item 40).
       let rz: ReturnType<typeof loadRazorpay> | undefined;
       const link = await createLinkOrCancel(record.payment_id, {
-        create: () => createPaymentLink(rz = loadRazorpay(env), {
-          paymentId: record.payment_id, amountPaise: record.amount_paise, description: `${record.meals} meals`,
-          customerName: record.customer_name, customerPhone: record.customer_phone, linkedAccountId: record.linked_account_id,
-          kitchenName: record.kitchen_name,
-        }),
+        create: () => createPaymentLink(rz = loadRazorpay(env), linkInputFromRecord(record as unknown as LinkRecord)),
         attach: async (created) => {
           await rpc('attach_payment_link', { p_payment: record.payment_id, p_link_id: created.id, p_short_url: created.shortUrl,
             p_expires_at: created.expiresAt });

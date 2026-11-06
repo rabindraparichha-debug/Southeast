@@ -242,6 +242,8 @@ select is((public.wa_receive('wamid.r16_3', '919316400001', 'hi', '{}') ->> 'sta
 create temp table tok (k text primary key, v text);
 grant all on tok to authenticated, anon;
 insert into tok select 'old', private.issue_magic_link((select cust from cx where name = 'Old Number'), 7);
+-- Merge with wave 3 safety: the customer page is gated by customer_portal (private.portal_customer).
+update public.platform_settings set enabled = true where key = 'customer_portal';
 select lives_ok($$select public.portal_get((select v from tok where k = 'old'))$$, 'their customer page opens');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"d1600000-0000-4000-d000-000000000001","role":"authenticated"}', true);
