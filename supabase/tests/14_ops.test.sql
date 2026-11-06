@@ -160,19 +160,27 @@ select ok(public.ops_health()::text !~ '(kitchen|Ops Test|[0-9a-f]{8}-[0-9a-f]{4
 -- Wave 1's engine_errors table, when it exists, makes recent errors unhealthy. Simulated if absent.
 select is((private.engine_health() -> 'engine_errors' ->> 'tracked')::boolean, to_regclass('public.engine_errors') is not null,
   'engine_errors is tracked exactly when the table exists');
+-- When wave 1's table is absent a minimal stand-in is created (rolled back); when it exists (after the
+-- merge) its own shape is unknown here, so its rows are not touched and the state must stay healthy.
+create temp table ee_sim (simulated boolean not null);
 do $$
 begin
   if to_regclass('public.engine_errors') is null then
-    create table public.engine_errors (id bigint generated always as identity, created_at timestamptz not null default now());
+    create table public.engine_errors (id bigint generated always as identity, created_at timestamptz not null default now(),
+                                       resolved_at timestamptz);
     insert into public.engine_errors (created_at) values (private.now() - interval '1 minute');
+    insert into public.engine_errors (created_at, resolved_at) values (private.now() - interval '2 minutes', private.now());
+    insert into ee_sim values (true);
   else
-    execute 'insert into public.engine_errors default values';
+    insert into ee_sim values (false);
   end if;
-exception when others then
-  raise warning 'could not simulate an engine error: %', sqlerrm;
 end $$;
-select is((public.ops_health() ->> 'ok')::boolean, false, 'a recent engine error makes it unhealthy');
-select ok((private.engine_health() -> 'engine_errors' ->> 'last_24h')::integer >= 1, 'and is counted for the admin tile');
+select is((public.ops_health() ->> 'ok')::boolean, not (select simulated from ee_sim),
+  'a recent unresolved engine error makes it unhealthy (simulated when wave 1''s table is absent)');
+select is((private.engine_health() -> 'engine_errors' ->> 'last_24h')::integer >= 1, (select simulated from ee_sim),
+  'and is counted for the admin tile; resolved ones are not');
+select is((private.engine_health() -> 'engine_errors' ->> 'recent')::integer, case when (select simulated from ee_sim) then 1 else 0 end,
+  'only unresolved errors count');
 
 -- Unscheduling the lock job is caught at once (the "unschedule the lock cron" test of the audit).
 select cron.unschedule('tiffin-lock-due-slots');

@@ -111,7 +111,9 @@ as $$
   order by d.d, sl.slot, k.name;
 $$;
 
--- wave 1 adds public.engine_errors. Counted only if the table exists (no hard dependency).
+-- wave 1 adds public.engine_errors. Counted only if the table exists (no hard dependency). Rows with a
+-- resolved_at are left out when that column exists. Without a recognised timestamp column nothing is
+-- "recent" (health is not held red by old rows); the total still shows on the admin tile.
 create or replace function private.engine_error_counts()
 returns jsonb
 language plpgsql
@@ -122,11 +124,15 @@ as $$
 declare
   v_rel regclass := to_regclass('public.engine_errors');
   v_col text;
+  v_open text := '';
   v_recent bigint;
   v_day bigint;
 begin
   if v_rel is null then
     return jsonb_build_object('tracked', false, 'recent', null, 'last_24h', null);
+  end if;
+  if exists (select 1 from pg_attribute a where a.attrelid = v_rel and a.attname = 'resolved_at' and not a.attisdropped) then
+    v_open := ' where resolved_at is null';
   end if;
   select a.attname into v_col from pg_attribute a
   where a.attrelid = v_rel and not a.attisdropped and a.attnum > 0
@@ -134,10 +140,10 @@ begin
   order by array_position(array['created_at', 'occurred_at', 'logged_at', 'at'], a.attname::text)
   limit 1;
   if v_col is null then
-    execute format('select count(*) from %s', v_rel) into v_day;
-    return jsonb_build_object('tracked', true, 'recent', v_day, 'last_24h', v_day);
+    execute format('select count(*) from %s%s', v_rel, v_open) into v_day;
+    return jsonb_build_object('tracked', true, 'recent', null, 'last_24h', v_day);
   end if;
-  execute format('select count(*) filter (where %1$I > $1), count(*) filter (where %1$I > $2) from %2$s', v_col, v_rel)
+  execute format('select count(*) filter (where %1$I > $1), count(*) filter (where %1$I > $2) from %2$s%3$s', v_col, v_rel, v_open)
     into v_recent, v_day using private.now() - interval '15 minutes', private.now() - interval '24 hours';
   return jsonb_build_object('tracked', true, 'recent', v_recent, 'last_24h', v_day);
 end;
