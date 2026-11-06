@@ -285,6 +285,8 @@ max_frequency = "5s"
 919000000103 = "123456"
 919000000104 = "123456"
 919000000105 = "123456"
+# Wave 3 riders track (tests/integration/w3-riders.test.ts).
+919000000130 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -455,4 +457,8 @@ verify_jwt = false
 
 # P5: started twice a day by pg_cron with the service role key (checked inside the function).
 [functions.weather-alerts]
+verify_jwt = false
+
+# Wave 3: kicked every minute by pg_cron (private.kick_push) with the service role key (checked inside).
+[functions.push-outbox]
 verify_jwt = false

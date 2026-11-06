@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { formatIstShort, SLOT_LABEL } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
+import { RiderExtras } from '@/components/rider-extras';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, clearRiderError, loadRider, refreshRider, useRider, type RiderRun, type RiderStop } from '@/lib/rider-store';
@@ -89,6 +90,8 @@ export default function Rider() {
           <ErrorText>{t('rider.syncFailed', { error: friendlyError({ message: rider.lastError }) })}</ErrorText>
         </Pressable>
       )}
+
+      <RiderExtras />
 
       {rider.runs.length > 1 && (
         <View style={styles.chips}>

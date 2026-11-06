@@ -19,6 +19,8 @@ export const IMPORT_FIELDS = [
   { key: 'balance', label: 'Opening balance (meals)', required: false, aliases: ['balance', 'opening balance', 'meals left', 'advance meals', 'remaining meals'] },
   { key: 'lat', label: 'Latitude', required: false, aliases: ['lat', 'latitude'] },
   { key: 'lng', label: 'Longitude', required: false, aliases: ['lng', 'lon', 'long', 'longitude'] },
+  // Wave 3: the delivery route (created when new); the server places the address on it (import_rows trigger).
+  { key: 'route', label: 'Route', required: false, aliases: ['route', 'route name', 'delivery route', 'rider route'] },
 ] as const;
 
 export type ImportField = (typeof IMPORT_FIELDS)[number]['key'];

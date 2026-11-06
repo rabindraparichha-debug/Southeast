@@ -927,8 +927,15 @@ export type Database = {
           address_id: string | null;
           cash_payment_id: string | null;
           client_op_id: string | null;
+          corrected_at: string | null;
+          corrected_by: string | null;
+          correction_note: string | null;
           created_at: string;
+          credit_decided_at: string | null;
+          credit_decided_by: string | null;
           credit_entry_id: string | null;
+          credit_note: string | null;
+          credit_status: string | null;
           customer_id: string;
           device_at: string | null;
           done_at: string | null;
@@ -964,8 +971,15 @@ export type Database = {
           address_id?: string | null;
           cash_payment_id?: string | null;
           client_op_id?: string | null;
+          corrected_at?: string | null;
+          corrected_by?: string | null;
+          correction_note?: string | null;
           created_at?: string;
+          credit_decided_at?: string | null;
+          credit_decided_by?: string | null;
           credit_entry_id?: string | null;
+          credit_note?: string | null;
+          credit_status?: string | null;
           customer_id: string;
           device_at?: string | null;
           done_at?: string | null;
@@ -1000,8 +1014,15 @@ export type Database = {
           address_id?: string | null;
           cash_payment_id?: string | null;
           client_op_id?: string | null;
+          corrected_at?: string | null;
+          corrected_by?: string | null;
+          correction_note?: string | null;
           created_at?: string;
+          credit_decided_at?: string | null;
+          credit_decided_by?: string | null;
           credit_entry_id?: string | null;
+          credit_note?: string | null;
+          credit_status?: string | null;
           customer_id?: string;
           device_at?: string | null;
           done_at?: string | null;
@@ -2155,6 +2176,46 @@ export type Database = {
             referencedColumns: ['id', 'kitchen_id'];
           },
         ];
+      };
+      member_devices: {
+        Row: {
+          active: boolean;
+          app_version: string | null;
+          created_at: string;
+          device_name: string | null;
+          id: string;
+          last_seen_at: string;
+          platform: string;
+          token: string;
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          active?: boolean;
+          app_version?: string | null;
+          created_at?: string;
+          device_name?: string | null;
+          id?: string;
+          last_seen_at?: string;
+          platform: string;
+          token: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          active?: boolean;
+          app_version?: string | null;
+          created_at?: string;
+          device_name?: string | null;
+          id?: string;
+          last_seen_at?: string;
+          platform?: string;
+          token?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
       };
       member_invites: {
         Row: {
@@ -3996,6 +4057,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_set_min_app_version: {
+        Args: { p_android_url?: string; p_ios_url?: string; p_message?: string; p_version: string };
+        Returns: Json;
+      };
       admin_set_platform_flag: { Args: { p_enabled: boolean; p_key: string }; Returns: undefined };
       admin_switch_requests: { Args: { p_status?: string }; Returns: Json };
       admin_update_vendor_application: {
@@ -4037,7 +4102,21 @@ export type Database = {
         Args: { p_error?: string; p_id: string; p_ok: boolean; p_skip?: boolean };
         Returns: undefined;
       };
+      app_config: { Args: Record<PropertyKey, never>; Returns: Json };
       apply_referral_code: { Args: { p_code: string; p_customer: string }; Returns: string };
+      area_routes: {
+        Args: { p_kitchen: string; p_slot: Database['public']['Enums']['meal_slot'] };
+        Returns: Json;
+      };
+      assign_routes_by_area: {
+        Args: {
+          p_dry_run?: boolean;
+          p_kitchen: string;
+          p_rules: Json;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
+      };
       assign_run: { Args: { p_rider?: string; p_run: string }; Returns: undefined };
       at_risk_customers: {
         Args: { p_kitchen: string; p_refresh?: boolean };
@@ -4054,6 +4133,7 @@ export type Database = {
         Returns: undefined;
       };
       cancel_stock_take: { Args: { p_stock_take: string }; Returns: undefined };
+      cash_handover: { Args: { p_days?: number; p_kitchen: string }; Returns: Json };
       change_feed: {
         Args: { p_kitchen: string; p_limit?: number; p_since?: string };
         Returns: {
@@ -4098,6 +4178,19 @@ export type Database = {
         Returns: Json;
       };
       confirm_payment: { Args: { p_meals?: number; p_payment: string }; Returns: undefined };
+      confirm_rider_cash: {
+        Args: { p_kitchen: string; p_payment_ids?: string[]; p_rider: string };
+        Returns: Json;
+      };
+      correct_stop: {
+        Args: {
+          p_note?: string;
+          p_reason?: Database['public']['Enums']['fail_reason'];
+          p_status: Database['public']['Enums']['stop_status'];
+          p_stop: string;
+        };
+        Returns: Json;
+      };
       cost_report: { Args: { p_from: string; p_kitchen: string; p_to: string }; Returns: Json };
       create_customer: {
         Args: {
@@ -4199,6 +4292,10 @@ export type Database = {
       customer_complaint_score: { Args: { p_customer: string; p_days?: number }; Returns: Json };
       customer_page_link: { Args: { p_customer: string }; Returns: string };
       customer_phone: { Args: { p_customer: string }; Returns: string };
+      decide_stop_credit: {
+        Args: { p_approve: boolean; p_note?: string; p_stop: string };
+        Returns: Json;
+      };
       delete_festival_special: { Args: { p_special: string }; Returns: undefined };
       demand_gaps: {
         Args: Record<PropertyKey, never>;
@@ -4316,6 +4413,8 @@ export type Database = {
       };
       money_report: { Args: { p_from: string; p_kitchen: string; p_to: string }; Returns: Json };
       move_stop: { Args: { p_run: string; p_stop: string }; Returns: undefined };
+      my_cash_handover: { Args: Record<PropertyKey, never>; Returns: Json };
+      my_notifications: { Args: { p_before?: string; p_limit?: number }; Returns: Json };
       notebook_import_context: { Args: { p_kitchen: string; p_path: string }; Returns: Json };
       office_statement: { Args: { p_month: string; p_office: string }; Returns: Json };
       offices_list: { Args: { p_kitchen: string }; Returns: Json };
@@ -4429,6 +4528,31 @@ export type Database = {
         };
         Returns: Json;
       };
+      push_claim_outbox: {
+        Args: { p_limit?: number };
+        Returns: {
+          attempts: number;
+          body: string;
+          data: Json;
+          id: string;
+          kitchen_id: string;
+          recipient_id: string;
+          template: string;
+          title: string;
+          tokens: string[];
+        }[];
+      };
+      push_complete_outbox: {
+        Args: {
+          p_dead_tokens?: string[];
+          p_error?: string;
+          p_id: string;
+          p_mock?: boolean;
+          p_ok: boolean;
+          p_skip?: boolean;
+        };
+        Returns: undefined;
+      };
       razorpay_process_event: { Args: { p_event_id: string; p_payload: Json }; Returns: string };
       record_cash_at_door: {
         Args: { p_amount_paise: number; p_meal_order: string; p_note?: string };
@@ -4486,6 +4610,15 @@ export type Database = {
       refund_for_gateway: { Args: { p_refund: string }; Returns: Json };
       refund_unused_meals: {
         Args: { p_customer: string; p_meals?: number; p_reason?: string };
+        Returns: string;
+      };
+      register_device: {
+        Args: {
+          p_app_version?: string;
+          p_device_name?: string;
+          p_platform: string;
+          p_token: string;
+        };
         Returns: string;
       };
       reject_payment: { Args: { p_payment: string; p_reason: string }; Returns: undefined };
@@ -4642,6 +4775,10 @@ export type Database = {
         }[];
       };
       stock_take_review: { Args: { p_stock_take: string }; Returns: Json };
+      stop_credit_requests: {
+        Args: { p_days?: number; p_kitchen: string; p_status?: string };
+        Returns: Json;
+      };
       submit_lead: {
         Args: {
           p_address?: string;
@@ -4700,6 +4837,8 @@ export type Database = {
           overdue: boolean;
         }[];
       };
+      unassigned_runs: { Args: Record<PropertyKey, never>; Returns: Json };
+      unregister_device: { Args: { p_token: string }; Returns: undefined };
       unused_meals_value: { Args: { p_customer: string }; Returns: Json };
       update_customer: { Args: { p_customer: string; p_patch: Json }; Returns: undefined };
       update_item: {

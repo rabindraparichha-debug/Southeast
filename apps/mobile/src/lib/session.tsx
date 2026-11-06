@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MemberRole } from '@tiffin/db';
 import { resetRider } from './rider-store';
+import { unregisterPush } from './push';
 import { loadServerOverride, supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       reload: () => loadMemberships(session),
       signOut: async () => {
+        await unregisterPush(); // this phone stops getting the member's alerts (wave 3)
         await supabase.auth.signOut();
         await AsyncStorage.multiRemove([KITCHEN_KEY, MEMBERSHIPS_KEY]);
         await resetRider();

@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/lib/session';
+import { AppGuards } from '@/components/app-guards';
 import { installGlobalErrorHandler } from '@/lib/monitor';
 import { colors } from '@/components/theme';
 import { t } from '@/i18n';
@@ -45,7 +46,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <StatusBar style="dark" />
-      <RootStack />
+      {/* Minimum app version (after the rider queue is sent) and push alerts: wave 3. */}
+      <AppGuards>
+        <RootStack />
+      </AppGuards>
     </AuthProvider>
   );
 }

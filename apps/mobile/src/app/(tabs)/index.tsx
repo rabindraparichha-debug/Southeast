@@ -9,6 +9,7 @@ import { Card, Muted, Title } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
 import { DispatchPhotoCard } from '@/components/dispatch-photo';
 import { AtRiskCard, SpecialsCard } from '@/components/insights';
+import { OwnerDesk } from '@/components/owner-desk';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -65,6 +66,7 @@ export default function Today() {
         ))}
       </View>
       <DispatchPhotoCard kitchenId={kitchen.kitchenId} version={version} />
+      {kitchen.role === 'owner' && <OwnerDesk kitchenId={kitchen.kitchenId} version={version} />}
       {kitchen.role === 'owner' && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>
         <Text style={styles.cardTitle}>{t('today.changes')}</Text>
