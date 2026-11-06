@@ -1,6 +1,9 @@
 // WhatsApp Cloud API helpers (no external imports: runs in Deno and in the Node tests).
-// WHATSAPP_MODE=mock (default without a token) sends nothing; replies are only logged.
+// WHATSAPP_MODE=mock (default without a token) sends nothing; replies are only logged. Mock is refused
+// outside a local stack (PLATFORM_ENV, _shared/platform.ts), so a hosted project without a token
+// leaves messages pending instead of marking them sent.
 
+import { mockAllowed } from './platform.ts';
 import { hmacSha256Hex } from './razorpay.ts';
 
 export type WaMode = 'mock' | 'live';
@@ -25,6 +28,9 @@ export function loadWaConfig(env: (name: string) => string | undefined): WaConfi
   if (!appSecret || !verifyToken) throw new Error('WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN must be set');
   if (mode === 'live' && (!token || !env('WHATSAPP_PHONE_NUMBER_ID'))) {
     throw new Error('Live WhatsApp needs WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID');
+  }
+  if (mode === 'mock' && !mockAllowed(env)) {
+    throw new Error('whatsapp_not_configured: mock WhatsApp runs only on a local stack (PLATFORM_ENV=local); set the live WhatsApp secrets');
   }
   return {
     mode,

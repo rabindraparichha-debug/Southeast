@@ -19,7 +19,9 @@ Deno.serve(async (req) => {
   try {
     cfg = loadConfig((k) => Deno.env.get(k));
   } catch (e) {
-    return json({ error: String((e as Error).message).split(':')[0] }, 500);
+    // payments_not_configured: a hosted project without Razorpay keys (mock runs only locally).
+    const code = String((e as Error).message).split(':')[0];
+    return json({ error: code }, code === 'payments_not_configured' ? 503 : 500);
   }
 
   const { refund_id } = await req.json().catch(() => ({}));

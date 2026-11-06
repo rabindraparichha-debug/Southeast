@@ -17,7 +17,7 @@ export function AddSubscription({ kitchenId, customerId, diet, plans, addresses 
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
-    plan_id: (plans.find((p) => p.diet === diet) ?? plans[0])?.id ?? '', start_date: istDate(), qty: '1', status: 'active' as 'active' | 'trial',
+    plan_id: (plans.find((p) => p.diet === diet) ?? plans[0])?.id ?? '', start_date: istDate(), qty: '1',
     address_id: addresses.find((a) => a.is_default)?.id ?? addresses[0]?.id ?? '',
   });
   const [error, setError] = useState('');
@@ -31,7 +31,8 @@ export function AddSubscription({ kitchenId, customerId, diet, plans, addresses 
     setBusy(true);
     const { error } = await supabaseBrowser().from('subscriptions').insert({
       kitchen_id: kitchenId, customer_id: customerId, plan_id: f.plan_id, start_date: f.start_date,
-      qty: Number(f.qty), status: f.status, address_id: f.address_id || null,
+      // Always active: a 'trial' subscription cooks nothing until it is paid online (Phase 2 only).
+      qty: Number(f.qty), status: 'active', address_id: f.address_id || null,
     });
     setBusy(false);
     if (error) return setError(friendlyError(error));
@@ -40,7 +41,7 @@ export function AddSubscription({ kitchenId, customerId, diet, plans, addresses 
   }
 
   return (
-    <form onSubmit={save} className="grid gap-3 sm:grid-cols-5 sm:items-end">
+    <form onSubmit={save} className="grid gap-3 sm:grid-cols-4 sm:items-end">
       <Field label="Plan" className="sm:col-span-2">
         <Select value={f.plan_id} onChange={(e) => setF({ ...f, plan_id: e.target.value })}>
           {plans.map((p) => <option key={p.id} value={p.id}>{p.name} · {formatPaise(p.price_per_meal_paise)}/meal</option>)}
@@ -52,12 +53,6 @@ export function AddSubscription({ kitchenId, customerId, diet, plans, addresses 
       <Field label="Tiffins per meal">
         <Input type="number" min={1} max={20} value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
       </Field>
-      <Field label="Starts as">
-        <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as 'active' | 'trial' })}>
-          <option value="active">Active</option>
-          <option value="trial">Trial</option>
-        </Select>
-      </Field>
       {addresses.length > 1 && (
         <Field label="Deliver to" className="sm:col-span-2">
           <Select value={f.address_id} onChange={(e) => setF({ ...f, address_id: e.target.value })}>
@@ -65,7 +60,7 @@ export function AddSubscription({ kitchenId, customerId, diet, plans, addresses 
           </Select>
         </Field>
       )}
-      <div className="flex gap-2 sm:col-span-5">
+      <div className="flex gap-2 sm:col-span-4">
         <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save subscription'}</Button>
         <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
         <Alert>{error}</Alert>

@@ -101,7 +101,7 @@ export default async function MoneyPage({ searchParams }: PageProps<'/money'>) {
               ))}
             </ul>
           ) : <p className="text-sm text-ink-500">Nobody owes money.</p>}
-          <p className="mt-3 text-xs text-ink-500">Reminders go out on day 1, 3 and 7 (WhatsApp, once connected).</p>
+          <p className="mt-3 text-xs text-ink-500">No reminders are sent automatically. Remind customers yourself when you collect.</p>
         </Card>
 
         <Card title="Collections by day">

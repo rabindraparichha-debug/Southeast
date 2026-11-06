@@ -1,13 +1,56 @@
 // Unit tests for the Edge Functions' shared Razorpay module (no network).
 import { describe, expect, it } from 'vitest';
+import { isLocalSupabaseUrl, mockAllowed, platformEnv } from '../../supabase/functions/_shared/platform.ts';
 import { hmacSha256Hex, loadConfig, verifySignature } from '../../supabase/functions/_shared/razorpay.ts';
+import { loadWaConfig } from '../../supabase/functions/_shared/whatsapp.ts';
 import { handleRazorpayWebhook } from '../../supabase/functions/razorpay-webhook/handler.ts';
 
 const envOf = (vars: Record<string, string>) => (k: string) => vars[k];
+// The Edge runtime of a local stack sees SUPABASE_URL=http://kong:8000.
+const LOCAL = { SUPABASE_URL: 'http://kong:8000' };
+const HOSTED = { SUPABASE_URL: 'https://abcdefghijklmnop.supabase.co' };
+
+describe('PLATFORM_ENV: mock modes run only locally', () => {
+  it('knows a local stack by its URL', () => {
+    for (const url of ['http://kong:8000', 'http://127.0.0.1:54321', 'http://localhost:54321', 'http://host.docker.internal:54321', 'http://[::1]:54321']) {
+      expect(isLocalSupabaseUrl(url)).toBe(true);
+    }
+    for (const url of ['https://abcdefghijklmnop.supabase.co', 'https://api.example.in', 'not a url', '', undefined]) {
+      expect(isLocalSupabaseUrl(url)).toBe(false);
+    }
+  });
+  it('unset counts as local only on a local stack; a hosted project marked local is not trusted', () => {
+    expect(platformEnv(envOf(LOCAL))).toBe('local');
+    expect(platformEnv(envOf(HOSTED))).toBe('unknown');
+    expect(platformEnv(envOf({}))).toBe('unknown');
+    expect(platformEnv(envOf({ ...LOCAL, PLATFORM_ENV: 'Local' }))).toBe('local');
+    expect(platformEnv(envOf({ ...HOSTED, PLATFORM_ENV: 'local' }))).toBe('unknown');
+    expect(platformEnv(envOf({ ...HOSTED, PLATFORM_ENV: 'production' }))).toBe('production');
+    expect(platformEnv(envOf({ ...LOCAL, PLATFORM_ENV: 'staging' }))).toBe('staging');
+    expect(mockAllowed(envOf(LOCAL))).toBe(true);
+    expect(mockAllowed(envOf({ ...LOCAL, PLATFORM_ENV: 'staging' }))).toBe(false);
+    expect(mockAllowed(envOf(HOSTED))).toBe(false);
+  });
+  it('mock payments are refused outside local (payments_not_configured), test keys still work', () => {
+    expect(() => loadConfig(envOf({ ...HOSTED, RAZORPAY_WEBHOOK_SECRET: 's' }))).toThrow(/^payments_not_configured/);
+    expect(() => loadConfig(envOf({ ...LOCAL, PLATFORM_ENV: 'staging', RAZORPAY_WEBHOOK_SECRET: 's' }))).toThrow(/^payments_not_configured/);
+    expect(() => loadConfig(envOf({ ...HOSTED, RAZORPAY_MODE: 'mock', RAZORPAY_WEBHOOK_SECRET: 's', PLATFORM_ENV: 'production' }))).toThrow(/^payments_not_configured/);
+    const test = { RAZORPAY_KEY_ID: 'rzp_test_abc', RAZORPAY_KEY_SECRET: 'x', RAZORPAY_WEBHOOK_SECRET: 's' };
+    expect(loadConfig(envOf({ ...HOSTED, PLATFORM_ENV: 'staging', ...test })).mode).toBe('test');
+  });
+  it('mock WhatsApp is refused outside local (whatsapp_not_configured), live still works', () => {
+    const wa = { WHATSAPP_APP_SECRET: 'a', WHATSAPP_VERIFY_TOKEN: 'v' };
+    expect(loadWaConfig(envOf({ ...LOCAL, ...wa })).mode).toBe('mock');
+    expect(() => loadWaConfig(envOf({ ...HOSTED, ...wa }))).toThrow(/^whatsapp_not_configured/);
+    expect(() => loadWaConfig(envOf({ ...HOSTED, PLATFORM_ENV: 'staging', WHATSAPP_MODE: 'mock', ...wa }))).toThrow(/^whatsapp_not_configured/);
+    const live = { ...wa, WHATSAPP_ACCESS_TOKEN: 't', WHATSAPP_PHONE_NUMBER_ID: '1' };
+    expect(loadWaConfig(envOf({ ...HOSTED, PLATFORM_ENV: 'production', ...live })).mode).toBe('live');
+  });
+});
 
 describe('loadConfig guardrails', () => {
-  it('defaults to mock mode without keys', () => {
-    expect(loadConfig(envOf({ RAZORPAY_WEBHOOK_SECRET: 's' })).mode).toBe('mock');
+  it('defaults to mock mode without keys (locally)', () => {
+    expect(loadConfig(envOf({ ...LOCAL, RAZORPAY_WEBHOOK_SECRET: 's' })).mode).toBe('mock');
   });
   it('refuses live keys unless the owner approved them', () => {
     const live = { RAZORPAY_KEY_ID: 'rzp_live_abc', RAZORPAY_KEY_SECRET: 'x', RAZORPAY_WEBHOOK_SECRET: 's' };

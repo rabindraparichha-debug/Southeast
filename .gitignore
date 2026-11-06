@@ -30,3 +30,6 @@ credentials.json
 supabase/.branches/
 supabase/.temp/
 backups/
+
+# Agent worktrees (never commit)
+.claude/worktrees/

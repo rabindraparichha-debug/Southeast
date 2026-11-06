@@ -13,7 +13,9 @@ REPO_DIR="${REPO_DIR:-$HOME/Southeast}"
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 
 command -v git >/dev/null || { echo "Install Git first (macOS: xcode-select --install)"; exit 1; }
-command -v node >/dev/null || { echo "Install Node 20+ first (https://nodejs.org)"; exit 1; }
+command -v node >/dev/null || { echo "Install Node 22 first (https://nodejs.org)"; exit 1; }
+node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)' \
+  || { echo "Node $(node -v) is too old: Expo SDK 58 needs Node 22.13 or later (https://nodejs.org)"; exit 1; }
 command -v pnpm >/dev/null || { step "Installing pnpm"; npm install -g pnpm@10; }
 
 if [[ -d "$REPO_DIR/.git" ]]; then

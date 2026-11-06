@@ -106,6 +106,10 @@ const MESSAGES: Record<string, string> = {
   unreadable_output: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   model_refused: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   ai_error: 'Reading the photo failed. Try again in a minute.',
+  // Hosted project without the provider keys (mock modes run only locally)
+  payments_not_configured: 'Online payments are not set up yet. Record cash or UPI meanwhile.',
+  whatsapp_not_configured: 'WhatsApp is not set up yet.',
+  ai_not_configured: 'Reading notebook photos is not set up yet. Use the Excel or CSV import instead.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

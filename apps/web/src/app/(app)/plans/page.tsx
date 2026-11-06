@@ -14,7 +14,7 @@ export default async function PlansPage() {
     .order('name');
   return (
     <>
-      <PageHeader title="Plans" subtitle="Price per meal. Customers prepay for meals; balances arrive in the money milestone." />
+      <PageHeader title="Plans" subtitle="Price per meal. Each meal is taken from the customer’s balance when the count locks." />
       <PlansEditor kitchenId={kitchen.kitchenId} plans={plans ?? []} />
     </>
   );

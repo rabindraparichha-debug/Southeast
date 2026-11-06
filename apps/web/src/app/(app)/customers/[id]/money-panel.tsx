@@ -211,7 +211,7 @@ export function MoneyPanel(p: Props) {
             </div>
           )}
           <Button onClick={recordPayment} disabled={busy || !paise}>{busy ? 'Saving…' : `Save ${paise ? formatPaise(paise) : ''}`}</Button>
-          <p className="text-xs text-ink-500">A receipt is sent to the customer on WhatsApp once WhatsApp is connected.</p>
+          <p className="text-xs text-ink-500">Print a receipt from the payment list if the customer wants one.</p>
         </div>
       )}
 
@@ -246,7 +246,7 @@ export function MoneyPanel(p: Props) {
                 </div>
               </Field>
               <Button onClick={createLink} disabled={busy || !Number(linkMeals)}>{busy ? 'Creating…' : 'Create payment link'}</Button>
-              <p className="text-xs text-ink-500">Razorpay test mode. Refund and cancellation terms are shown before payment (customer page, next milestone).</p>
+              <p className="text-xs text-ink-500">Razorpay test mode: no real money moves.</p>
             </>
           )}
         </div>

@@ -26,7 +26,7 @@ docs/               SPEC, PLAN, DECISIONS, AUDIT
 ```
 
 ## Commands
-Requirements: Node 20+, pnpm 10, Docker.
+Requirements: Node 22 (22.13 or later; `nvm use` reads `.nvmrc`), pnpm 10, Docker. Node 20 cannot run the integration tests or Expo SDK 58.
 
 ```bash
 pnpm install

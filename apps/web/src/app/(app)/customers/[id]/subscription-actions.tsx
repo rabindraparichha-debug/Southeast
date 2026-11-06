@@ -152,7 +152,7 @@ export function SubscriptionActions({ subscriptionId, slots, addresses, nextMeal
                   Waive the late charge where the kitchen can still change the count
                 </label>
               )}
-              {type === 'cancel' && <p className="text-ink-600">Refund of unused meals is handled in the money milestone.</p>}
+              {type === 'cancel' && <p className="text-ink-600">If this is the customer’s last subscription, their unused meals are added to Refunds waiting on the Money page.</p>}
               <div className="flex gap-2">
                 <Button onClick={() => call(false)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</Button>
                 <Button variant="ghost" onClick={() => setPreview(null)}>Back</Button>

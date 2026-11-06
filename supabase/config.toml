@@ -437,7 +437,7 @@ enabled = true
 [functions.razorpay-webhook]
 verify_jwt = false
 
-# Local mock payment page (refuses to run unless RAZORPAY_MODE=mock).
+# Local mock payment page (404 unless RAZORPAY_MODE=mock on a local stack). Never deploy it (docs/OPERATIONS.md).
 [functions.razorpay-mock]
 verify_jwt = false
 

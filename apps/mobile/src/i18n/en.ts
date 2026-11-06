@@ -325,6 +325,7 @@ export const en = {
   'errors.unreadable_output': 'The notebook page could not be read. Try a clearer, well-lit photo.',
   'errors.model_refused': 'The notebook page could not be read. Try a clearer, well-lit photo.',
   'errors.ai_error': 'Reading the photo failed. Try again in a minute.',
+  'errors.payments_not_configured': 'Online payments are not set up yet. Record cash meanwhile.',
   'tabs.stock': 'Stock',
   'stock.purchase': 'Purchase',
   'stock.waste': 'Waste',

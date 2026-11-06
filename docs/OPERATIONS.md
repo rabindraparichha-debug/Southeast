@@ -16,8 +16,15 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 1. Run every check locally: `pnpm db:reset && pnpm db:test && pnpm --filter @tiffin/core test && pnpm test:integration`, plus web and mobile `typecheck` and `lint`.
 2. Database: `supabase link --project-ref <ref>` then `supabase db push`. Migrations are append-only: never edit one that a shared environment has applied (CLAUDE.md).
 3. Regenerate types if the schema changed: `pnpm db:types`, and commit them.
-4. Edge Functions: `supabase functions deploy <name>` for each changed function (`--no-verify-jwt` for `razorpay-webhook`, `razorpay-mock`, `whatsapp-webhook`, `lead-intake`, matching `supabase/config.toml`).
-5. Secrets: `supabase secrets set KEY=value` (see `supabase/functions/.env.example`). Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
+4. Edge Functions: deploy each changed function by name, and only functions from this list. Never run `supabase functions deploy` without a name: that also deploys `razorpay-mock`, the local test payment page, which must never reach a hosted project (it answers 404 there, but keep it off anyway).
+
+   | Function | Deploy with |
+   |---|---|
+   | `razorpay-payment-link`, `razorpay-refund`, `whatsapp-outbox`, `notebook-import`, `route-optimize` | `supabase functions deploy <name>` |
+   | `razorpay-webhook`, `whatsapp-webhook`, `lead-intake`, `lead-email`, `ads-conversions`, `weather-alerts` | `supabase functions deploy <name> --no-verify-jwt` (they check their own signature or key, matching `supabase/config.toml`) |
+
+   Not deployed: `razorpay-mock` (local only).
+5. Secrets: `supabase secrets set KEY=value`, with real random values. `supabase/functions/.env.example` lists the names, but its values are local placeholders: never copy that file to a hosted project. Set `PLATFORM_ENV=staging` or `PLATFORM_ENV=production` on every hosted project. Mock modes (Razorpay, WhatsApp, the notebook-import fixture) run only when `PLATFORM_ENV` is `local`, so a hosted project without keys refuses (`payments_not_configured`, `whatsapp_not_configured`, `ai_not_configured`) instead of pretending to work. Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
 6. Web: deploy as usual. Mobile: `eas build` / `eas update` (docs/RELEASE.md).
 
 ## Scheduled jobs (pg_cron, inside the database)
