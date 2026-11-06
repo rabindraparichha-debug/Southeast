@@ -1,5 +1,7 @@
 // Database functions raise short codes; this turns them into vendor-facing English.
 // Wording here is a draft for the owner to review (docs/DECISIONS.md D-012).
+import { loginErrorKey, type LoginErrorKey } from '@tiffin/core';
+
 const MESSAGES: Record<string, string> = {
   forbidden: 'You do not have permission to do this.',
   not_authenticated: 'Please log in again.',
@@ -176,4 +178,25 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   if (error.code === '23505') return 'This already exists.';
   if (error.code === '42501') return MESSAGES.forbidden!;
   return msg || 'Something went wrong. Please try again.';
+}
+
+// Login by phone code (docs/LOGIN.md, D-134): Supabase Auth error codes and the auth-send-sms hook's
+// codes, normalised by loginErrorKey in @tiffin/core. Keep in step with apps/mobile/src/i18n/en.ts.
+const LOGIN_MESSAGES: Record<LoginErrorKey, string> = {
+  invalid_phone: 'Enter a valid 10-digit Indian mobile number.',
+  over_sms_send_rate_limit: 'Please wait a little before asking for another code.',
+  over_request_rate_limit: 'Too many tries. Please wait a few minutes and try again.',
+  sms_send_failed: 'We could not send the code. Try again in a minute.',
+  sms_not_configured: 'Login codes cannot be sent right now. Please try again later or contact Tiffin support.',
+  phone_not_allowed: 'Only Indian mobile numbers (+91) can log in.',
+  otp_expired: 'Code is wrong or expired.',
+  signup_disabled: 'This number is not registered yet. Ask your kitchen owner to add you, or contact Tiffin support.',
+  phone_provider_disabled: 'Phone login is switched off. Please contact Tiffin support.',
+  network: 'No network. Try again when you are online.',
+};
+
+/** Text for an error from signInWithOtp / verifyOtp. */
+export function loginErrorText(error: { code?: string; message?: string; status?: number } | null | undefined): string {
+  const key = loginErrorKey(error);
+  return key ? LOGIN_MESSAGES[key] : friendlyError(error);
 }

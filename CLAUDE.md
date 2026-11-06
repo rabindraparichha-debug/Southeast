@@ -8,6 +8,7 @@ A free operating system for small tiffin vendors in Bhubaneswar.
 | `docs/PLAN.md` | Work packages and their status |
 | `docs/DECISIONS.md` | Defaults and open questions |
 | `docs/AUDIT.md` | Initial audit |
+| `docs/LOGIN.md` | Login codes: WhatsApp/SMS providers, hosted auth settings |
 
 **Working rules from the product owner:**
 - Build one milestone at a time, then stop for review. (During M5 the owner asked to build through to the end without stopping; see D-077.)
@@ -69,6 +70,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00140 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
 
 ## Conventions (follow these in every change)
 
@@ -171,6 +173,12 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
 - **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
 
+**Login codes (D-134, docs/LOGIN.md)**
+- Apps call `signInWithOtp({ phone, options: { channel } })` (`whatsapp` | `sms`, offered per `*_LOGIN_CHANNELS`) and always `verifyOtp(..., type: 'sms')`. Map auth errors through `loginErrorKey` (`@tiffin/core`) in both apps.
+- Default delivery is Supabase's built-in Twilio provider (dashboard settings). The optional Send SMS hook `auth-send-sms` (logic in `_shared/auth-sms.ts`, tests in `tests/integration/auth-sms.test.ts`) checks the Standard Webhooks signature first (missing secrets answer like a bad signature; replayed `webhook-id`s are refused), never logs the code or a full phone, and its mock uses `mockAllowed` (`_shared/platform.ts`).
+- Supabase does not pass the channel to hooks, so with the hook on the apps must run channel-neutral (`*_LOGIN_DELIVERY=hook`, `channelNeutral` in `@tiffin/core`). Never label a code with a channel the screen cannot know.
+- Hosted: "Confirm phone" on, provider keys only in the dashboard / `supabase secrets set`, never `config push`. The signup policy is still open (D-135).
+
 **Channels, web app, builds (M9)**
 - Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
@@ -228,6 +236,22 @@ WhatsApp and AI Edge Function secrets (same file):
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+
+Login channels (docs/LOGIN.md): `NEXT_PUBLIC_LOGIN_CHANNELS` (web) and `EXPO_PUBLIC_LOGIN_CHANNELS` (mobile, build time), e.g. `whatsapp,sms`; unset means `sms` (local test numbers). `NEXT_PUBLIC_LOGIN_DELIVERY` / `EXPO_PUBLIC_LOGIN_DELIVERY`: `channel` (default, built-in provider) or `hook` (Send SMS hook on: channel-neutral screens).
+
+Login code Edge Function secrets (`auth-send-sms`, same file; only when the Send SMS hook is used):
+
+| Variable | Notes |
+|---|---|
+| `SEND_SMS_HOOK_SECRETS` | `v1,whsec_…` from Authentication > Hooks (several separated by a pipe, for rotation). The `.env.example` value is a published local placeholder, refused when hosted |
+| `AUTH_SMS_MODE` | `mock` (local only, nothing sent) or `live` |
+| `AUTH_SMS_ROUTES`, `AUTH_SMS_PROVIDER` | Order tried, e.g. `whatsapp:twilio,sms:telnyx`; provider for plain `sms` (`twilio` or `telnyx`) |
+| `AUTH_SMS_ESCALATE_SECONDS`, `AUTH_SMS_TIMEOUT_MS`, `AUTH_SMS_BUDGET_MS` | Resend window (600), per call (2000) and total (4300) ms |
+| `AUTH_SMS_ALLOWED_COUNTRY_CODES`, `AUTH_SMS_TEMPLATE`, `AUTH_SMS_VALIDITY_SECONDS`, `AUTH_SMS_MOCK_FAIL` | `91`; SMS text with `{code}` (= DLT template); Twilio validity; mock-only failures |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_WHATSAPP_CONTENT_SID`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM` | WhatsApp authentication template (`HX…`) and senders |
+| `TELNYX_API_KEY`, `TELNYX_FROM`, `TELNYX_MESSAGING_PROFILE_ID` | Telnyx SMS (India: DLT-registered alphanumeric sender) |
+
+Local config only (`config.toml` `env()`, unset locally): `SUPABASE_AUTH_SMS_TWILIO_ACCOUNT_SID`, `SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN`, `SUPABASE_AUTH_SMS_TWILIO_MESSAGE_SERVICE_SID`, `SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID` (accepted for `config push`; CLI 2.122.0 does not pass it to the local Auth container), and `SEND_SMS_HOOK_SECRETS` in `supabase/.env` for the hook's local check (`SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED=true pnpm db:start`).
 
 Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 
