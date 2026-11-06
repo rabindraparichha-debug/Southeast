@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { formatIstShort, formatPaise, SLOT_LABEL } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
+import { ChangedBadge } from '@/components/changed-badge';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -153,6 +154,7 @@ function StopRow({ stop }: { stop: RiderStop }) {
       <View style={styles.seq}><Text style={styles.seqText}>{stop.seq}</Text></View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.name}>{stop.office ? `🏢 ${stop.name}` : stop.name}</Text>
+        <ChangedBadge stop={stop} />
         {stop.office && <Text style={styles.office}>{t('rider.officeMeals', { n: stop.meal_count })}</Text>}
         <Text style={styles.addr}>{[stop.line1, stop.landmark, stop.area].filter(Boolean).join(', ')}</Text>
         <Text style={styles.small}>{stop.office ? diets : `${t('rider.meals', { n: stop.meal_count })}${diets ? ` · ${diets}` : ''}`}

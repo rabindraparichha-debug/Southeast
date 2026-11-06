@@ -3,6 +3,7 @@ import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MemberRole } from '@tiffin/db';
 import { loadRider, resetRider, riderPendingCount, syncQueue } from './rider-store';
+import { clearScreenCache } from './cache-storage';
 import { loadServerOverride, readStoredSession, supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         await AsyncStorage.multiRemove([KITCHEN_KEY, MEMBERSHIPS_KEY]);
         await resetRider();
+        await clearScreenCache(); // the offline copies of Today, customers and packing lists
         return true;
       },
     };

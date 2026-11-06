@@ -8,10 +8,13 @@ import { useKitchen } from '@/lib/session';
 import { friendlyError } from '@/lib/errors';
 import { Button, Card, Chip, DIET_COLOR, DIET_LABEL, ErrorText, Label, Muted } from '@/components/ui';
 import { CustomerExtras } from '@/components/customer-extras';
+import { SubscriptionsCard } from '@/components/subscriptions-card';
+import { LockedMealsCard } from '@/components/locked-meals';
+import { AddressCard } from '@/components/address-card';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
-type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; skip_reason: string | null; locked_at: string | null };
+type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; charge_waived?: boolean; skip_reason: string | null; locked_at: string | null };
 type Sub = { id: string; status: string; plan: { name: string; price_per_meal_paise: number } | null };
 type Pending = { label: string; type: ChangeType; subscriptionId: string; from: string; to?: string; slot?: MealSlot; preview: ChangeResult };
 type CashProposal = { meals: number; amount: number };
@@ -35,7 +38,7 @@ export default function CustomerDetail() {
   const load = useCallback(async () => {
     const [cust, orders, s, b] = await Promise.all([
       supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
-      supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
+      supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at')
         .eq('customer_id', id).gte('service_date', today).lte('service_date', addDays(today, 7)).order('service_date').order('slot'),
       isOwner ? supabase.from('subscriptions').select('id, status, plan:plans(name, price_per_meal_paise)').eq('customer_id', id).in('status', ['active', 'low_balance', 'paused', 'suspended', 'trial'])
               : Promise.resolve({ data: [] }),
@@ -116,6 +119,8 @@ export default function CustomerDetail() {
         <Muted>{[c.line1, c.landmark, c.area].filter(Boolean).join(', ')}</Muted>
         {canCall && <Button title={`📞 ${t('customer.call')}`} onPress={() => Linking.openURL(`tel:${c.phone}`)} variant="secondary" />}
       </Card>
+      {/* Status badges, upcoming holds with Undo, cancel and reactivate (reloads with the meals below). */}
+      {isOwner && <SubscriptionsCard customerId={id} kitchenId={kitchen.kitchenId} version={meals} onChanged={load} />}
 
       {isOwner && price && (
         <Card>
@@ -199,6 +204,7 @@ export default function CustomerDetail() {
       })}
       {saved ? <Text style={styles.saved}>✓ {saved}</Text> : null}
       <ErrorText>{error}</ErrorText>
+      {isOwner && <LockedMealsCard customerId={id} version={meals} onChanged={load} />}
 
       <Card>
         <Label>{t('meals.title')}</Label>
@@ -206,14 +212,16 @@ export default function CustomerDetail() {
         {meals.map((m) => (
           <View key={m.id} style={styles.meal}>
             <Text style={styles.mealDate}>{formatServiceDate(m.service_date)} · {SLOT_LABEL[m.slot]}{m.qty > 1 ? ` ×${m.qty}` : ''}</Text>
-            <Text style={[styles.mealStatus, m.status === 'skipped' && { color: m.charged ? '#B45309' : colors.muted }]}>
+            <Text style={[styles.mealStatus, m.status === 'skipped' && { color: m.charged && !m.charge_waived ? '#B45309' : colors.muted }]}>
               {m.status === 'skipped'
-                ? m.charged ? t('meals.lateSkip') : m.skip_reason === 'pause' ? t('meals.paused') : t('meals.skipped')
+                ? m.charged ? (m.charge_waived ? t('meals.lateSkipWaived') : t('meals.lateSkip')) : m.skip_reason === 'pause' ? t('meals.paused') : t('meals.skipped')
                 : m.locked_at ? t('meals.locked') : t('meals.scheduled')}
             </Text>
           </View>
         ))}
       </Card>
+
+      {kitchen.role !== 'rider' && <AddressCard customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} version={meals} onChanged={load} />}
 
       {kitchen.role !== 'rider' && <CustomerExtras customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} />}
 
