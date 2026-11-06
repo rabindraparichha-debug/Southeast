@@ -264,13 +264,12 @@ otp_expiry = 3600
 # Hosted Phase 1: see docs/LOGIN.md "Signup policy" (invited staff/riders must still be able to sign up).
 enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-# Local only: off so seed logins are instant. Hosted MUST turn "Confirm phone" ON: with it off, a
+# On locally too (D-139): a phone + password sign-up must prove the number with a code. Seed logins use
+# fixed test codes, so they are unaffected. Hosted MUST also have "Confirm phone" ON: with it off, a
 # phone + password signup counts as confirmed without any code, and Auth skips its SMS rate limit.
-enable_confirmations = false
+enable_confirmations = true
 # Template for sending OTP to users (built-in providers only; the auth-send-sms hook uses AUTH_SMS_TEMPLATE).
 # In India the SMS text must match the DLT content template exactly.
-enable_confirmations = true  # phone: a phone + password sign-up must prove the number with a code (D-139)
-# Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 # Local 5s for fast test runs; hosted 30s to 60s (the apps show a 30 s resend countdown).
