@@ -2,7 +2,7 @@
 import { handleWhatsAppWebhook } from './handler.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
-import { createPaymentLink, loadConfig as loadRazorpay } from '../_shared/razorpay.ts';
+import { cancelPaymentLink, createPaymentLink, loadConfig as loadRazorpay } from '../_shared/razorpay.ts';
 import { loadAiConfig, makeClaudeComplete, type SdkModule } from '../_shared/ai-claude.ts';
 import { createLinkOrCancel } from '../_shared/payment-link.ts';
 import { rpc as callRpc } from '../_shared/http.ts';
@@ -45,17 +45,26 @@ Deno.serve(async (req) => {
     rpc,
     report: (e, code) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code } }),
     send: (to, out) => sendWhatsApp(cfg, to, out),
-    // A failed Razorpay call (or attach) cancels the 'created' row (D-129).
-    createLink: (record) => createLinkOrCancel(record.payment_id, async () => {
-      const link = await createPaymentLink(loadRazorpay(env), {
-        paymentId: record.payment_id, amountPaise: record.amount_paise, description: `${record.meals} meals`,
-        customerName: record.customer_name, customerPhone: record.customer_phone, linkedAccountId: record.linked_account_id,
-        kitchenName: record.kitchen_name,
-      });
-      await rpc('attach_payment_link', { p_payment: record.payment_id, p_link_id: link.id, p_short_url: link.shortUrl, p_expires_at: link.expiresAt });
+    // A failed Razorpay call cancels the 'created' row; a failed attach cancels the link at Razorpay
+    // first (D-129, D-135).
+    createLink: async (record) => {
+      // Loaded inside create(), so a missing key (payments_not_configured) also cancels the row.
+      let rz: ReturnType<typeof loadRazorpay> | undefined;
+      const link = await createLinkOrCancel(record.payment_id, {
+        create: () => createPaymentLink(rz = loadRazorpay(env), {
+          paymentId: record.payment_id, amountPaise: record.amount_paise, description: `${record.meals} meals`,
+          customerName: record.customer_name, customerPhone: record.customer_phone, linkedAccountId: record.linked_account_id,
+          kitchenName: record.kitchen_name,
+        }),
+        attach: async (created) => {
+          await rpc('attach_payment_link', { p_payment: record.payment_id, p_link_id: created.id, p_short_url: created.shortUrl,
+            p_expires_at: created.expiresAt });
+        },
+        cancelGateway: (created) => cancelPaymentLink(rz!, created.id),
+      }, (paymentId, reason) => rpc('cancel_payment_link_record', { p_payment: paymentId, p_error: reason }),
+      (e) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code: 'payment_link_cancel' } }));
       return link.shortUrl;
-    }, (paymentId, reason) => rpc('cancel_payment_link_record', { p_payment: paymentId, p_error: reason }),
-    (e) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code: 'payment_link_cancel' } })),
+    },
     complete,
     aiCaps: ai,
   });

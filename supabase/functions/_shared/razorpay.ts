@@ -137,6 +137,15 @@ export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): 
   return { id: link.id, shortUrl: link.short_url, expiresAt: new Date(link.expire_by * 1000).toISOString() };
 }
 
+/**
+ * Cancels a Payment Link at Razorpay (used when the link was created but could not be attached to our
+ * payment row, D-135). Mock links need nothing. Razorpay then sends payment_link.cancelled.
+ */
+export async function cancelPaymentLink(cfg: RazorpayConfig, linkId: string): Promise<void> {
+  if (cfg.mode === 'mock' || linkId.startsWith('plink_mock_')) return;
+  await api<unknown>(cfg, `/payment_links/${encodeURIComponent(linkId)}/cancel`, {});
+}
+
 /** Refunds an online payment (reversing the Route transfer). */
 export async function createRefund(cfg: RazorpayConfig, razorpayPaymentId: string, amountPaise: number, refundId: string): Promise<{ id: string }> {
   if (cfg.mode === 'mock') return { id: randomId('rfnd_mock_') };

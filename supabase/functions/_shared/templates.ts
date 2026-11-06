@@ -143,8 +143,9 @@ export const TEMPLATES: Record<string, Def> = {
     },
     params: (p, k) => [k, p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date), String(p.meals ?? 1)],
   },
+  // Asks for a purchase, so Meta classes it as marketing (D-135).
   trial_followup: {
-    name: 'trial_followup_v1', category: 'UTILITY',
+    name: 'trial_followup_v1', category: 'MARKETING',
     text: {
       en: '{{1}}: hope you are enjoying your trial meals! Continue with {{2}}: {{3}} meals for {{4}}. Pay here: {{5}}',
       hi: '{{1}}: उम्मीद है ट्रायल खाना पसंद आ रहा है! {{2}} जारी रखें: {{3}} खाने {{4}} में। यहाँ भुगतान करें: {{5}}',
@@ -257,8 +258,9 @@ export const TEMPLATES: Record<string, Def> = {
     params: (p) => [String(p.name ?? 'there')],
     quickReplies: () => [{ payload: 'lead_start', title: { en: 'Find my tiffin', hi: 'टिफिन ढूँढें', or: 'ଟିଫିନ୍ ଖୋଜନ୍ତୁ' } }],
   },
+  // Re-engagement, so Meta classes it as marketing (D-135).
   lead_reminder: {
-    name: 'lead_reminder_v1', category: 'UTILITY',
+    name: 'lead_reminder_v1', category: 'MARKETING',
     text: {
       en: 'Namaskar! The kitchens we found near you still have space: {{1}}. Tap below to see them again.',
       hi: 'नमस्कार! आपके पास के किचन में अभी भी जगह है: {{1}}। फिर से देखने के लिए नीचे दबाएँ।',
@@ -297,6 +299,14 @@ export const TEMPLATES: Record<string, Def> = {
     text: { en: '{{1}}: {{2}} ({{3}}) joined with the invite of {{4}}: {{5}}, trial of {{6}} meals from {{7}}. Please call them to confirm.' },
     params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.referrer_name ?? 'a customer'),
       String(p.plan_name ?? ''), String(p.trial_meals ?? ''), day(p.start_date)],
+  },
+  // Someone used an invite with a number the kitchen already has (referral_join, D-135): nothing was
+  // added, the owner calls them (a lapsed customer coming back, or a family member on a shared number).
+  referral_existing: {
+    name: 'referral_existing_v1', category: 'UTILITY',
+    text: { en: '{{1}}: {{2}} used the invite of {{3}} to ask for {{4}} from {{5}}. This number is already in your customers as {{6}}, so nothing was added. Please call them.' },
+    params: (p, k) => [k, String(p.customer_name ?? 'Someone'), String(p.referrer_name ?? 'a customer'), String(p.plan_name ?? ''),
+      day(p.start_date), String(p.existing_name ?? 'a customer')],
   },
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',

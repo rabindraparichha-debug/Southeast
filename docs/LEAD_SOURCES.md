@@ -79,8 +79,10 @@ Setup:
 Until `GOOGLE_ADS_MODE=live` and a developer token are set, uploads run in **mock** mode: nothing
 leaves the server and rows are marked **"not sent (mock)"** (status `mock`, never `sent`). The first
 live run uploads them too; to send them at once, press "queue them now" on Admin → Leads →
-Conversions (`admin_requeue_mock_conversions`). A stage without a conversion action id is marked
-skipped. Google accepts clicks up to 90 days old (D-131).
+Conversions (`admin_requeue_mock_conversions`). In mock mode every row is kept as `mock`, even for a
+stage with no conversion action id yet. In live mode a stage without an action id is marked
+skipped; after adding the id, "queue them now" sends those too. Google accepts clicks up to 90 days
+old (D-131, D-135).
 
 Privacy: only the click id, the time and the value are sent; never a name or phone number.
 

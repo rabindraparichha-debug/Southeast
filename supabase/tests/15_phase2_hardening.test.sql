@@ -103,6 +103,24 @@ select is(public.complete_stop('95400000-0000-4000-f000-000000000002', 'otp', p_
   p_client_op => '95500000-0000-4000-f000-000000000002', p_offline => true) ->> 'otp_ok', 'true', 'an offline right code delivers');
 reset role;
 
+-- A wrong-code submit resent with the same op id (its answer was lost) is not counted twice (D-135).
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select is(public.complete_stop('95400000-0000-4000-f000-000000000003', 'otp', p_otp => '0000',
+  p_client_op => '95500000-0000-4000-f000-000000000031', p_offline => true) ->> 'otp_attempts_left', '4', 'a queued wrong code: 4 tries left');
+select is(public.complete_stop('95400000-0000-4000-f000-000000000003', 'otp', p_otp => '0000',
+  p_client_op => '95500000-0000-4000-f000-000000000031', p_offline => true) ->> 'otp_attempts_left', '4',
+  'the same op sent again gets the same answer');
+reset role;
+select is((select otp_attempts from public.delivery_stops where id = '95400000-0000-4000-f000-000000000003'), 1::smallint,
+  'and counts as one attempt');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select is(public.complete_stop('95400000-0000-4000-f000-000000000003', 'otp', p_otp => '0001',
+  p_client_op => '95500000-0000-4000-f000-000000000032') ->> 'otp_attempts_left', '3', 'a new wrong code is another attempt');
+reset role;
+update public.delivery_stops set otp_attempts = 0, otp_last_op = null where id = '95400000-0000-4000-f000-000000000003';
+
 -- Other roles cannot use the rider RPC on this run.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
@@ -217,7 +235,7 @@ select is(public.referral_join('phase-two-kitchen', (select v from vals where k 
 reset role;
 insert into ids select 'f1', id from public.customers where kitchen_id = '95000000-0000-4000-f000-000000000001' and name = 'Friend One';
 select is((select source::text || '/' || platform_sourced::text || '/' || whatsapp_opt_in::text from public.customers where id = (select v from ids where k = 'f1')),
-  'web/false/false', 'as the kitchen''s own customer (not platform-sourced, no commission), WhatsApp off unless ticked');
+  'web/false/false', 'as the kitchen''s own customer (not platform-sourced, no commission), WhatsApp off');
 select is((select status::text || '/' || start_date::text from public.subscriptions where customer_id = (select v from ids where k = 'f1')),
   'trial/2026-11-17', 'with a trial from tomorrow');
 select is((select r.source || '/' || (r.referrer_customer_id = (select v from ids where k = 'p1'))::text from public.referrals r
@@ -239,14 +257,38 @@ reset role;
 select is((select count(*) from public.customers where kitchen_id = '95000000-0000-4000-f000-000000000001'), 4::bigint,
   'no customer was added or changed by those');
 select is((select name from public.customers where id = (select v from ids where k = 'p2')), 'Phase p2', 'the existing customer is untouched');
+select is((select string_agg(payload ->> 'existing_name' || '<-' || (payload ->> 'customer_name'), ',' order by payload ->> 'existing_name')
+           from public.notifications_outbox where template = 'referral_existing' and recipient_id = 'f5000000-0000-4000-f000-000000000001'),
+  'Friend One<-Somebody,Phase p2<-Somebody', 'but the owner is told each time, to call them back (D-135)');
 
--- 5 joins per code per day.
+-- 5 attempts per code per day, whatever the number (3 used above).
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select public.referral_join('phase-two-kitchen', (select v from vals where k = 'code_p1'), 'Friend ' || n, '+91955520000' || n,
-  '95100000-0000-4000-f000-000000000001', 'House ' || n, p_consent => true) from generate_series(2, 5) n;
+  '95100000-0000-4000-f000-000000000001', 'House ' || n, p_consent => true, p_whatsapp_opt_in => true) from generate_series(2, 3) n;
 select throws_ok($$ select public.referral_join('phase-two-kitchen', (select v from vals where k = 'code_p1'), 'Friend 6', '+919555200006',
-  '95100000-0000-4000-f000-000000000001', 'House 6', p_consent => true) $$, '22023', 'too_many_requests', 'a sixth join on one code in a day is refused');
+  '95100000-0000-4000-f000-000000000001', 'House 6', p_consent => true) $$, '22023', 'too_many_requests', 'a sixth attempt on one code in a day is refused');
+select throws_ok($$ select public.referral_join('phase-two-kitchen', (select v from vals where k = 'code_p1'), 'Somebody', '+919555100002',
+  '95100000-0000-4000-f000-000000000001', 'House 6', p_consent => true) $$, '22023', 'too_many_requests',
+  '...and so is an existing customer''s number: the limit tells nothing about who is a customer (D-135)');
+reset role;
+select is((select count(*) from public.referral_join_attempts where kitchen_id = '95000000-0000-4000-f000-000000000001'), 5::bigint,
+  'refused attempts are not stored');
+insert into ids select 'f2', id from public.customers where kitchen_id = '95000000-0000-4000-f000-000000000001' and name = 'Friend 2';
+select is((select whatsapp_opt_in::text || '/' || (notes like '%Asked for WhatsApp updates%')::text from public.customers where id = (select v from ids where k = 'f2')),
+  'false/true', 'a ticked WhatsApp box is passed on as a wish, not recorded as opt-in (the page cannot prove who holds the phone)');
+select is((select count(*) from public.consents where customer_id = (select v from ids where k = 'f2') and purpose = 'whatsapp'), 0::bigint,
+  'no WhatsApp consent row from the join page');
+select is((select payload ->> 'whatsapp_requested' from public.notifications_outbox where dedupe_key like 'referral_customer:' || (select v from ids where k = 'f2') || ':%'),
+  'true', 'the owner sees the wish');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select is((select count(*) from public.referral_join_attempts), 0::bigint, 'owners cannot read join attempts');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
+select is((select count(*) from public.referral_join_attempts where kitchen_id = '95000000-0000-4000-f000-000000000001'), 5::bigint,
+  'the platform team can');
+select throws_ok($$ insert into public.referral_join_attempts (kitchen_id, referrer_customer_id) values ('95000000-0000-4000-f000-000000000001', (select v from ids where k = 'p1')) $$,
+  '42501', null, 'nobody writes join attempts directly');
 reset role;
 
 -- Customer page: card hidden at reward 0, kitchen-scoped link otherwise; other-kitchen codes named.
@@ -353,10 +395,17 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
 select throws_ok($$ select public.admin_requeue_mock_conversions() $$, '42501', 'forbidden', 'owners cannot requeue');
 select throws_ok($$ select public.ads_claim_conversions(10) $$, '42501', null, 'users cannot claim uploads');
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
-select is(public.admin_requeue_mock_conversions(), 1, 'the platform team requeues mock rows after going live');
 reset role;
-select is((select count(*) from public.ad_conversions where id::text like '95900000-%' and status = 'pending' and attempts = 0), 1::bigint, 'back to pending');
+-- A row with no conversion action id for its stage (usual before go-live) is not lost (D-135).
+insert into public.leads (id, source, gclid) values ('95800000-0000-4000-f000-000000000003', 'google_ads', 'gclid-phase2-0003');
+insert into public.ad_conversions (id, lead_id, gclid, stage, value_paise, occurred_at, status, last_error) values
+  ('95900000-0000-4000-f000-000000000003', '95800000-0000-4000-f000-000000000003', 'gclid-phase2-0003', 'renewal', 14000,
+   '2026-11-15 12:00:00+05:30', 'skipped', 'no conversion action for renewal');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
+select is(public.admin_requeue_mock_conversions(), 2, 'the platform team requeues mock and skipped rows after going live');
+reset role;
+select is((select count(*) from public.ad_conversions where id::text like '95900000-%' and status = 'pending' and attempts = 0), 2::bigint, 'back to pending');
 
 -- ===========================================================================
 -- Item 7: escalated complaints
@@ -404,6 +453,10 @@ select is((select count(*) from public.balance_entries where ref_type = 'complai
 select is((select count(*) from public.audit_log where action = 'ACCESS' and row_id in ((select v from ids where k = 'p1')::text, '95000000-0000-4000-f000-000000000001')
            and after ->> 'reason' = 'admin_complaint'), 2::bigint, 'both reveals are in the audit log');
 select throws_ok($$ update public.complaint_admin_events set note = 'x' $$, 'P0001', null, 'the team log cannot be edited');
+select set_config('tiffin.audit_scrub', 'on', true);
+select throws_ok($$ update public.complaint_admin_events set note = 'x' $$, 'P0001', null,
+  'not even in scrub mode, except blanking a note');
+select set_config('tiffin.audit_scrub', '', true);
 
 -- Nobody else sees the queue or the log.
 set local role authenticated;
@@ -424,6 +477,11 @@ set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select throws_ok($$ select public.admin_escalations() $$, '42501', null, 'anon cannot');
 reset role;
+
+-- Erasing the customer blanks the team's notes on their complaints; the log rows stay (D-135).
+update public.customers set deleted_at = private.now() where id = (select v from ids where k = 'p1');
+select is((select count(*) || '/' || count(note) from public.complaint_admin_events where complaint_id = '95a00000-0000-4000-f000-000000000001'),
+  '6/0', 'an erased customer''s complaint keeps its team log, without the notes');
 
 select * from finish();
 rollback;

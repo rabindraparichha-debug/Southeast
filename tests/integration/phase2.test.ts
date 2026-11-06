@@ -64,6 +64,8 @@ describe('Phase 2 hardening over the API', () => {
     expect(usage.data ?? []).toHaveLength(0);
     const log = await owner.client.from('complaint_admin_events').select('id');
     expect(log.data ?? []).toHaveLength(0);
+    const attempts = await owner.client.from('referral_join_attempts').select('id');
+    expect(attempts.data ?? []).toHaveLength(0);
   });
 
   it('lead intake takes its key from a header, never from the URL', async () => {

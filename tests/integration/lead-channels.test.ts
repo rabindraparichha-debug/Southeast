@@ -64,10 +64,13 @@ describe('Google Ads', () => {
 
   it('mock mode accepts without calling Google; live mode reads partial failures', async () => {
     const mock = await uploadConversions(cfg, rows, (async () => { throw new Error('no network in mock mode'); }) as unknown as typeof fetch);
-    // Mock mode sends nothing: rows come back as mock (stored 'mock', not 'sent', D-131).
-    expect(mock.filter((r) => r.ok)).toEqual([]);
-    expect(mock.filter((r) => r.mock).map((r) => r.id)).toEqual(['a', 'b']);
-    expect(mock.find((r) => r.id === 'c')).toMatchObject({ skip: true });
+    // Mock mode sends nothing: every row comes back as mock, also one whose stage has no action id
+    // yet (stored 'mock', never 'sent' or 'skipped', D-131, D-135).
+    expect(mock.filter((r) => r.ok || r.skip)).toEqual([]);
+    expect(mock.filter((r) => r.mock).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    // The usual pre-launch setup: no conversion action ids at all.
+    const bare = await uploadConversions({ ...cfg, actions: {} }, rows);
+    expect(bare.map((r) => `${r.id}:${r.mock ? 'mock' : r.skip ? 'skip' : 'other'}`)).toEqual(['a:mock', 'b:mock', 'c:mock']);
 
     const calls: string[] = [];
     const fetchFn = (async (url: string) => {
@@ -80,6 +83,7 @@ describe('Google Ads', () => {
     expect(calls[1]).toBe('https://googleads.googleapis.com/v21/customers/1234567890:uploadClickConversions');
     expect(live.find((r) => r.id === 'a')).toMatchObject({ ok: true });
     expect(live.find((r) => r.id === 'b')).toMatchObject({ ok: false, error: 'click too old' });
+    expect(live.find((r) => r.id === 'c')).toMatchObject({ skip: true }); // only live mode skips a stage without an action id
     expect(failedIndexes({})).toEqual(new Map());
   });
 

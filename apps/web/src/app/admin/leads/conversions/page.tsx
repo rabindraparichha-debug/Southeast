@@ -34,6 +34,11 @@ export default async function ConversionsPage() {
           uploads them; <RequeueMock /> to do it on the next run.
         </Alert>
       )}
+      {!rows.some((c) => c.status === 'mock') && rows.some((c) => c.status === 'skipped') && (
+        <Alert tone="amber">
+          Rows marked “skipped” had no conversion action id for their stage. After adding it (GOOGLE_ADS_CONVERSION_*), <RequeueMock /> to send them.
+        </Alert>
+      )}
       <Card className="overflow-x-auto p-0">
         <table className="min-w-full text-sm">
           <thead className="border-b border-ink-100 text-left text-xs uppercase text-ink-500">

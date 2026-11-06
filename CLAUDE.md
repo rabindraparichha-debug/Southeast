@@ -172,14 +172,14 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
 
-**Phase 2 hardening (D-126 – D-134)**
-- **Delivery codes:** never raise after counting a code attempt (the raise rolls the counter back): answer `status 'pending'`, `otp_ok false`. `otp` is a redacted audit column (`private.audit_redacted_columns`); outbox payloads lose `otp` once not pending/sending; never copy a code anywhere else.
-- **Referrals:** the share link is `/k/<slug>/join?ref=<CODE>` (`referral_invite`, `referral_join`, flag `customer_portal`). A join creates the kitchen's own customer (`source 'web'`, never platform-sourced) and records the referral; codes from another kitchen raise `referral_other_kitchen`.
+**Phase 2 hardening (D-126 – D-135)**
+- **Delivery codes:** never raise after counting a code attempt (the raise rolls the counter back): answer `status 'pending'`, `otp_ok false`. A wrong code is counted once per `p_client_op` (`delivery_stops.otp_last_op`). `otp` is a redacted audit column (`private.audit_redacted_columns`); outbox payloads lose `otp` once not pending/sending; never copy a code anywhere else.
+- **Referrals:** the share link is `/k/<slug>/join?ref=<CODE>` (`referral_invite`, `referral_join`, flag `customer_portal`). A join creates the kitchen's own customer (`source 'web'`, never platform-sourced) and records the referral; codes from another kitchen raise `referral_other_kitchen`. Count the attempt (`referral_join_attempts`) before looking at the number, give an existing number the same answer (the owner gets `referral_existing`), and never record WhatsApp opt-in from a public form that cannot prove who holds the phone.
 - **AI fallback:** every model call takes a unit of the budget first (`BotDeps.aiBudget` → `wa_ai_take`; caps `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`). Build the Claude call only with `makeClaudeComplete` (`_shared/ai-claude.ts`); the model comes from `ANTHROPIC_CHAT_MODEL` / `ANTHROPIC_MODEL`.
-- **Payment links:** wrap every Razorpay link creation in `createLinkOrCancel` (`_shared/payment-link.ts`) so a failure cancels the `created` row (`cancel_payment_link_record`).
+- **Payment links:** wrap every Razorpay link creation in `createLinkOrCancel` (`_shared/payment-link.ts`, steps `create` / `attach` / `cancelGateway`): a failed create cancels the `created` row (`cancel_payment_link_record`); a failed attach is retried, then the link is cancelled at Razorpay (`cancelPaymentLink`) before the row.
 - **Lead-intake keys:** header `X-Lead-Key` or Basic auth only, checked by `checkLeadKey` / `checkGoogleKey` (`_shared/leads.ts`); the only URL key is `JUSTDIAL_LEAD_KEY` on `?source=justdial`.
-- **Google Ads:** mock mode stores conversions as `mock`, never `sent`.
-- **Escalated complaints:** the platform team works through the `admin_*complaint*` RPCs (reveals logged, team log `complaint_admin_events`); the team never credits meals.
+- **Google Ads:** mock mode stores every conversion as `mock` (never `sent` or `skipped`); only live mode skips a stage without an action id.
+- **Escalated complaints:** the platform team works through the `admin_*complaint*` RPCs (reveals logged, team log `complaint_admin_events`, append-only except the erasure scrub of `note`); the team never credits meals.
 - **Templates:** a new template goes in `_shared/templates.ts`, `TEMPLATE_SAMPLES` (`_shared/template-pack.ts`) and `docs/WHATSAPP_TEMPLATES.md`; regenerate `docs/whatsapp-templates.csv` (`UPDATE_TEMPLATE_PACK=1`, see the doc).
 
 **Migrations and data**

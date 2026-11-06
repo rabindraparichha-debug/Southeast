@@ -8,7 +8,8 @@ import {
   type SdkModule,
 } from '../../supabase/functions/_shared/ai-claude.ts';
 import { handleMessage, type BotDeps } from '../../supabase/functions/_shared/bot.ts';
-import { createLinkOrCancel, failureReason } from '../../supabase/functions/_shared/payment-link.ts';
+import { createLinkOrCancel, failureReason, type LinkSteps } from '../../supabase/functions/_shared/payment-link.ts';
+import { cancelPaymentLink, type RazorpayConfig } from '../../supabase/functions/_shared/razorpay.ts';
 import {
   checkGoogleKey, checkLeadKey, EXAMPLE_INTAKE_KEYS, intakeKeyProblem, presentedKey,
 } from '../../supabase/functions/_shared/leads.ts';
@@ -149,23 +150,68 @@ describe('AI budget', () => {
 // Payment links: a failed Razorpay call cancels our row
 // ---------------------------------------------------------------------------
 describe('payment link failures', () => {
-  it('keeps the row when the link is created', async () => {
+  const noSleep = { sleep: async () => {} };
+  const steps = (over: Partial<LinkSteps<string>> = {}): LinkSteps<string> => ({
+    create: async () => 'https://rzp.io/x',
+    attach: async () => {},
+    cancelGateway: async () => {},
+    ...over,
+  });
+
+  it('keeps the row when the link is created and attached', async () => {
     const cancel = vi.fn(async () => true);
-    expect(await createLinkOrCancel('p1', async () => 'https://rzp.io/x', cancel)).toBe('https://rzp.io/x');
+    expect(await createLinkOrCancel('p1', steps(), cancel, undefined, noSleep)).toBe('https://rzp.io/x');
     expect(cancel).not.toHaveBeenCalled();
   });
 
   it('cancels the row and rethrows when Razorpay fails (owner, page, payer and bot paths share this)', async () => {
     const cancel = vi.fn(async () => true);
-    await expect(createLinkOrCancel('p1', async () => { throw new Error('razorpay_502: Bad gateway'); }, cancel)).rejects.toThrow('razorpay_502');
+    const cancelGateway = vi.fn(async () => {});
+    await expect(createLinkOrCancel('p1', steps({ create: async () => { throw new Error('razorpay_502: Bad gateway'); }, cancelGateway }),
+      cancel, undefined, noSleep)).rejects.toThrow('razorpay_502');
     expect(cancel).toHaveBeenCalledWith('p1', 'razorpay_502');
+    expect(cancelGateway).not.toHaveBeenCalled();
   });
 
   it('a failure to cancel is reported but never hides the original error', async () => {
     const report = vi.fn();
-    await expect(createLinkOrCancel('p1', async () => { throw new Error('payments_not_configured: no key'); },
-      async () => { throw new Error('db down'); }, report)).rejects.toThrow('payments_not_configured');
+    await expect(createLinkOrCancel('p1', steps({ create: async () => { throw new Error('payments_not_configured: no key'); } }),
+      async () => { throw new Error('db down'); }, report, noSleep)).rejects.toThrow('payments_not_configured');
     expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a failed attach and keeps the row once it works (D-135)', async () => {
+    const cancel = vi.fn(async () => true);
+    let n = 0;
+    const attach = vi.fn(async () => { if (++n < 3) throw new Error('rest_503'); });
+    expect(await createLinkOrCancel('p1', steps({ attach }), cancel, undefined, noSleep)).toBe('https://rzp.io/x');
+    expect(attach).toHaveBeenCalledTimes(3);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('a link Razorpay created is cancelled there before our row is called failed', async () => {
+    const order: string[] = [];
+    const cancel = vi.fn(async (_p: string, reason: string) => { order.push(`row:${reason}`); });
+    await expect(createLinkOrCancel('p1', steps({
+      attach: async () => { throw new Error('rest_503: timeout'); },
+      cancelGateway: async (l) => { order.push(`gateway:${l}`); },
+    }), cancel, undefined, noSleep)).rejects.toThrow('rest_503');
+    expect(order).toEqual(['gateway:https://rzp.io/x', 'row:attach_failed_rest_503']);
+  });
+
+  it('if the Razorpay link cannot be cancelled, our row is left as it is (a live link exists) and it is reported', async () => {
+    const cancel = vi.fn(async () => true);
+    const report = vi.fn();
+    await expect(createLinkOrCancel('p1', steps({
+      attach: async () => { throw new Error('rest_503'); },
+      cancelGateway: async () => { throw new Error('razorpay_500'); },
+    }), cancel, report, noSleep)).rejects.toThrow('rest_503');
+    expect(cancel).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancelling a mock link at the gateway calls nothing', async () => {
+    await expect(cancelPaymentLink({ mode: 'mock' } as RazorpayConfig, 'plink_mock_abc')).resolves.toBeUndefined();
   });
 
   it('keeps only a short reason', () => {

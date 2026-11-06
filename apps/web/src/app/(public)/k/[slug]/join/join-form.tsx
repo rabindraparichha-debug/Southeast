@@ -13,6 +13,7 @@ type Props = { slug: string; code: string; kitchenName: string; plans: ReferralI
 
 export function JoinForm({ slug, code, kitchenName, plans }: Props) {
   const tomorrow = addDays(istDate(), 1);
+  const platform = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
   const [f, setF] = useState({
     name: '', phone: '', plan: plans[0]?.id ?? '', address: '', area: '', landmark: '', start: tomorrow,
     consent: false, whatsapp: false, // unticked: opting in must be a choice (D-133)
@@ -48,6 +49,14 @@ export function JoinForm({ slug, code, kitchenName, plans }: Props) {
         <p className="mt-1 text-ink-700">
           {done.kitchen_name} will call you to confirm your trial of {done.trial_meals} meals and when to start. You pay the kitchen directly.
         </p>
+        {/* This page cannot prove whose phone it is, so WhatsApp updates start only from the phone itself (D-135). */}
+        {f.whatsapp && platform && (
+          <p className="mt-3 text-sm text-ink-700">
+            For updates on WhatsApp, send UPDATES from your phone:{' '}
+            <a className="font-medium text-green-700 hover:underline" target="_blank" rel="noreferrer" data-testid="join-whatsapp"
+               href={`https://wa.me/${platform}?text=${encodeURIComponent('UPDATES')}`}>open WhatsApp</a>
+          </p>
+        )}
       </div>
     );
   }

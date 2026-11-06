@@ -40,6 +40,7 @@ export const TEMPLATE_SAMPLES: Record<string, { audience: Audience; payload: Pay
   vendor_nudge: { audience: 'platform', payload: { name: 'Sunita', next_step: 'plans', url: 'https://app.example.in/plans' } },
   new_platform_customer: { audience: 'owner', payload: { customer_name: 'Asha Das', area: 'Patia', plan_name: 'Veg Lunch', trial_meals: 2 } },
   referral_customer: { audience: 'owner', payload: { customer_name: 'Priya Nayak', area: 'Patia', referrer_name: 'Asha Das', plan_name: 'Veg Lunch', trial_meals: 2, start_date: '2026-11-17' } },
+  referral_existing: { audience: 'owner', payload: { customer_name: 'Priya Nayak', referrer_name: 'Asha Das', plan_name: 'Veg Lunch', start_date: '2026-11-17', existing_name: 'Priya N' } },
   owner_daily_summary: { audience: 'owner', payload: { service_date: '2026-11-17', lunch: { total_meals: 64 }, dinner: { total_meals: 31 }, collections_paise: 350000, low_stock: ['Toor dal', 'Mustard oil'] } },
   production_sheet: { audience: 'owner', payload: { service_date: '2026-11-17', slot: 'lunch', totals: { total_meals: 64, by_diet: { veg: 50, nonveg: 12, jain: 2 } } } },
   stock_alert: { audience: 'owner', payload: { kind: 'low', item: 'Toor dal', stock: 4, unit: 'kg', min_qty: 5 } },
@@ -57,7 +58,7 @@ export const EXTERNAL_TEMPLATES: {
   name: string; category: Category; audience: Audience; body: string; examples: string[]; buttons: string[]; source: string; notes: string;
 }[] = [
   {
-    name: 'login_code_v1', category: 'AUTHENTICATION', audience: 'login',
+    name: 'tiffin_login_code', category: 'AUTHENTICATION', audience: 'login',
     body: '{{1}} is your verification code. For your security, do not share this code.',
     examples: ['482913'], buttons: ['Copy code'],
     source: 'auth-send-sms (WhatsApp login through Twilio: TWILIO_WHATSAPP_CONTENT_SID)',

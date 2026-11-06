@@ -1046,6 +1046,7 @@ export type Database = {
           offline: boolean;
           otp: string | null;
           otp_attempts: number;
+          otp_last_op: string | null;
           otp_ok: boolean | null;
           photo_path: string | null;
           proof_type: Database['public']['Enums']['proof_type'] | null;
@@ -1084,6 +1085,7 @@ export type Database = {
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
+          otp_last_op?: string | null;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
@@ -1121,6 +1123,7 @@ export type Database = {
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
+          otp_last_op?: string | null;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
@@ -3160,6 +3163,50 @@ export type Database = {
             columns: ['item_id', 'kitchen_id'];
             isOneToOne: false;
             referencedRelation: 'items';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
+      referral_join_attempts: {
+        Row: {
+          created_at: string;
+          id: number;
+          kitchen_id: string;
+          referrer_customer_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: never;
+          kitchen_id: string;
+          referrer_customer_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          kitchen_id?: string;
+          referrer_customer_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'referral_join_attempts_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'referral_join_attempts_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referral_join_attempts_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
             referencedColumns: ['id', 'kitchen_id'];
           },
         ];
