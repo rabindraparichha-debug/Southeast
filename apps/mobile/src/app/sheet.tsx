@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { SLOT_LABEL, formatServiceDate } from '@tiffin/core';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { SLOT_LABEL, addDays, formatServiceDate, istDate } from '@tiffin/core';
 import type { Database, MealSlot } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
 import { DIET_COLOR, DIET_LABEL } from '@/components/ui';
 import { healthSummary } from '@/components/slot-card';
+import { StaleBanner } from '@/components/offline-banner';
+import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
+import { oldSheetKeys } from '@/lib/screen-cache';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -17,10 +20,28 @@ export default function Sheet() {
   const { date, slot } = useLocalSearchParams<{ date: string; slot: MealSlot }>();
   const kitchen = useKitchen();
   const [rows, setRows] = useState<Row[]>([]);
+  const scope = useCacheScope();
+  const [stale, setStale] = useState<Stale | null>(null); // showing the copy saved on this phone
+  const [loaded, setLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    supabase.rpc('packing_list', { p_kitchen: kitchen.kitchenId, p_date: date, p_slot: slot }).then(({ data }) => setRows(data ?? []));
-  }, [kitchen.kitchenId, date, slot]);
+  // Each meal's list is saved on the phone (kept for 2 days), so it still opens with no signal.
+  const load = useCallback(async () => {
+    const res = await cachedFetch<Row[]>({
+      scope, screen: 'sheet', part: `${date}.${slot}`,
+      prune: (keys) => oldSheetKeys(keys, kitchen.kitchenId, addDays(istDate(), -2)),
+      fetch: async () => {
+        const { data, error } = await supabase.rpc('packing_list', { p_kitchen: kitchen.kitchenId, p_date: date, p_slot: slot });
+        return { data: data ?? [], error };
+      },
+      onCached: (d, savedAt) => { setRows(d); setStale({ savedAt, offline: false, error: '', updating: true }); },
+    });
+    if (res.data) setRows(res.data);
+    setStale(res.stale);
+    setLoaded(true);
+  }, [scope, kitchen.kitchenId, date, slot]);
+
+  useFocusEffect(useCallback(() => void load(), [load]));
 
   // Meals switched to veg today and meals per health tag (counted rows only, like the totals).
   const summary = useMemo(() => {
@@ -40,15 +61,17 @@ export default function Sheet() {
       <FlatList
         data={rows}
         keyExtractor={(r) => r.order_id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
         ListHeaderComponent={
           <View style={styles.headerBox}>
+            <StaleBanner stale={stale} />
             <Text style={styles.header}>{t('sheet.title')} ({rows.length})</Text>
             {(summary.veg > 0 || summary.health) && (
               <Text style={styles.sub}>{t('sheet.summary', { n: summary.veg, health: summary.health || '—' })}</Text>
             )}
           </View>
         }
-        ListEmptyComponent={<Text style={styles.empty}>{t('sheet.empty')}</Text>}
+        ListEmptyComponent={loaded && (!stale || stale.savedAt) ? <Text style={styles.empty}>{t('sheet.empty')}</Text> : undefined}
         ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.line }} />}
         renderItem={({ item, index }) => (
           <View style={[styles.item, item.status === 'skipped' && { backgroundColor: '#FFFBEB' }]}>

@@ -6,6 +6,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { rupeesToPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components/ui';
 import { QrScanner } from '@/components/qr-scanner';
+import { ChangedBadge } from '@/components/changed-badge';
 import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, isNetworkError, keepPhoto, useRider, uuid } from '@/lib/rider-store';
@@ -160,6 +161,7 @@ export default function StopScreen() {
       <Stack.Screen options={{ title: `${stop.seq}. ${stop.name}` }} />
       {scanning && <QrScanner visible onScanned={onScanned} onClose={() => setScanning(false)} />}
       <Card>
+        <ChangedBadge stop={stop} detail />
         {stop.office && (
           <View style={styles.office}>
             <Text style={styles.officeTitle}>🏢 {t('rider.office', { name: stop.name })}</Text>
