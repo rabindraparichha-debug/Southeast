@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/server';
 import { istDateTime } from '@/lib/public';
 import { Alert, Badge, Card, PageHeader } from '@/components/ui';
 import { GoalBar } from './goal-bar';
-import { share, type PlatformMetrics } from './types';
+import { EngineTile } from './engine-tile';
+import { share, type EngineHealth, type PlatformMetrics } from './types';
 
 export const metadata: Metadata = { title: 'Dashboard · Admin' };
 
@@ -15,11 +16,12 @@ export const metadata: Metadata = { title: 'Dashboard · Admin' };
 export default async function AdminDashboard() {
   const session = await requireAdmin();
   const supabase = await createClient();
-  const [{ data, error }, { data: escalated }, { data: kitchens }] = await Promise.all([
+  const [{ data, error }, { data: escalated }, { data: kitchens }, { data: engine }] = await Promise.all([
     supabase.rpc('platform_metrics'),
     supabase.from('complaints').select('id, category, description, created_at, escalated_at, kitchen_id')
       .eq('status', 'escalated').order('escalated_at'),
     supabase.from('kitchens').select('id, name'),
+    supabase.rpc('engine_health'),
   ]);
   const m = data as unknown as PlatformMetrics | null;
   const kitchenName = new Map((kitchens ?? []).map((k) => [k.id, k.name]));
@@ -32,6 +34,12 @@ export default async function AdminDashboard() {
         actions={session.kitchen && <Link href="/" className="text-sm text-brand-700 hover:underline">Back to my kitchen</Link>}
       />
       {error && <Alert>{error.message}</Alert>}
+      {engine && (
+        <EngineTile
+          h={engine as unknown as EngineHealth}
+          healthUrl={`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://<project>.supabase.co'}/functions/v1/ops-health`}
+        />
+      )}
       {m && <Metrics m={m} />}
 
       <div id="escalated" className="scroll-mt-20" />

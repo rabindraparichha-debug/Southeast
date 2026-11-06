@@ -764,3 +764,31 @@ Today signups are open: any number that receives a code gets an account, so invi
   2. *CAPTCHA on login* (Turnstile or hCaptcha through Supabase, a `captchaToken` from both login screens; the mobile app needs a WebView widget). Not built. Best once signups open to the public.
   3. *Open* (today): rate limits plus India-only rules, and watch the auth logs.
 - Until you decide, the default stays open, with the hourly SMS limit set above the real login peak (docs/LOGIN.md, "Signup policy").
+### D-128 Engine health: heartbeats, ops-health and what "healthy" means (vendor-first wave 3, ops)
+- The engine jobs (`tiffin-lock-due-slots`, `tiffin-nightly`, `tiffin-owner-summary`, `tiffin-purge`) run through `private.run_job`, which stamps `engine_heartbeats` only when the job finished. A failure still rolls back and is logged by pg_cron; nothing is swallowed. `tiffin-storage-retention` (an Edge Function) reports with `ops_heartbeat`.
+- **Healthy** = the lock job finished within 5 minutes, nightly and summary within 26 hours, all three scheduled and active; no slot more than 5 minutes past its cutoff with counted, unlocked orders and no count snapshot (non-suspended kitchens, last 7 days to tomorrow; slots with no orders are ignored, so closed days never alarm); no `tiffin-*` job whose latest finished run failed; no `engine_errors` row in 15 minutes (wave 1's table, read only if it exists). A job that has never run counts from when its heartbeat row was created (the migration), so a fresh project is not red for a day.
+- `ops-health` is public (no JWT, for free uptime pingers) and returns booleans and counts only, 200 or 503; optional `OPS_HEALTH_KEY`. The admin tile (`engine_health`, admins only) shows names, dates and errors.
+
+### D-129 Freeze now (owner)
+- A slot card shows "Count not frozen" 5 minutes after its cutoff when it has orders and no lock, on web and mobile. Owners get **Freeze now** (`freeze_slot`), staff see the banner only. It runs the one lock path (`private.lock_slot`, idempotent) plus the same balance sync as the job; it refuses before the cutoff (`before_cutoff`), beyond 7 days back (`out_of_range`, ops can still run the job) and for suspended kitchens (`kitchen_suspended`). The audit log shows who froze it (the `count_snapshots` insert carries the owner as actor).
+- Managers (D-117, wave 2) are not included yet: add them to `freeze_slot`'s `require_role` when the role exists.
+
+### D-130 A smaller audit log
+- Updates on personal-data tables store only the changed keys plus identity keys (`id`, `kitchen_id`, `customer_id`, `user_id`, `run_id`, `route_id`, `subscription_id`, `new_customer_id`); inserts and deletes keep whole rows; other tables keep full copies. Personal-data tables and keys: `private.audit_personal_keys` (customers, addresses, customer_health, complaints, delivery_stops, delivery_runs, kitchen_reviews, kitchen_switch_requests, leads, vendor_applications, member_invites, members, offices).
+- Not audit events: rider location pings (`delivery_runs` updates that only move `last_lat`/`last_lng`/`last_seen_at`) and updates that only touch `updated_at`.
+- Never copied: `otp` (delivery codes; the security finding), `phone_e164` (invites) and `contact_phone_enc` join `phone_enc`/`phone_hash`/`token_hash`; values already logged were replaced with `"[erased]"` once.
+- Measured in pgTAP 14: 30 pings plus 10 customer edits store 2.8 kB instead of 41 kB (about 7%).
+- `audit_log` stays append-only. The only update allowed is the erasure scrub: with the session flag `tiffin.audit_scrub = 'on'` (set only by `private.scrub_customer_audit`) values may be replaced by `"[erased]"`, with the same keys and nothing else changed. Deletes and truncates are still refused.
+
+### D-131 Real erasure
+- `erase_customer` (any path that sets `customers.deleted_at`) now also: removes their delivery GPS, failure notes and proof-photo paths (photos queued in `storage_purge_queue` and deleted by `storage-retention`), complaint text and photo, review comment, switch-request reasons; blanks their import row; deletes their WhatsApp conversation and messages (if another live customer of the kitchen shares the number, D-118, the conversation is only unlinked); deletes outbox messages to them; then replaces every personal value in their audit rows with `"[erased]"`.
+- Kept: ledgers, counts, orders, stops (status and outcome), complaints (category, status), reviews (rating), consents, audit rows (scrubbed, never deleted). Their lead (platform data, if they came through the platform) is not touched: open question for the owner.
+
+### D-132 Retention defaults
+- `platform_settings` key `retention`, on by default: proof photos 90 days, dispatch photos 30, notebook-import photos 7 (closes the D-111 gap), finished outbox rows 90 (and expired ones once wave 2's `expires_at` exists), pg_cron run log 14. Receipts and purchase bills are money records and are kept. Floors: proofs 7, dispatch 2, imports 1, outbox 7, cron log 2 days. Admins change them with `admin_set_retention`.
+- Photos are deleted only through the Storage API (`storage-retention`, daily 03:15 IST); SQL cannot delete storage objects. Rows that point at an expired photo stay; the screens show no photo.
+- The audit log has no time-based retention (append-only); it shrinks through D-130.
+
+### D-133 Hosted deploy and restore
+- Deploys go through `scripts/deploy.sh`: migrations with `db push` (never `--include-seed`), an explicit Edge Function allowlist (never `razorpay-mock`), and checks before anything changes: `PLATFORM_ENV` matches the target (by digest), no placeholder values from `.env.example`, no `RAZORPAY_ALLOW_LIVE` without the owner's approval, Vault keys present and not the dev keys, `functions_base_url` hosted https, `service_role_key` not the demo key, no seed logins. It refuses `config push`, `db reset` and seeds outright.
+- Restore drill against hosted: `scripts/restore-drill.sh` with `DB_URL` restores into a staging copy (data replaced in one transaction, `tiffin-*` jobs paused meanwhile, `CONFIRM_WIPE` must repeat the target) and checks counts, ledger totals, cron jobs and that phones decrypt with the target's Vault keys. Storage files are not in database backups: proofs expire, receipts and bills need a monthly S3 copy (founder action).

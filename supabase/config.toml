@@ -296,6 +296,9 @@ max_frequency = "5s"
 919000000106 = "123456"
 # tests/integration/auth-sms.test.ts (amr of a code login)
 919000000107 = "123456"
+# tests/integration/ops.test.ts (vendor-first wave 3 ops)
+919000000120 = "123456"
+919000000121 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -500,4 +503,14 @@ verify_jwt = false
 
 # Supabase Auth's Send SMS hook (no user JWT yet; the Standard Webhooks signature is checked inside).
 [functions.auth-send-sms]
+verify_jwt = false
+
+# Vendor-first wave 3: engine health for a free uptime pinger (200/503, booleans and counts only).
+# Optional OPS_HEALTH_KEY secret requires ?key=. See docs/OPERATIONS.md.
+[functions.ops-health]
+verify_jwt = false
+
+# Vendor-first wave 3: daily photo retention and erasure clean-up, started by pg_cron with the
+# service role key (checked inside the function).
+[functions.storage-retention]
 verify_jwt = false

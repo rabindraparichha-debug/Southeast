@@ -119,6 +119,11 @@ const MESSAGES: Record<string, string> = {
   invalid_change_type: 'To undo a skip or pause, use Undo on it.',
   not_cancelled: 'This subscription is not cancelled.',
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
+  // Vendor-first wave 3 (ops): Freeze now, retention settings
+  before_cutoff: 'Changes are still open for this meal. It is frozen automatically at the cutoff.',
+  out_of_range: 'Only meals from the last 7 days can be frozen here. Contact Tiffin support.',
+  kitchen_suspended: 'This kitchen is suspended. Contact Tiffin support.',
+  invalid_setting: 'Retention days must be whole numbers from 1 to 3650.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

@@ -35,9 +35,10 @@ select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') 
              and p.prosrc !~ '(require_role|require_admin|require_run_access|portal_customer|private.lead_|token_hash|auth.uid\(\) is null|private.has_role|private.is_platform_admin)'),
   array['claim_invites', 'create_kitchen', 'kitchen_directory', 'kitchen_profile', 'list_areas', 'submit_vendor_application'],
   'every other RPC callable by signed-in users checks who is calling');
--- Service-role-only RPCs are not callable by users.
+-- Service-role-only RPCs are not callable by users (wave 3: ops_* for the ops-health and
+-- storage-retention Edge Functions).
 select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'public' and (p.proname like 'wa\_%' or p.proname in ('razorpay_process_event', 'attach_payment_link',
+           where n.nspname = 'public' and (p.proname like 'wa\_%' or p.proname like 'ops\_%' or p.proname in ('razorpay_process_event', 'attach_payment_link',
              'mark_refund_submitted', 'lead_ingest', 'weather_kitchens', 'weather_record_alert'))
              and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))),
   '{}'::text[], 'webhook/service functions are not callable by users');
@@ -53,7 +54,7 @@ select is((select coalesce(array_agg(distinct table_name::text), '{}') from info
                                 'customers', 'webhook_events', 'notifications_outbox', 'lead_events', 'platform_commissions',
                                 'customer_health', 'referrals', 'kitchen_switch_requests', 'offices', 'platform_settings',
                                 'food_calendar', 'churn_risks', 'dispatch_photos', 'festival_specials', 'weather_alerts',
-                                'engine_errors', 'kitchen_closures')),
+                                'engine_errors', 'kitchen_closures', 'engine_heartbeats', 'storage_purge_queue')),
   '{}'::text[], 'no direct inserts or updates on ledgers, money, orders, leads or customers (RPCs only)');
 
 -- Append-only ledgers refuse updates and deletes even for the database owner.
@@ -62,6 +63,16 @@ select is((select coalesce(array_agg(t order by t), '{}') from unnest(array['aud
            where not exists (select 1 from pg_trigger tr join pg_class c on c.oid = tr.tgrelid
                              where c.relname = t and tr.tgfoid = 'private.forbid_mutation'::regproc)),
   '{}'::text[], 'every ledger has the append-only trigger');
+
+-- Wave 3: the ops RPCs exist and are granted to the service role (ops-health, storage-retention).
+select is((select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname like 'ops\_%' and has_function_privilege('service_role', p.oid, 'execute')),
+  array['ops_expired_objects', 'ops_health', 'ops_heartbeat', 'ops_mark_purged'], 'the service role can run the ops RPCs');
+-- audit_log: deletes refused by forbid_mutation; updates only through the scrub-only guard.
+select is((select array_agg(tr.tgname::text || ':' || tr.tgfoid::regproc::text order by tr.tgname) from pg_trigger tr
+           where tr.tgrelid = 'public.audit_log'::regclass and not tr.tgisinternal),
+  array['audit_log_append_only:private.forbid_mutation', 'audit_log_no_truncate:private.forbid_mutation', 'audit_log_scrub_only:private.audit_log_guard'],
+  'the audit log is append-only except the erasure scrub');
 
 -- Views run with the caller's rights (RLS applies).
 select is((select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace

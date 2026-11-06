@@ -83,7 +83,14 @@ export default function Today() {
       <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={kitchen.role === 'owner'} version={version} />
       <View style={styles.grid}>
         {slots.map((s) => (
-          <SlotCard key={`${s.service_date}-${s.slot}`} s={s} onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })} />
+          <SlotCard
+            key={`${s.service_date}-${s.slot}`}
+            s={s}
+            kitchenId={kitchen.kitchenId}
+            canFreeze={kitchen.role === 'owner'}
+            onFrozen={() => void load()}
+            onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })}
+          />
         ))}
       </View>
       <ClosuresCard kitchenId={kitchen.kitchenId} isOwner={kitchen.role === 'owner'} version={version} onChanged={load} />

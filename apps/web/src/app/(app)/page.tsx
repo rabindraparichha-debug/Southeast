@@ -49,7 +49,9 @@ export default async function TodayPage() {
       {isOwner && <OnboardingChecklist items={checklist} />}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaries.map((r, i) => r.data && <SlotCard key={i} s={r.data as unknown as SlotSummary} />)}
+        {summaries.map((r, i) => r.data && (
+          <SlotCard key={i} s={r.data as unknown as SlotSummary} kitchenId={kitchen.kitchenId} canFreeze={isOwner} />
+        ))}
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">

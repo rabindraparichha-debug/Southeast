@@ -36,3 +36,17 @@ export type AdminReview = {
 export function share(n: number, d: number): number | null {
   return d > 0 ? Math.round((n / d) * 1000) / 10 : null;
 }
+
+/** public.engine_health() (supabase/migrations/20261110000100_engine_health.sql). */
+export type EngineJob = {
+  job: string; critical: boolean; max_age_minutes: number; scheduled: boolean; active: boolean; schedule: string | null;
+  last_ok_at: string | null; last_duration_ms: number | null; last_result: Record<string, unknown> | null; stale: boolean; healthy: boolean;
+};
+export type EngineHealth = {
+  ok: boolean;
+  checked_at: string;
+  jobs: EngineJob[];
+  overdue_slots: { count: number; items: { kitchen_id: string; kitchen: string; service_date: string; slot: 'lunch' | 'dinner'; cutoff_at: string }[] };
+  cron: { failing: { job: string; at: string; message: string }[]; failures_24h: number };
+  engine_errors: { tracked: boolean; recent: number | null; last_24h: number | null };
+};

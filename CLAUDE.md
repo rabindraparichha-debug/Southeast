@@ -38,7 +38,8 @@ pnpm --filter @tiffin/core test
 pnpm test:integration        # needs db:start + db:reset
 pnpm db:types                # regenerate packages/db/src/types.ts after every migration
 pnpm db:loadtest             # 5,000-subscription lock timing (rolled back)
-pnpm db:restore-drill        # backup → restore → compare counts and ledger totals
+pnpm db:restore-drill        # backup → restore → compare counts and ledger totals (DB_URL=…: into a staging copy)
+scripts/deploy.sh --self-test   # hosted deploy guards; real deploys: docs/OPERATIONS.md (never config push / db reset / seed)
 
 # Every check in one go (stack, pgTAP, types, integration, load test, typecheck, lint, builds);
 # prints a PASS/FAIL table. In a worktree, give it its own stack: docs/OPERATIONS.md "Verifying a branch"
@@ -71,6 +72,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
 | 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
+| 90000 00120 – 90000 00121 | Spare (used by the vendor-first wave 3 ops integration test: owner of its own kitchen, and an outsider) |
 
 ## Conventions (follow these in every change)
 
@@ -154,7 +156,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 **Hardening (M8)**
 - `supabase/tests/09_security.test.sql` pins schema-wide rules (RLS everywhere, definer hygiene, anon allowlist, no direct ledger writes, private buckets). If you add an anon RPC or a public bucket, update its allowlist deliberately.
 - Performance: `pnpm db:loadtest` (21:00 lock for 5,000 subscriptions must stay under 60 s). Anything you hang off the lock (`count_snapshots` triggers) must stay fast and must never raise.
-- Backups: `pnpm db:backup`, `pnpm db:restore-drill`. Edge Function errors go through `_shared/monitor.ts` (`reportError`, phones masked).
+- Backups: `pnpm db:backup`, `pnpm db:restore-drill` (docs/OPERATIONS.md). Edge Function errors go through `_shared/monitor.ts` (`reportError`, phones masked).
 
 **P5 / P6 (P6 ships switched off)**
 - **Parent pays:** balances stay per eater.
@@ -183,6 +185,15 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
+
+**Ops: engine health, retention, deploy (vendor-first wave 3)**
+- Engine pg_cron jobs run through `private.run_job('<job>')` (heartbeat in `engine_heartbeats` when it finishes). A new engine job: add it to `run_job` and `private.engine_jobs()` (critical or not, max age), schedule it with `run_job`, and to `CRON_JOBS` in `scripts/deploy.sh`.
+- Health is `private.engine_health()`: admin tile `engine_health()`, service-role `ops_health()` for the public `ops-health` function (booleans and counts only, never names, ids or error text). Wave 1's `engine_errors` is read through `to_regclass` + dynamic SQL only.
+- "Count not frozen" + **Freeze now** (`freeze_slot`, owner) goes through `private.lock_slot` and `sync_balance_status`: the lock stays the only path that posts meal entries.
+- Audit log: updates on tables listed in `private.audit_personal_keys` store only changed keys. A new table with personal data: list its personal keys there (and in `private.customer_audit_tables()` if erasure must scrub it); a new secret column: add it to `private.audit_redacted_columns()`. Never update `audit_log` except through `private.scrub_customer_audit` (the `tiffin.audit_scrub` guard allows `"[erased]"` replacements only).
+- Erasure lives in `private.customer_erased_cleanup` (trigger on `customers.deleted_at`). New customer data anywhere must be scrubbed or deleted there.
+- Retention: days in `platform_settings` `retention` (`private.retention_days`, `admin_set_retention`); `private.purge_old_data()` (job `tiffin-purge`) for rows; storage objects only through the `storage-retention` function (SQL cannot delete them). Never purge ledgers, receipts or bills.
+- Hosted deploys only through `scripts/deploy.sh` (explicit function allowlist; `razorpay-mock` is never deployed; a new function must be added to `ALLOWLIST` or `NEVER`, the self-test checks it). Its `service_role` ops RPCs are pinned in `09_security`.
 
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
@@ -271,6 +282,8 @@ Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the
 Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
 
 Monitoring (optional): `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` (Edge Functions), `NEXT_PUBLIC_SENTRY_DSN` and `NEXT_PUBLIC_POSTHOG_KEY`/`NEXT_PUBLIC_POSTHOG_HOST` (web), `EXPO_PUBLIC_SENTRY_DSN` (mobile). All listed in `.env.example`.
+
+Ops (optional): `OPS_HEALTH_KEY` (Edge Function secret; `ops-health` then needs `?key=`). The deploy and restore scripts read `DB_URL`, `SOURCE_DB_URL`, `CONFIRM_WIPE`, `DB_CONTAINER`, `PG_TOOLS_IMAGE` and `OWNER_APPROVED_LIVE_PAYMENTS` (root `.env.example`, docs/OPERATIONS.md).
 
 ## Secrets
 - Never commit secrets. `.env*` files are gitignored except `.env.example`.

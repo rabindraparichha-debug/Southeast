@@ -344,6 +344,21 @@ Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sq
 
 Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
 
+## Vendor-first wave 3 — ops (docs/VENDOR_FIRST_AUDIT.md items 30–32)
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 30 | Engine health: heartbeats, health check, `ops-health` for an uptime pinger, admin Engine tile, "Count not frozen" + Freeze now on web and mobile slot cards | ✅ | `20261110000100_engine_health.sql`, `supabase/functions/ops-health`, `apps/web/src/app/admin/engine-tile.tsx`, `slot-card.tsx` (web, mobile), D-128, D-129 |
+| 31 | Retention and real erasure: diff-only audit rows for personal data, no rider pings, OTP never logged; purge job (cron log, outbox); photo retention through the Storage API; erasure scrubs audit log, conversations, import rows, delivery GPS and photos | ✅ | `20261110000200_lean_audit.sql`, `…0300_real_erasure.sql`, `…0400_retention.sql`, `supabase/functions/storage-retention`, D-130–D-132 |
+| 32 | Hosted deploy script, backups, restore drill into a staging copy, runbook | ✅ locally (dry run and staging-copy drill against the local stack); needs the founder's Pro projects for a real run | `scripts/deploy.sh`, `scripts/restore-drill.sh`, `scripts/backup.sh`, `docs/OPERATIONS.md`, D-133 |
+
+Tests: `supabase/tests/14_ops.test.sql` (106), `09_security` allowlists, `tests/integration/ops.test.ts` (10), `scripts/deploy.sh --self-test` and `--env staging --local`, `pnpm db:restore-drill` (both modes). Load test 13.2 s.
+
+Known gaps:
+- **Wave 1's `engine_errors`** is read only if the table exists (no hard dependency); after merging, the Engine tile and ops-health count its rows from the last 15 minutes (column `created_at`, `occurred_at`, `logged_at` or `at`).
+- **Managers** (D-117, wave 2) cannot Freeze now until `freeze_slot` lists the role.
+- **Not run against hosted yet:** `scripts/deploy.sh` without `--local`, and the staging-copy drill against a real staging project (needs the founder's projects, DB password and access token).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.
