@@ -5,6 +5,9 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select no_plan();
+-- Customer messages are queued (not cancelled) only with the Phase 2 flag on (wave 2, item 13; D-156); wave 5
+-- strips the delivery code from rows that can no longer be sent, so these checks need it on.
+update public.platform_settings set enabled = true where key = 'customer_whatsapp';
 
 -- ===========================================================================
 -- Setup: kitchen R in Patia (owner, staff, 2 riders); 25 lunch customers on a 1.5 km circle,
