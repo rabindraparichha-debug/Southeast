@@ -319,6 +319,7 @@ function RunList({ isOwner, onOpen }: { isOwner: boolean; onOpen: (id: string) =
 }
 
 function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
+  const changed = stop as RiderStop & { changed?: boolean; changed_at?: string | null };
   const diets = Object.entries(stop.diets ?? {}).map(([d, n]) => `${n} ${d === 'nonveg' ? 'non-veg' : d}`).join(', ');
   return (
     <li>
@@ -327,6 +328,12 @@ function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 font-bold text-brand-700">{stop.seq}</span>
         <span className="min-w-0 flex-1 space-y-0.5">
           <span className="block text-base font-semibold text-ink-900">{stop.office ? '🏢 ' : ''}{stop.name}</span>
+          {/* Wave 1 (rider_today.changed): added or changed after the run was built (late skip, new address, meal count). */}
+          {changed.changed && stop.status === 'pending' && (
+            <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" data-testid={`stop-changed-${stop.seq}`}>
+              Changed{changed.changed_at ? ` ${formatIstShort(changed.changed_at)}` : ''}: check meals and address
+            </span>
+          )}
           {stop.office && <span className="block text-xs font-medium text-brand-700">Office: hand all {plural(stop.meal_count, 'tiffin')} to reception</span>}
           <span className="block text-sm text-ink-600">{address(stop)}</span>
           <span className="block text-xs text-ink-500">

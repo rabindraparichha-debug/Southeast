@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SLOT_LABEL, addDays, formatServiceDate } from '@tiffin/core';
+import { SLOT_LABEL, addDays } from '@tiffin/core';
 import type { ChangeResult, ChangeType, MealSlot } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
+import { ChangePreview, savedMessage } from '@/components/change-preview';
 
 type Props = {
   subscriptionId: string;
@@ -78,14 +79,11 @@ export function SubscriptionActions({ subscriptionId, slots, addresses, nextMeal
     if (error) return setError(friendlyError(error));
     const res = data as unknown as ChangeResult;
     if (dryRun) return setPreview(res);
-    setDone(`${ACTIONS.find((a) => a.type === type)?.label} saved.`);
+    setDone(savedMessage(ACTIONS.find((a) => a.type === type)?.label ?? 'Change', type, res));
     setType(null);
     setPreview(null);
     router.refresh();
   }
-
-  const charged = preview?.affected.filter((a) => a.charged) ?? [];
-  const late = preview?.affected.filter((a) => a.late) ?? [];
 
   return (
     <div className="mt-2">
@@ -133,25 +131,8 @@ export function SubscriptionActions({ subscriptionId, slots, addresses, nextMeal
             </div>
           ) : (
             <div className="mt-3 space-y-2 text-sm">
-              <p>
-                {preview.affected.length === 0
-                  ? 'No generated meals are affected yet (meals beyond the next 7 days follow this change automatically).'
-                  : `Affects ${preview.affected.length} meal${preview.affected.length > 1 ? 's' : ''}: ${preview.affected
-                      .slice(0, 6)
-                      .map((a) => `${formatServiceDate(a.date)} ${SLOT_LABEL[a.slot]}`)
-                      .join(', ')}${preview.affected.length > 6 ? '…' : ''}`}
-              </p>
-              {charged.length > 0 && (
-                <Alert tone="amber">
-                  {charged.length} meal{charged.length > 1 ? 's are' : ' is'} past the cutoff and will still be charged. Tell the customer before confirming.
-                </Alert>
-              )}
-              {late.length > 0 && (type === 'skip' || type === 'pause') && (
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={waive} onChange={(e) => { setWaive(e.target.checked); void call(true, e.target.checked); }} />
-                  Waive the late charge where the kitchen can still change the count
-                </label>
-              )}
+              <ChangePreview preview={preview} type={type} waive={waive} disabled={busy}
+                onWaive={(w) => { setWaive(w); void call(true, w); }} />
               {type === 'cancel' && <p className="text-ink-600">If this is the customer’s last subscription, their unused meals are added to Refunds waiting on the Money page.</p>}
               <div className="flex gap-2">
                 <Button onClick={() => call(false)} disabled={busy}>{busy ? 'Saving…' : 'Confirm'}</Button>

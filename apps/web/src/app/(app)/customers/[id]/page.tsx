@@ -13,6 +13,8 @@ import { WhatsAppCard } from './whatsapp-card';
 import { FamilyCard } from './family-card';
 import { FoodHealthCard } from './food-health-card';
 import { ReferralCard } from './referral-card';
+import { UpcomingHolds } from './upcoming-holds';
+import { ReactivateSubscription } from './reactivate-subscription';
 import type { CustomerScore } from '@/lib/p5';
 
 const formatDate = (d: string) =>
@@ -35,7 +37,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const today = istDate();
   const { data: meals } = await supabase
     .from('meal_orders')
-    .select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
+    .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at')
     .eq('customer_id', id)
     .gte('service_date', addDays(today, -3))
     .lte('service_date', addDays(today, 7))
@@ -130,7 +132,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                     <div>
                       {SLOT_LABEL[m.slot]}{m.qty > 1 ? ` ×${m.qty}` : ''} ·{' '}
                       {m.status === 'skipped'
-                        ? m.charged ? 'Late skip (charged)' : m.skip_reason === 'pause' ? 'Paused' : 'Skipped'
+                        ? m.charged ? (m.charge_waived ? 'Late skip (not charged)' : 'Late skip (charged)') : m.skip_reason === 'pause' ? 'Paused' : 'Skipped'
                         : m.locked_at ? 'Locked' : 'Scheduled'}
                     </div>
                   </div>
@@ -141,6 +143,8 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             <p className="text-sm text-ink-500">No meals in the last 3 or next 7 days.</p>
           )}
         </Card>
+
+        <UpcomingHolds customerId={c.id!} isOwner={isOwner} />
 
         <FoodHealthCard
           customerId={c.id!}
@@ -243,6 +247,9 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                         noticeDays={settings?.notice_days ?? 1}
                       />
                     </div>
+                  )}
+                  {s.status === 'cancelled' && (
+                    <div className="w-full"><ReactivateSubscription subscriptionId={s.id} today={today} /></div>
                   )}
                 </li>
               ))}
