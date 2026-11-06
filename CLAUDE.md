@@ -70,7 +70,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
-| 90000 00140 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
+| 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
 
 ## Conventions (follow these in every change)
 
@@ -173,11 +173,11 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
 - **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
 
-**Login codes (D-134, docs/LOGIN.md)**
+**Login codes (D-126, docs/LOGIN.md)**
 - Apps call `signInWithOtp({ phone, options: { channel } })` (`whatsapp` | `sms`, offered per `*_LOGIN_CHANNELS`) and always `verifyOtp(..., type: 'sms')`. Map auth errors through `loginErrorKey` (`@tiffin/core`) in both apps.
 - Default delivery is Supabase's built-in Twilio provider (dashboard settings). The optional Send SMS hook `auth-send-sms` (logic in `_shared/auth-sms.ts`, tests in `tests/integration/auth-sms.test.ts`) checks the Standard Webhooks signature first (missing secrets answer like a bad signature; replayed `webhook-id`s are refused), never logs the code or a full phone, and its mock uses `mockAllowed` (`_shared/platform.ts`).
 - Supabase does not pass the channel to hooks, so with the hook on the apps must run channel-neutral (`*_LOGIN_DELIVERY=hook`, `channelNeutral` in `@tiffin/core`). Never label a code with a channel the screen cannot know.
-- Hosted: "Confirm phone" on, provider keys only in the dashboard / `supabase secrets set`, never `config push`. The signup policy is still open (D-135).
+- Hosted: "Confirm phone" on, provider keys only in the dashboard / `supabase secrets set`, never `config push`. The signup policy is still open (D-127).
 
 **Channels, web app, builds (M9)**
 - Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).

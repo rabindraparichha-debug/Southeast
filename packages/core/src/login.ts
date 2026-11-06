@@ -1,4 +1,4 @@
-// Phone-code login helpers shared by the web and mobile login screens (docs/LOGIN.md, D-134).
+// Phone-code login helpers shared by the web and mobile login screens (docs/LOGIN.md, D-126).
 
 export type LoginChannel = 'whatsapp' | 'sms';
 

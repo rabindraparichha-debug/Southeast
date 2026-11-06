@@ -180,7 +180,7 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   return msg || 'Something went wrong. Please try again.';
 }
 
-// Login by phone code (docs/LOGIN.md, D-134): Supabase Auth error codes and the auth-send-sms hook's
+// Login by phone code (docs/LOGIN.md, D-126): Supabase Auth error codes and the auth-send-sms hook's
 // codes, normalised by loginErrorKey in @tiffin/core. Keep in step with apps/mobile/src/i18n/en.ts.
 const LOGIN_MESSAGES: Record<LoginErrorKey, string> = {
   invalid_phone: 'Enter a valid 10-digit Indian mobile number.',

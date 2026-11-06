@@ -11,7 +11,7 @@ export const en = {
   'login.checking': 'Checking…',
   'login.changeNumber': 'Use a different number',
   'login.devHint': 'Local dev: seed numbers 90000 00001 … use OTP 123456',
-  // Login by phone code (docs/LOGIN.md, D-134); keep in step with loginErrorText in apps/web/src/lib/errors.ts.
+  // Login by phone code (docs/LOGIN.md, D-126); keep in step with loginErrorText in apps/web/src/lib/errors.ts.
   'login.send.whatsapp': 'Get code on WhatsApp',
   'login.send.sms': 'Send code by SMS',
   'login.instead.whatsapp': 'Get code on WhatsApp instead',

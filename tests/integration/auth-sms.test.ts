@@ -1,6 +1,6 @@
 // Login codes: unit tests for the Send SMS hook logic (no network), plus a check of the deployed
 // auth-send-sms function on the local stack (signature accepted / refused, mock send).
-// docs/LOGIN.md, D-134.
+// docs/LOGIN.md, D-126.
 import { describe, expect, it } from 'vitest';
 import {
   AuthSmsConfigError, LOCAL_PLACEHOLDER_HOOK_SECRET, ReplayGuard, buildTelnyxRequest, buildTwilioRequest,
@@ -431,7 +431,7 @@ describe('how Supabase Auth marks a session (amr)', () => {
     JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64url').toString()).amr ?? [];
 
   it('a code login carries amr otp; an auto-confirmed phone + password signup carries only amr password', async () => {
-    const { accessToken } = await loginAs('+919000000140');
+    const { accessToken } = await loginAs('+919000000107');
     expect(amr(accessToken).map((a) => a.method)).toContain('otp');
 
     // The local stack keeps phone confirmations off, so this signup is "confirmed" without any code:

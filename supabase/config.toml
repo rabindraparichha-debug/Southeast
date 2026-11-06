@@ -256,7 +256,7 @@ otp_expiry = 3600
 # subject = "Your password has been changed"
 # content_path = "./supabase/templates/password_changed_notification.html"
 
-# Phone login (docs/LOGIN.md, D-134). The values below are for the LOCAL stack only. A hosted project
+# Phone login (docs/LOGIN.md, D-126). The values below are for the LOCAL stack only. A hosted project
 # is set in the dashboard (Authentication > Sign In / Providers > Phone, and Authentication > Hooks);
 # never `supabase config push` this file (it carries the seed test numbers).
 [auth.sms]
@@ -277,7 +277,7 @@ max_frequency = "5s"
 # Use pre-defined map of phone number to OTP for testing.
 # Keys are the phone number with country code and without the + prefix.
 # Local dev only: seed users log in with OTP 123456 and no SMS is sent (test numbers never reach a
-# provider or the Send SMS hook). See docs/LOGIN.md for the production channels (D-134).
+# provider or the Send SMS hook). See docs/LOGIN.md for the production channels (D-126).
 [auth.sms.test_otp]
 919000000001 = "123456"
 919000000002 = "123456"
@@ -295,7 +295,7 @@ max_frequency = "5s"
 919000000105 = "123456"
 919000000106 = "123456"
 # tests/integration/auth-sms.test.ts (amr of a code login)
-919000000140 = "123456"
+919000000107 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]

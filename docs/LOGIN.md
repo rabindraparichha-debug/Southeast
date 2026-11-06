@@ -1,6 +1,6 @@
 # Login codes (WhatsApp and SMS)
 
-Owners, staff and riders log in with their mobile number and a 6-digit code. This page is the setup guide for a hosted Supabase project: which provider sends the code, how to set each one up, and the auth settings that keep login safe. The decision is D-134 (it resolves D-004).
+Owners, staff and riders log in with their mobile number and a 6-digit code. This page is the setup guide for a hosted Supabase project: which provider sends the code, how to set each one up, and the auth settings that keep login safe. The decision is D-126 (it resolves D-004).
 
 **Contents**
 - [Summary and recommendation](#summary-and-recommendation)
@@ -175,7 +175,7 @@ Set these on every hosted project (staging and production) before the first outs
   The apps never use passwords; with confirmations on, every phone account must prove it holds the number.
   - **What the code checks.** `claim_invites` has required `phone_confirmed_at` since M1 (`tenancy.sql`), but that does not help here: an auto-confirmed password signup has it too (`supabase/auth` `signup.go` confirms the phone and opens a session). The code-side guard is that `claim_invites` only accepts a session signed in with a one-time code (JWT `amr` contains `otp`). That guard is part of the wave 2 database work (migration `20261108000200_manager_accountant_roles.sql`, with pgTAP cases for an `amr` `password` session and an `amr` `otp` session); `tests/integration/auth-sms.test.ts` pins what Supabase Auth really puts in `amr` (`otp` after `verifyOtp`, only `password` after an auto-confirmed signup). Until that migration is merged, this dashboard setting is the only protection.
   - **Not covered by code:** `invite_member` adds an existing account for the invited number straight away (no claim step). With "Confirm phone" on this is safe: a stranger's password signup stays unconfirmed and cannot sign in, and when the real owner of the number first verifies a code, Auth replaces the stranger's password (`signup.go`, existing unconfirmed user). With "Confirm phone" off, an account a stranger made before the invite is added directly. So the setting stays mandatory either way.
-- **Signup policy: ⏳ PENDING your decision (D-135).** Who may create a login is not decided yet; the current default is open.
+- **Signup policy: ⏳ PENDING your decision (D-127).** Who may create a login is not decided yet; the current default is open.
   - Today, with **"Allow new users to sign up" ON**, invited staff and riders create their account at their first login and `claim_invites` adds them to the kitchen. With signups off, Auth refuses them (`signup_disabled`, "Signups not allowed for this instance"; the apps show "This number is not registered yet…").
   - **The risk of open signup:** Supabase's "SMS sent per hour" limit is **one bucket for the whole project**, checked before every code it sends (built-in provider or hook). A script that asks for codes for random +91 numbers, staying under the per-IP limit, uses up the hour's codes. Every real owner, staff member or rider then gets "Please wait a little before asking for another code" (`over_sms_send_rate_limit`) until the hour rolls over: a login outage, for example for a rider at the start of lunch delivery, not only an SMS bill. Each such request also creates an empty account.
   - **Options** (none is built yet):

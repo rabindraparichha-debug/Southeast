@@ -1,4 +1,4 @@
-// Login codes for Supabase Auth's Send SMS hook (docs/LOGIN.md, D-134).
+// Login codes for Supabase Auth's Send SMS hook (docs/LOGIN.md, D-126).
 // No external imports (WebCrypto + fetch only), so the same file runs in Deno and in the Node tests
 // (tests/integration/auth-sms.test.ts).
 //

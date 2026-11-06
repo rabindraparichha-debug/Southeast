@@ -1,4 +1,4 @@
-// Supabase Auth "Send SMS" hook: delivers login codes (docs/LOGIN.md, D-134).
+// Supabase Auth "Send SMS" hook: delivers login codes (docs/LOGIN.md, D-126).
 // verify_jwt = false (config.toml): Auth calls this before anyone has a session and signs the
 // request with the hook secret (Standard Webhooks), which handleSendSmsHook checks first.
 // WhatsApp through Twilio (authentication template), SMS through Twilio or Telnyx, in the order of
