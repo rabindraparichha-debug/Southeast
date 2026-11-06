@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPhone, normalizePhone } from '@tiffin/core';
+import {
+  RESEND_SECONDS, alternateChannel, channelNeutral, formatPhone, loginErrorKey, normalizePhone, parseLoginChannels,
+  parseLoginDelivery, retryAfterSeconds, type LoginChannel,
+} from '@tiffin/core';
 import { loadServerOverride, saveServerOverride, supabase } from '@/lib/supabase';
 import { friendlyError } from '@/lib/errors';
 import { ALLOW_SERVER_SWITCH, IS_DEV } from '@/lib/env';
@@ -10,13 +13,34 @@ import { Button, Card, ErrorText, Input, Label, Muted, Title } from '@/component
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
+// Login by phone code (docs/LOGIN.md). EXPO_PUBLIC_LOGIN_CHANNELS, e.g. "whatsapp,sms": the first is
+// the default, the other is offered as "instead" once a code was asked for (or sending failed).
+// Inlined at build time; unset means SMS only (the local stack's test numbers).
+// EXPO_PUBLIC_LOGIN_DELIVERY=hook: the Send SMS hook picks the channel (Supabase does not pass the
+// person's pick on), so with two channels the screen is channel-neutral ("Get code", both named).
+const CHANNELS = parseLoginChannels(process.env.EXPO_PUBLIC_LOGIN_CHANNELS);
+const PRIMARY: LoginChannel = CHANNELS[0] ?? 'sms';
+const NEUTRAL = channelNeutral(CHANNELS, parseLoginDelivery(process.env.EXPO_PUBLIC_LOGIN_DELIVERY));
+/** i18n key suffix: the channel, or 'any' when the screen cannot know which channel was used. */
+const via = (channel: LoginChannel) => (NEUTRAL ? 'any' : channel);
+
+/** signInWithOtp / verifyOtp errors → text (Auth codes and the auth-send-sms hook's codes). */
+function loginError(error: { code?: string; message?: string; status?: number }): string {
+  const key = loginErrorKey(error);
+  return key ? t(`errors.${key}`) : friendlyError(error);
+}
+
 export default function Login() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneInput, setPhoneInput] = useState('');
   const [phone, setPhone] = useState('');
+  const [channel, setChannel] = useState<LoginChannel>(PRIMARY);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [wait, setWait] = useState(0);
+  const [sendFailed, setSendFailed] = useState(false);
   const [server, setServer] = useState<{ url: string; anonKey: string } | null>(null);
   const [editServer, setEditServer] = useState(false);
   const [serverSaved, setServerSaved] = useState(false);
@@ -25,26 +49,56 @@ export default function Login() {
     if (ALLOW_SERVER_SWITCH) void loadServerOverride().then(setServer);
   }, []);
 
-  async function sendOtp() {
+  useEffect(() => {
+    if (wait <= 0) return;
+    const id = setTimeout(() => setWait((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [wait]);
+
+  async function sendCode(via: LoginChannel, target: string): Promise<boolean> {
     setError('');
+    setNotice('');
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOtp({ phone: target, options: { channel: via } });
+    setBusy(false);
+    if (error) {
+      const key = loginErrorKey(error);
+      if (key === 'over_sms_send_rate_limit') setWait(retryAfterSeconds(error.message) ?? RESEND_SECONDS);
+      setSendFailed(key === 'sms_send_failed');
+      setError(loginError(error));
+      return false;
+    }
+    setSendFailed(false);
+    setPhone(target);
+    setChannel(via);
+    setOtp('');
+    setWait(RESEND_SECONDS);
+    return true;
+  }
+
+  async function start(via: LoginChannel) {
     const e164 = normalizePhone(phoneInput);
     if (!e164) return setError(t('errors.invalid_phone'));
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
-    setBusy(false);
-    if (error) return setError(friendlyError(error));
-    setPhone(e164);
-    setStep('otp');
+    if (await sendCode(via, e164)) setStep('otp');
+  }
+
+  async function resend(channelPicked: LoginChannel) {
+    if (await sendCode(channelPicked, phone)) setNotice(t(`login.resent.${via(channelPicked)}`));
   }
 
   async function verify() {
     setError('');
+    setNotice('');
     setBusy(true);
+    // WhatsApp and SMS codes are both verified as type 'sms'.
     const { error } = await supabase.auth.verifyOtp({ phone, token: otp.trim(), type: 'sms' });
     setBusy(false);
     // On success the auth listener updates the session and the root layout navigates.
-    if (error) setError(t('errors.otp'));
+    if (error) setError(loginError(error));
   }
+
+  // Channel-neutral: no "instead" button (the hook already falls back and moves a resend on by itself).
+  const other = NEUTRAL ? null : alternateChannel(CHANNELS, step === 'phone' ? PRIMARY : channel);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -58,9 +112,19 @@ export default function Login() {
           {step === 'phone' ? (
             <>
               <Label>{t('login.phone')}</Label>
-              <Input value={phoneInput} onChangeText={setPhoneInput} keyboardType="phone-pad" placeholder="98610 00001" autoFocus testID="phone" />
+              <Input value={phoneInput} onChangeText={(v) => { setPhoneInput(v); setWait(0); }} keyboardType="phone-pad" placeholder="98610 00001" autoFocus testID="phone" />
               <ErrorText>{error}</ErrorText>
-              <Button title={busy ? t('login.sending') : t('login.sendOtp')} onPress={sendOtp} busy={busy} />
+              <Button
+                title={busy ? t('login.sending') : wait > 0 ? t('login.tryAgainIn', { seconds: wait }) : t(`login.send.${via(PRIMARY)}`)}
+                onPress={() => void start(PRIMARY)} busy={busy} disabled={wait > 0}
+              />
+              {NEUTRAL && <Muted>{t('login.sendHint.any')}</Muted>}
+              {other && sendFailed && (
+                <Pressable onPress={() => void start(other)} disabled={busy}>
+                  <Text style={styles.action}>{t(`login.instead.${other}`)}</Text>
+                </Pressable>
+              )}
+              {PRIMARY === 'whatsapp' && other === 'sms' && !sendFailed && <Muted>{t('login.smsLater')}</Muted>}
               {IS_DEV && <Muted>{t('login.devHint')}</Muted>}
               {ALLOW_SERVER_SWITCH && server && !editServer && (
                 <Pressable onPress={() => setEditServer(true)}>
@@ -84,12 +148,27 @@ export default function Login() {
             </>
           ) : (
             <>
-              <Muted>{t('login.otpSentTo', { phone: formatPhone(phone) })}</Muted>
-              <Label>{t('login.otp')}</Label>
-              <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} autoFocus textContentType="oneTimeCode" testID="otp" />
+              <Muted>{t(`login.sent.${via(channel)}`, { phone: formatPhone(phone) })}</Muted>
+              <Label>{t('login.code')}</Label>
+              <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} autoFocus textContentType="oneTimeCode" autoComplete="sms-otp" testID="otp" />
               <ErrorText>{error}</ErrorText>
+              {notice !== '' && <Text style={styles.notice}>{notice}</Text>}
               <Button title={busy ? t('login.checking') : t('login.verify')} onPress={verify} busy={busy} disabled={otp.trim().length < 6} />
-              <Pressable onPress={() => setStep('phone')}>
+              {wait > 0 ? (
+                <Text style={styles.link}>{t('login.waitResend', { seconds: wait })}</Text>
+              ) : (
+                <>
+                  {other && (
+                    <Pressable onPress={() => void resend(other)} disabled={busy} testID="login-instead">
+                      <Text style={styles.action}>{t(`login.instead.${other}`)}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable onPress={() => void resend(channel)} disabled={busy} testID="login-resend">
+                    <Text style={styles.link}>{t(`login.resend.${via(channel)}`)}</Text>
+                  </Pressable>
+                </>
+              )}
+              <Pressable onPress={() => { setStep('phone'); setError(''); setNotice(''); setWait(0); setSendFailed(false); }}>
                 <Text style={styles.link}>{t('login.changeNumber')}</Text>
               </Pressable>
             </>
@@ -107,4 +186,6 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', gap: space(1) },
   logo: { fontSize: 44 },
   link: { color: colors.muted, textAlign: 'center', marginTop: space(2) },
+  action: { color: colors.brand, fontWeight: '600', textAlign: 'center', marginTop: space(3) },
+  notice: { color: colors.brand, textAlign: 'center' },
 });

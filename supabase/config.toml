@@ -256,20 +256,28 @@ otp_expiry = 3600
 # subject = "Your password has been changed"
 # content_path = "./supabase/templates/password_changed_notification.html"
 
+# Phone login (docs/LOGIN.md, D-126). The values below are for the LOCAL stack only. A hosted project
+# is set in the dashboard (Authentication > Sign In / Providers > Phone, and Authentication > Hooks);
+# never `supabase config push` this file (it carries the seed test numbers).
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
+# Hosted Phase 1: see docs/LOGIN.md "Signup policy" (invited staff/riders must still be able to sign up).
 enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
+# Local only: off so seed logins are instant. Hosted MUST turn "Confirm phone" ON: with it off, a
+# phone + password signup counts as confirmed without any code, and Auth skips its SMS rate limit.
 enable_confirmations = false
-# Template for sending OTP to users
+# Template for sending OTP to users (built-in providers only; the auth-send-sms hook uses AUTH_SMS_TEMPLATE).
+# In India the SMS text must match the DLT content template exactly.
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
+# Local 5s for fast test runs; hosted 30s to 60s (the apps show a 30 s resend countdown).
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # Keys are the phone number with country code and without the + prefix.
-# Local dev only: seed users log in with OTP 123456 and no SMS is sent.
-# See docs/DECISIONS.md (D-004) for the production OTP channel.
+# Local dev only: seed users log in with OTP 123456 and no SMS is sent (test numbers never reach a
+# provider or the Send SMS hook). See docs/LOGIN.md for the production channels (D-126).
 [auth.sms.test_otp]
 919000000001 = "123456"
 919000000002 = "123456"
@@ -286,6 +294,8 @@ max_frequency = "5s"
 919000000104 = "123456"
 919000000105 = "123456"
 919000000106 = "123456"
+# tests/integration/auth-sms.test.ts (amr of a code login)
+919000000107 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -304,14 +314,44 @@ max_frequency = "5s"
 # enabled = true
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
+# Send SMS hook: Auth hands every login code to the auth-send-sms Edge Function, which sends it on
+# WhatsApp (Twilio) and/or SMS (Twilio or Telnyx) in the order of AUTH_SMS_ROUTES, with fallback.
+# When enabled it replaces the built-in provider below. Off locally by default (seed numbers use
+# test_otp). To try it locally (mock mode, nothing is sent), see docs/LOGIN.md "Local check":
+#   SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED=true, with SEND_SMS_HOOK_SECRETS in supabase/.env.
+# Hosted: Authentication > Hooks > Send SMS > HTTPS, https://<project>.supabase.co/functions/v1/auth-send-sms
+# and the secret Supabase generates (also set as the function's SEND_SMS_HOOK_SECRETS).
+[auth.hook.send_sms]
+enabled = false
+# Local only: Auth accepts plain http just for localhost / host.docker.internal (port = [api] port).
+uri = "http://host.docker.internal:54321/functions/v1/auth-send-sms"
+# "v1,whsec_<base64>"; several separated by "|" for rotation. Never a literal here.
+secrets = "env(SEND_SMS_HOOK_SECRETS)"
+
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Built-in Twilio: WhatsApp (signInWithOtp options.channel = 'whatsapp') and SMS from one Messaging
+# Service. Locally the env() values are unset, so Auth gets the literal placeholders: the provider is
+# "on" for the seed test numbers, which never reach Twilio. Hosted: fill these in the dashboard
+# (Account SID + primary Auth Token: an API key secret does not work here, Auth signs in as the SID).
 [auth.sms.twilio]
-# Enabled with dummy values only so the phone provider is active locally; test_otp numbers never hit Twilio.
 enabled = true
-account_sid = "local-dev-dummy"
-message_service_sid = "local-dev-dummy"
+account_sid = "env(SUPABASE_AUTH_SMS_TWILIO_ACCOUNT_SID)"
+message_service_sid = "env(SUPABASE_AUTH_SMS_TWILIO_MESSAGE_SERVICE_SID)"
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "local-dev-dummy"
+auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+# HX... Content SID of the approved WhatsApp authentication template (dashboard "Twilio Content SID",
+# Management API sms_twilio_content_sid). Without it a WhatsApp code goes out as free text, which Meta
+# refuses outside a 24-hour chat. CLI 2.122.0 accepts this key (config push) but does not pass it to
+# the local Auth container, so a local stack cannot send the template; use the dashboard.
+content_sid = "env(SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID)"
+
+# Twilio Verify is the other built-in option (Twilio makes and checks the code; for WhatsApp the Verify
+# service needs your own WhatsApp sender). Use either [auth.sms.twilio] or this block, not both.
+# [auth.sms.twilio_verify]
+# enabled = true
+# account_sid = "env(SUPABASE_AUTH_SMS_TWILIO_VERIFY_ACCOUNT_SID)"
+# message_service_sid = "env(SUPABASE_AUTH_SMS_TWILIO_VERIFY_SERVICE_SID)"
+# auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_VERIFY_AUTH_TOKEN)"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
@@ -456,4 +496,8 @@ verify_jwt = false
 
 # P5: started twice a day by pg_cron with the service role key (checked inside the function).
 [functions.weather-alerts]
+verify_jwt = false
+
+# Supabase Auth's Send SMS hook (no user JWT yet; the Standard Webhooks signature is checked inside).
+[functions.auth-send-sms]
 verify_jwt = false
