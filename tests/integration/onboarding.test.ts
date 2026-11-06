@@ -1,7 +1,8 @@
 // Wave 4 over the API: the vendor approval gate, Odia kitchen names, invited staff never offered
 // "Set up your kitchen", the admin-change-phone Edge Function, dated plan prices, phoned-in
 // complaints, "Export my kitchen" and close requests. Spare numbers +919000000150 … 159 only
-// (155–159 are not on the seed's allowed list, so the gate can be seen refusing them).
+// (155–159 are not on the seed's allowed list, so the gate can be seen refusing them), and
+// +919000000149 for a phone + password sign-up (never logged in with a code).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addDays, istDate } from '@tiffin/core';
 import type { ExportPage, OnboardingStatus, PlanPriceResult } from '@tiffin/db';
@@ -57,6 +58,28 @@ describe('Wave 4: approval gate and onboarding', () => {
     // Vendors cannot allow themselves.
     const self = await vendor.client.rpc('admin_allow_vendor_phone', { p_phone: '+919000000156', p_note: 'me' });
     expect(self.error?.message).toBe('forbidden');
+  });
+
+  it('a phone + password sign-up never counts as a proven phone (D-134)', async () => {
+    // +919000000149 is on the seed's allowed list. With phone confirmations on, a password sign-up
+    // gets no session until the number is proven with a code; even if it did, the gate would refuse it.
+    const { url, anonKey } = env();
+    const headers = { apikey: anonKey, 'Content-Type': 'application/json' };
+    const creds = JSON.stringify({ phone: '+919000000149', password: 'hunter2hunter2' });
+    const signup = await fetch(`${url}/auth/v1/signup`, { method: 'POST', headers, body: creds });
+    const signupBody = (await signup.json().catch(() => ({}))) as { access_token?: string };
+    expect(signupBody.access_token).toBeUndefined();
+    const token = await fetch(`${url}/auth/v1/token?grant_type=password`, { method: 'POST', headers, body: creds });
+    const tokenBody = (await token.json().catch(() => ({}))) as { access_token?: string };
+    if (tokenBody.access_token) {
+      const res = await fetch(`${url}/rest/v1/rpc/create_kitchen`, {
+        method: 'POST', headers: { ...headers, Authorization: `Bearer ${tokenBody.access_token}` },
+        body: JSON.stringify({ p_name: 'Password Kitchen' }),
+      });
+      expect(((await res.json()) as { message?: string }).message).toBe('not_approved');
+    } else {
+      expect(token.ok).toBe(false);
+    }
   });
 
   it('creates a kitchen with an Odia name (no raw database error)', async () => {

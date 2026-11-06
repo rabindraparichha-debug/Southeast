@@ -3,8 +3,9 @@
 // auth.users.phone, so this function does it between two database checks made AS THE CALLER:
 //   1. admin_phone_change_check (require_admin, a reason, a valid and unused number);
 //   2. PUT /auth/v1/admin/users/<id> {phone, phone_confirm: true} with the service role;
-//   3. admin_phone_change_done (re-checks auth.users, signs the user out everywhere, writes
-//      admin_actions with the admin, kitchen, reason and old/new last 4 digits).
+//   3. admin_phone_change_done(change) (re-checks auth.users against the pending change, signs the
+//      user out everywhere, writes admin_actions with the admin, kitchen, reason and old/new last 4
+//      digits from the pending record). A retry after a lost step 3 resumes the same change.
 // The caller's JWT is verified by the gateway (verify_jwt) and again by PostgREST; admin rights
 // come from platform_admins in the database, never from the request body. No mock mode: it only
 // talks to this project's own Auth API.
@@ -38,36 +39,48 @@ Deno.serve(async (req) => {
   if (!UUID.test(userId)) return json({ error: 'not_found' }, 404);
   if (!reason) return json({ error: 'reason_required' }, 400);
 
-  // 1. As the caller: admin, reason, number.
-  const check = await rpc<{ new_phone: string; old_phone_last4: string | null }>(SUPABASE_URL, ANON_KEY, auth,
+  // 1. As the caller: admin, reason, number. Records a pending change (old digits read on the server).
+  type Check = { change_id: string; new_phone: string; already_changed: boolean };
+  const check = await rpc<Check>(SUPABASE_URL, ANON_KEY, auth,
     'admin_phone_change_check', { p_user: userId, p_new_phone: body.new_phone ?? null, p_reason: reason });
   if (check.error || !check.data) return json({ error: check.error?.message ?? 'forbidden' }, statusFor(check.error?.code));
 
   // 2. Service role: change the login phone (confirmed, so the next OTP login works at once).
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-      method: 'PUT',
-      headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: check.data.new_phone, phone_confirm: true }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      const taken = res.status === 422 && /already|exists|registered/i.test(text);
-      if (!taken) await reportError(monitor, new Error(`auth admin update failed: ${res.status}`), { fn: 'admin-change-phone' });
-      return json({ error: taken ? 'phone_in_use' : 'auth_update_failed' }, taken ? 409 : 502);
+  //    Skipped when an earlier attempt already changed it and only step 3 was lost.
+  if (!check.data.already_changed) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: check.data.new_phone, phone_confirm: true }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        const taken = res.status === 422 && /already|exists|registered/i.test(text);
+        if (!taken) await reportError(monitor, new Error(`auth admin update failed: ${res.status}`), { fn: 'admin-change-phone' });
+        return json({ error: taken ? 'phone_in_use' : 'auth_update_failed' }, taken ? 409 : 502);
+      }
+    } catch (e) {
+      await reportError(monitor, e, { fn: 'admin-change-phone' });
+      return json({ error: 'auth_update_failed' }, 502);
     }
-  } catch (e) {
-    await reportError(monitor, e, { fn: 'admin-change-phone' });
-    return json({ error: 'auth_update_failed' }, 502);
   }
 
-  // 3. As the caller: record it and sign the user out everywhere.
-  const done = await rpc<{ user_id: string; phone_last4: string; signed_out: boolean }>(SUPABASE_URL, ANON_KEY, auth,
-    'admin_phone_change_done', { p_user: userId, p_new_phone: check.data.new_phone, p_reason: reason,
-                                 p_old_last4: check.data.old_phone_last4 });
+  // 3. As the caller: finish the pending change (log it, sign the user out everywhere). One retry;
+  //    if it still fails, the same request later resumes from here (check returns already_changed).
+  type Done = { user_id: string; phone_last4: string; signed_out: boolean };
+  const finish = () => rpc<Done>(SUPABASE_URL, ANON_KEY, auth, 'admin_phone_change_done', { p_change: check.data!.change_id });
+  let done = await finish();
+  if (done.error || !done.data) done = await finish();
   if (done.error || !done.data) {
     await reportError(monitor, new Error(`phone changed but not recorded: ${done.error?.message}`), { fn: 'admin-change-phone' });
     return json({ error: 'not_recorded', changed: true }, 500);
+  }
+  // Sign-out refused: try once more on its own; the screen warns if it still did not happen.
+  if (!done.data.signed_out) {
+    const again = await rpc<{ signed_out: boolean }>(SUPABASE_URL, ANON_KEY, auth, 'admin_sign_out_user',
+      { p_user: userId, p_reason: reason });
+    if (again.data?.signed_out) done.data.signed_out = true;
   }
   return json({ ok: true, ...done.data });
 });

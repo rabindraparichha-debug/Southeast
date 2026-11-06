@@ -41,7 +41,7 @@ export function ChangePhoneForm({ userId, name }: { userId: string; name: string
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState('');
   const [reason, setReason] = useState('');
-  const [msg, setMsg] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ tone: 'red' | 'green' | 'amber'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -52,13 +52,15 @@ export function ChangePhoneForm({ userId, name }: { userId: string; name: string
     if (!reason.trim()) return setMsg({ tone: 'red', text: friendlyError({ message: 'reason_required' }) });
     if (!window.confirm(`Change ${name}'s login number to ${formatPhone(e164)}? They are signed out everywhere and log in with the new number.`)) return;
     setBusy(true);
-    const { error } = await supabaseBrowser().functions.invoke('admin-change-phone', { body: { user_id: userId, new_phone: e164, reason } });
+    const { data, error } = await supabaseBrowser().functions.invoke<{ signed_out?: boolean }>('admin-change-phone', { body: { user_id: userId, new_phone: e164, reason } });
     setBusy(false);
     if (error) {
       const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
       return setMsg({ tone: 'red', text: friendlyError({ message: body?.error ?? error.message }) });
     }
-    setMsg({ tone: 'green', text: 'Number changed. They were signed out and can log in with the new number.' });
+    setMsg(data?.signed_out === false
+      ? { tone: 'amber', text: 'Number changed, but signing them out of other devices failed. Use “Sign out everywhere” below.' }
+      : { tone: 'green', text: 'Number changed. They were signed out and can log in with the new number.' });
     setPhone('');
     setReason('');
     router.refresh();
@@ -149,6 +151,29 @@ export function ApproveApplicationButton({ id, approved, rejected }: { id: strin
         ? <button type="button" disabled={busy} className="text-xs text-ink-500 hover:underline" onClick={() => set(false)}>Withdraw approval</button>
         : <Button variant="secondary" className="px-2 py-1 text-xs" disabled={busy} onClick={() => set(true)}>Approve number</Button>}
       {error && <span className="text-xs text-red-700">{error}</span>}
+    </span>
+  );
+}
+
+/** Lost or stolen phone: end every session of this person (they log in again with a code). */
+export function SignOutEverywhere({ userId, name }: { userId: string; name: string }) {
+  const [msg, setMsg] = useState<{ tone: 'red' | 'green' | 'amber'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    const reason = window.prompt(`Sign ${name} out on every device? Reason (kept in the admin log):`)?.trim();
+    if (!reason) return;
+    setBusy(true);
+    setMsg(null);
+    const { data, error } = await supabaseBrowser().rpc('admin_sign_out_user', { p_user: userId, p_reason: reason });
+    setBusy(false);
+    if (error) return setMsg({ tone: 'red', text: friendlyError(error) });
+    const ok = (data as { signed_out?: boolean } | null)?.signed_out;
+    setMsg(ok ? { tone: 'green', text: 'Signed out everywhere.' } : { tone: 'amber', text: 'Signing out failed. Try again in a minute.' });
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button type="button" className="text-xs text-brand-700 hover:underline" onClick={run} disabled={busy}>{busy ? 'Signing out…' : 'Sign out everywhere'}</button>
+      {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
     </span>
   );
 }

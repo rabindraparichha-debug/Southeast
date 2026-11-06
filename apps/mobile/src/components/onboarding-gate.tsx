@@ -8,7 +8,9 @@ import { SupportLink } from '@/components/support-link';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
-type Gate = { kind: 'checking' } | { kind: 'failed' } | { kind: 'joining' } | { kind: 'not_approved'; applied: boolean } | { kind: 'open' };
+type Gate =
+  | { kind: 'checking' } | { kind: 'failed' } | { kind: 'joining' } | { kind: 'login_with_code' }
+  | { kind: 'not_approved'; applied: boolean; applyOpen: boolean } | { kind: 'open' };
 
 /** Claims waiting invites, then asks the server what this login may do. */
 async function fetchGate(): Promise<{ gate: Gate; joined: boolean }> {
@@ -18,8 +20,12 @@ async function fetchGate(): Promise<{ gate: Gate; joined: boolean }> {
   const status = data as unknown as OnboardingStatus;
   if (status.memberships > 0) return { gate: { kind: 'joining' }, joined: true };
   if (status.pending_invites > 0) return { gate: { kind: 'joining' }, joined: false };
+  if (!status.can_create_kitchen && status.login_with_code) return { gate: { kind: 'login_with_code' }, joined: false };
   if (!status.can_create_kitchen) {
-    return { gate: { kind: 'not_approved', applied: Boolean(status.application && status.application.status !== 'rejected') }, joined: false };
+    return {
+      gate: { kind: 'not_approved', applied: Boolean(status.application && status.application.status !== 'rejected'), applyOpen: status.apply_open },
+      joined: false,
+    };
   }
   return { gate: { kind: 'open' }, joined: false };
 }
@@ -30,7 +36,7 @@ async function fetchGate(): Promise<{ gate: Gate; joined: boolean }> {
  * is still waiting (slow network) they get a retry, never the form.
  */
 export function OnboardingGate({ children }: { children: ReactNode }) {
-  const { reload } = useAuth();
+  const { reload, signOut } = useAuth();
   const [gate, setGate] = useState<Gate>({ kind: 'checking' });
   // reload changes identity whenever the memberships change; the check must not re-run because of it.
   const reloadRef = useRef(reload);
@@ -71,10 +77,22 @@ export function OnboardingGate({ children }: { children: ReactNode }) {
     return (
       <Card>
         <Title>{t('onboarding.notApproved')}</Title>
-        <Muted>{gate.applied ? t('onboarding.notApprovedApplied') : t('onboarding.notApprovedApply')}</Muted>
+        <Muted>
+          {gate.applied ? t('onboarding.notApprovedApplied') : gate.applyOpen ? t('onboarding.notApprovedApply') : t('onboarding.notApprovedMessage')}
+        </Muted>
         <Muted>{t('onboarding.staffHint')}</Muted>
         <Button title={t('onboarding.retry')} onPress={() => void check()} variant="secondary" />
         <SupportLink text={t('support.approveMessage')} />
+      </Card>
+    );
+  }
+  if (gate.kind === 'login_with_code') {
+    return (
+      <Card>
+        <Title>{t('onboarding.loginWithCode')}</Title>
+        <Muted>{t('onboarding.loginWithCodeHelp')}</Muted>
+        <Button title={t('onboarding.logOut')} onPress={() => void signOut()} />
+        <SupportLink />
       </Card>
     );
   }

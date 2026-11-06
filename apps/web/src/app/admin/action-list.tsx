@@ -4,7 +4,8 @@ import { istDateTime } from '@/lib/public';
 // The admin_actions log as a list (wave 4): kitchen detail and the Access page.
 const ACTION_LABEL: Record<string, string> = {
   vendor_approved: 'Application approved', vendor_unapproved: 'Approval withdrawn', vendor_phone_allowed: 'Number allowed to create a kitchen',
-  vendor_phone_removed: 'Allowed number removed', phone_revealed: 'Phone number revealed', member_phone_changed: 'Login phone changed',
+  vendor_phone_removed: 'Allowed number removed', phone_revealed: 'Phone number revealed', member_phone_changed: 'Login phone changed', member_signed_out: 'Signed out everywhere',
+  vendor_signup_opened: 'Vendor signup opened to everyone', vendor_signup_closed: 'Vendor signup needs approval again',
   ownership_transferred: 'Ownership transferred', platform_admin_added: 'Platform admin added', platform_admin_removed: 'Platform admin removed',
   close_request_closed: 'Close request done', close_request_declined: 'Close request declined',
 };

@@ -47,6 +47,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
 | D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
 | D-126 – D-133 | Wave 4 defaults (approval gate, non-Latin kitchen names, admin actions log, phone change / ownership / admins, dated plan prices, phoned-in complaints, export and close requests, support contact) | Decided | Wave 4 |
+| D-134 – D-140 | Wave 4 review fixes (proven phone, owner basis in good standing, pending phone changes, exact owner, approval-aware vendor messages, dues todo, logged signup switch) | Decided | Wave 4 |
 
 ---
 
@@ -770,4 +771,35 @@ Implementation choices for the audit's Phase 1 steps 2, 4, 5 and 7 (docs/VENDOR_
 - "Request to close my kitchen" files one open `kitchen_close_requests` row per kitchen; the owner can withdraw it. The platform team handles it by hand (export, suspend, erase what the law allows) and records `closed` or `declined` with a note. Nothing is deleted automatically.
 
 ### D-133 Support contact
-- `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` (digits with country code): "Help: WhatsApp the Tiffin team" in the web sidebar, onboarding and Your data, and on the mobile Account and onboarding screens. Hidden when unset.
+- `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` (digits with country code): "Help: WhatsApp the Tiffin team" in the web sidebar, onboarding and Your data, and on the mobile Account and onboarding screens. Without it, the web shows `NEXT_PUBLIC_GRIEVANCE_CONTACT` instead and the mobile onboarding screens say where to find the number (D-140); the mobile Account screen hides it.
+
+## Wave 4 review fixes (2026-11-06)
+
+Migration `20261113000700_onboarding_review_fixes.sql`; tests in `15_onboarding.test.sql`, `07_acquisition.test.sql`, `tests/integration/onboarding.test.ts`, `lead-bot.test.ts`.
+
+### D-134 A proven phone
+- `phone_confirmed_at` alone is not proof: with phone confirmations off, GoTrue stamps a phone + password sign-up confirmed without any code (verified locally: such an account on an allowed number created a kitchen). A phone counts for the approval gate (approved / allowed numbers) only when **this session was signed in with a one-time code** (JWT `amr` method `otp`, the same rule as wave 2's `claim_invites`). Helper `private.session_phone()`; `onboarding_status` uses it for `phone_confirmed` and `pending_invites` and reports `login_with_code` (log out and log in with a code).
+- A password set by whoever registered the number first would keep working after the real vendor logs in with a code. It cannot be detected in SQL (GoTrue gives OTP-created accounts a random password too), so the moment the account gains trust it is **secured** (`private.secure_account`): the password is replaced by a random one and every other session ends. This happens when `create_kitchen` succeeds on an approved or allowed number (the vendor's current session stays) and in `admin_add_platform_admin` (all sessions end; the new admin logs in again with a code, which also requires a confirmed phone, else `no_account`).
+- Local `supabase/config.toml` now has `[auth.sms] enable_confirmations = true` (a password sign-up must prove the number with a code before it gets a session); hosted projects must keep "Confirm phone" on (Authentication > Providers > Phone).
+
+### D-135 Owners may add a kitchen only while in good standing
+- The `owner` basis counts only owners of a kitchen that is not `suspended` and has no `closed` close request. A suspended vendor cannot start a fresh kitchen to get round the suspension; the platform team approves them again if needed.
+
+### D-136 Phone change uses a pending record
+- `admin_phone_change_check` records a pending change in `private.phone_changes` (old last 4 digits read on the server, new number's hash, reason, admin, 1-hour expiry) and returns `change_id`. `admin_phone_change_done(change_id)` finishes only that change, only if the login really has the new number, with the stored reason and digits; calling it again only retries the sign-out. If the Auth half went through but the last step was lost, the same request later resumes the open change (`already_changed`) instead of failing with `same_phone`.
+- `admin_sign_out_user(user, reason)` signs a person out everywhere on its own (lost phone, or a phone change whose sign-out failed); "Sign out everywhere" on the admin kitchen page. The phone-change screen warns when `signed_out` is false.
+
+### D-137 Owner-only areas check the exact owner role
+- `export_kitchen`, `request_kitchen_close`, `withdraw_kitchen_close` and the `admin_actions` / `kitchen_close_requests` read policies use `private.require_owner` / `private.owner_kitchen_ids()` (role exactly `owner`). Wave 2 makes `'{owner}'` also mean managers; these areas (full customer phones, closing the kitchen, the platform team's log) stay owner-only. Managers keep `log_complaint` and plan prices; the accountant never gets `export_kitchen`.
+
+### D-138 Vendor messages wait for approval
+- The WhatsApp vendor bot's last reply and the welcome template (`vendor_welcome_v2`) say the team will call and approve the number first. The day 1/3/7 nudge to "log in and create your kitchen" goes only to applicants who are approved (counted from approval) or when vendor signup is open.
+- The migration approves applications already in `onboarding` or `live` (`approved_at` = their last update, `approved_by` empty); `new` and `contacted` ones wait for the founder.
+
+### D-139 Dues after a price change
+- On this base `private.dues` values every owed meal at today's plan price, so dues for meals eaten before a price change move when the new price starts. Wave 2's ledger-valued `private.dues` fixes it and is a merge prerequisite; `15_onboarding` holds the check as a pgTAP `todo` that passes once wave 2 is merged.
+- `set_plan_price` returns `charged_slots`: the plan's slots on the start date already counted at the old price; the Plans editor says so.
+
+### D-140 The vendor signup switch is logged
+- `open_vendor_signup` changes only through `admin_set_vendor_signup(open, reason)` (reason required, `admin_actions` `vendor_signup_opened` / `vendor_signup_closed`); `admin_set_platform_flag` refuses that key (`use_vendor_signup`).
+- `onboarding_status.apply_open` is the `growth` switch when a branch adds it (open when the key does not exist): "Apply here" shows only when the form is on; otherwise the screen asks the vendor to message the team.

@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { istDateTime } from '@/lib/public';
 import { Alert, Badge, Card, PageHeader, ROLE_LABEL } from '@/components/ui';
-import { ChangePhoneForm, RevealMemberPhone, TransferOwnershipForm } from '../../support-tools';
+import { ChangePhoneForm, RevealMemberPhone, SignOutEverywhere, TransferOwnershipForm } from '../../support-tools';
 import { ActionList } from '../../action-list';
 
 export const metadata: Metadata = { title: 'Kitchen · Admin' };
@@ -46,7 +46,10 @@ export default async function AdminKitchenPage({ params }: PageProps<'/admin/kit
             <div className="font-medium">{k.owner.name ?? 'No name'}</div>
             <RevealMemberPhone userId={k.owner.user_id} kitchenId={k.kitchen.id} masked={k.owner.phone} />
             <div className="text-xs text-ink-500">Last login {k.owner.last_sign_in_at ? istDateTime(k.owner.last_sign_in_at) : 'never'}</div>
-            <ChangePhoneForm userId={k.owner.user_id} name={k.owner.name ?? 'the owner'} />
+            <div className="flex flex-wrap gap-3">
+              <ChangePhoneForm userId={k.owner.user_id} name={k.owner.name ?? 'the owner'} />
+              <SignOutEverywhere userId={k.owner.user_id} name={k.owner.name ?? 'the owner'} />
+            </div>
           </div>
         ) : <p className="text-sm text-ink-500">No owner found.</p>}
       </Card>
@@ -61,7 +64,12 @@ export default async function AdminKitchenPage({ params }: PageProps<'/admin/kit
                 <RevealMemberPhone userId={m.user_id} kitchenId={k.kitchen.id} masked={m.phone} />
                 <span className="text-xs text-ink-500">joined {istDateTime(m.joined_at)} · last login {m.last_sign_in_at ? istDateTime(m.last_sign_in_at) : 'never'}</span>
               </div>
-              {m.role !== 'owner' && <ChangePhoneForm userId={m.user_id} name={m.name ?? 'this member'} />}
+              {m.role !== 'owner' && (
+                <div className="flex flex-wrap gap-3">
+                  <ChangePhoneForm userId={m.user_id} name={m.name ?? 'this member'} />
+                  <SignOutEverywhere userId={m.user_id} name={m.name ?? 'this member'} />
+                </div>
+              )}
             </li>
           ))}
         </ul>

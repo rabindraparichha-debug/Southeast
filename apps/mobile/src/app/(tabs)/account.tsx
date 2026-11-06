@@ -43,7 +43,7 @@ export default function Account() {
       {unsynced > 0 && <Muted>{t('account.unsynced', { n: unsynced })}</Muted>}
       {blocked && unsynced > 0 && <ErrorText>{t('account.logoutBlocked')}</ErrorText>}
       <Button title={t('account.signOut')} onPress={logOut} variant="secondary" disabled={unsynced > 0} busy={busy} />
-      <SupportLink />
+      <SupportLink fallback={false} />
       <LegalLinks />
     </Screen>
   );

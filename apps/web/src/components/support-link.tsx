@@ -1,7 +1,9 @@
-// "Help: WhatsApp the Tiffin team" (wave 4). Hidden when NEXT_PUBLIC_SUPPORT_WHATSAPP is not set.
-// The number is the platform team's own (digits with country code, e.g. 919861000000).
+// "Help: WhatsApp the Tiffin team" (wave 4). Without NEXT_PUBLIC_SUPPORT_WHATSAPP it shows the
+// grievance contact (NEXT_PUBLIC_GRIEVANCE_CONTACT) instead, so a vendor always has a way forward;
+// hidden only when neither is set. The number is the platform team's own (e.g. 919861000000).
 
 const RAW = process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP ?? '';
+const FALLBACK = process.env.NEXT_PUBLIC_GRIEVANCE_CONTACT ?? '';
 
 /** Digits for wa.me (a bare 10-digit Indian number gets 91), or null when no support number is set. */
 export function supportNumber(raw: string = RAW): string | null {
@@ -18,7 +20,7 @@ export function supportUrl(text?: string, raw: string = RAW): string | null {
 
 export function SupportLink({ text, label = 'Help: WhatsApp the Tiffin team', className }: { text?: string; label?: string; className?: string }) {
   const url = supportUrl(text);
-  if (!url) return null;
+  if (!url) return FALLBACK ? <p className="text-sm text-ink-600">Contact the Tiffin team: {FALLBACK}</p> : null;
   return (
     <a href={url} target="_blank" rel="noreferrer" className={className ?? 'text-sm text-brand-700 hover:underline'}>
       {label}

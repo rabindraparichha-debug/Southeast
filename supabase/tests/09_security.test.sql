@@ -58,7 +58,7 @@ select is((select coalesce(array_agg(distinct table_name::text), '{}') from info
 
 -- Append-only ledgers refuse updates and deletes even for the database owner.
 select is((select coalesce(array_agg(t order by t), '{}') from unnest(array['audit_log', 'balance_entries', 'schedule_changes', 'count_snapshots',
-            'stock_moves', 'supplier_payments', 'tiffin_ledger', 'lead_events', 'platform_commissions']) t
+            'stock_moves', 'supplier_payments', 'tiffin_ledger', 'lead_events', 'platform_commissions', 'admin_actions']) t
            where not exists (select 1 from pg_trigger tr join pg_class c on c.oid = tr.tgrelid
                              where c.relname = t and tr.tgfoid = 'private.forbid_mutation'::regproc)),
   '{}'::text[], 'every ledger has the append-only trigger');

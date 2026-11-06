@@ -24,6 +24,7 @@ export async function OnboardingGate({ children }: { children: ReactNode }) {
   if (status.pending_invites > 0) {
     return <Retry title="A kitchen added you" text="We are still joining you to it. Try again in a moment." />;
   }
+  if (!status.can_create_kitchen && status.login_with_code) return <LoginWithCode />;
   if (!status.can_create_kitchen) return <NotApproved status={status} />;
   return <>{children}</>;
 }
@@ -42,6 +43,19 @@ function Retry({ title, text }: { title: string; text: string }) {
   );
 }
 
+// The number is confirmed but this login did not prove it with a code (a password login): only a
+// code login counts for approval and invites.
+function LoginWithCode() {
+  return (
+    <div className="space-y-3 text-sm">
+      <h2 className="text-base font-semibold text-ink-900">Log in with a code</h2>
+      <p className="text-ink-700">To set up a kitchen or join one, log out and log in again with the code we send to your phone.</p>
+      <SupportLink text="Hello, I cannot set up my kitchen on Tiffin OS." />
+      <div className="pt-2"><SignOutButton /></div>
+    </div>
+  );
+}
+
 function NotApproved({ status }: { status: OnboardingStatus }) {
   const app = status.application;
   return (
@@ -52,11 +66,13 @@ function NotApproved({ status }: { status: OnboardingStatus }) {
           We have your application. Our team calls every new kitchen before it starts; once they approve this number you can set up
           your kitchen here.
         </p>
-      ) : (
+      ) : status.apply_open ? (
         <p className="text-ink-700">
           New kitchens start after a short call with our team. <Link href="/vendors" className="text-brand-700 hover:underline">Apply here</Link> with
           this number, or message us.
         </p>
+      ) : (
+        <p className="text-ink-700">New kitchens start after a short call with our team. Message us with this number and we will call you.</p>
       )}
       <p className="text-ink-500">
         If a kitchen owner added you as staff or rider, ask them to check they used this number.

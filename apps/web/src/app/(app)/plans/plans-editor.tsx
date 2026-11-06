@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { WEEKDAYS, formatPaise, formatServiceDate, istDate, rupeesToPaise } from '@tiffin/core';
-import type { DietType, MealSlot } from '@tiffin/db';
+import type { DietType, MealSlot, PlanPriceResult } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Badge, Button, Card, DIET_LABEL, DIET_TONE, Field, Input, Select } from '@/components/ui';
@@ -24,6 +24,8 @@ export function PlansEditor({ kitchenId, plans, scheduled = [] }: { kitchenId: s
   const [f, setF] = useState(empty);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // After a price change: meals of its first day already counted at the old price.
+  const [notice, setNotice] = useState('');
 
   function open(p: Plan | 'new') {
     setError('');
@@ -62,9 +64,16 @@ export function PlansEditor({ kitchenId, plans, scheduled = [] }: { kitchenId: s
       ? await supabase.from('plans').insert({ ...values, price_per_meal_paise: paise, kitchen_id: kitchenId })
       : await supabase.from('plans').update(values).eq('id', editing!);
     // A price change goes through set_plan_price: now, or from a later date (meals before it keep the old price).
-    const priceError = !error && current && (paise !== current.price_per_meal_paise || (f.priceFrom && f.priceFrom > istDate()))
-      ? (await supabase.rpc('set_plan_price', { p_plan: current.id, p_price_paise: paise, p_from: f.priceFrom && f.priceFrom > istDate() ? f.priceFrom : undefined })).error
+    setNotice('');
+    const price = !error && current && (paise !== current.price_per_meal_paise || (f.priceFrom && f.priceFrom > istDate()))
+      ? await supabase.rpc('set_plan_price', { p_plan: current.id, p_price_paise: paise, p_from: f.priceFrom && f.priceFrom > istDate() ? f.priceFrom : undefined })
       : null;
+    const priceError = price?.error ?? null;
+    const result = (price?.data ?? null) as unknown as PlanPriceResult | null;
+    if (result?.charged_slots?.length) {
+      setNotice(`${formatServiceDate(result.effective_from)}: ${result.charged_slots.join(' and ')} is already counted at the old price; ` +
+        `the new price applies to the meals after it.`);
+    }
     setBusy(false);
     if (error) return setError(error.code === '23505' ? 'A plan with this name already exists.' : friendlyError(error));
     if (priceError) return setError(friendlyError(priceError));
@@ -75,6 +84,7 @@ export function PlansEditor({ kitchenId, plans, scheduled = [] }: { kitchenId: s
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card title="Your plans" actions={<Button variant="secondary" onClick={() => open('new')}>New plan</Button>}>
+        {notice && <div className="mb-3"><Alert tone="amber">{notice}</Alert></div>}
         <ul className="divide-y divide-ink-100">
           {plans.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-sm">

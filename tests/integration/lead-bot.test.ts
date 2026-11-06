@@ -154,6 +154,9 @@ describe('vendor bot: a kitchen owner signs up on WhatsApp', () => {
     expect(r.intent).toBe('vendor_applied');
     expect(applied).toEqual({ kitchen_name: "Kabita's Rasoi", area: 'Khandagiri', subscribers: 50, campaign: 'jd-x' });
     expect(text(r.replies[0]!)).toContain('http://web/login');
+    // New kitchens need approval first (wave 4): the reply must not say "start right now".
+    expect(text(r.replies[0]!)).toMatch(/approve this number/);
+    expect(text(r.replies[0]!)).not.toMatch(/right now/i);
     expect(state).toBeNull();
   });
 });

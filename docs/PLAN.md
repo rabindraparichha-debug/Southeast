@@ -359,10 +359,14 @@ Migrations `20261113000100` – `20261113000600`; pgTAP `15_onboarding.test.sql`
 | 6 | Phoned-in complaints | ✅ web | `log_complaint`, customer page Complaints card (D-131) |
 | 7 | Export my kitchen (ZIP of CSVs), request to close | ✅ | `export_kitchen`, `kitchen_close_requests`, `/settings/export`, `@tiffin/core` `toCsvText`/`zipFiles` (D-132) |
 
+Review fixes (`20261113000700`, D-134 – D-140): proven phone (OTP session) for the gate and `onboarding_status`, accounts secured (random password, other sessions end) when they get a kitchen or admin rights; owner basis only in good standing; pending phone changes (`admin_phone_change_done(change_id)`, `admin_sign_out_user`); exact-owner export and close requests; vendor messages and nudges wait for approval (backfill of onboarding/live applications); `admin_set_vendor_signup`; `charged_slots` from `set_plan_price`; `enable_confirmations = true` locally.
+
 Known gaps:
 - Mobile has no "Log complaint" form yet (web only).
-- After wave 2 merges, `log_complaint`, `export_kitchen` and the plan price RPCs should also allow the **manager** role (and `export_kitchen` the accountant), and `admin_transfer_ownership` could offer "becomes manager".
-- The dues list values meals owed at today's plan price until wave 2's rupee dues (D-115).
+- Wave 2 already lets managers into `'{owner}'` checks. Wave 4's owner-only areas (export, close requests, admin_actions) check the exact owner (D-137); `log_complaint` and plan prices follow `'{owner}'` (so managers too). `plan_prices_select` should become `'{owner,accountant}'` when merged with wave 2 (accountants read plans there); the accountant must never get `export_kitchen`. pgTAP manager/accountant cases need wave 2's roles.
+- Dues are valued at today's plan price until wave 2's ledger-valued `private.dues` lands (D-139, pgTAP `todo`).
+- On merge with wave 3/ops: add `tiffin-plan-prices` to `private.engine_jobs` and run it through `private.run_job`. With wave 5: its complaint support RPCs should also write `admin_actions`.
+- Meta must approve `vendor_welcome_v2` before deploy.
 
 ## Things to start outside code now
 These have external lead times:

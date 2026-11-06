@@ -82,7 +82,12 @@ export type ClosureResult = { dry_run: boolean; closure_id?: string; service_dat
 
 /** public.onboarding_status: what "Set up your kitchen" shows (D-126). */
 export type OnboardingStatus = {
+  /** A phone proven in this session (one-time code login). */
   phone_confirmed: boolean;
+  /** The number is confirmed but this login did not use a code. */
+  login_with_code: boolean;
+  /** The public vendor application form is switched on. */
+  apply_open: boolean;
   memberships: number;
   pending_invites: number;
   can_create_kitchen: boolean;
@@ -111,7 +116,11 @@ export type AdminKitchenDetail = {
 };
 
 /** public.set_plan_price result. */
-export type PlanPriceResult = { id?: string; plan_id: string; price_per_meal_paise: number; effective_from: string; scheduled: boolean };
+export type PlanPriceResult = {
+  id?: string; plan_id: string; price_per_meal_paise: number; effective_from: string; scheduled: boolean;
+  /** Slots of effective_from already counted (and charged) at the old price. */
+  charged_slots: MealSlot[];
+};
 
 /** "Export my kitchen" parts (public.export_kitchen). */
 export type ExportPart = 'customers' | 'subscriptions' | 'payments' | 'balance_entries' | 'meal_orders';

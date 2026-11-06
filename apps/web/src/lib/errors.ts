@@ -133,6 +133,7 @@ const MESSAGES: Record<string, string> = {
   invalid_option: 'Choose one of the options.',
   no_account: 'This number has never logged in. Ask them to log in once first.',
   last_admin: 'The last platform admin cannot be removed. Add another admin first.',
+  use_vendor_signup: 'Use the vendor signup switch on the Access page (it asks for a reason).',
   date_too_far: 'Choose a date within the next year.',
   already_started: 'This price has already started. Set a new price instead.',
   invalid_category: 'Choose what the complaint is about.',

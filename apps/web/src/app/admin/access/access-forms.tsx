@@ -38,8 +38,11 @@ export function OpenSignupToggle({ enabled }: { enabled: boolean }) {
         <input type="checkbox" checked={enabled} disabled={busy}
           onChange={(e) => {
             const on = e.target.checked;
-            if (on && !window.confirm('Let anyone who logs in create a kitchen without approval?')) return;
-            void run(() => supabaseBrowser().rpc('admin_set_platform_flag', { p_key: 'open_vendor_signup', p_enabled: on }), on ? 'Signup is open.' : 'Signup needs approval again.');
+            const reason = window.prompt(on
+              ? 'Let anyone who logs in create a kitchen without approval? Reason (kept in the admin log):'
+              : 'Require approval for new kitchens again? Reason (kept in the admin log):')?.trim();
+            if (!reason) return;
+            void run(() => supabaseBrowser().rpc('admin_set_vendor_signup', { p_open: on, p_reason: reason }), on ? 'Signup is open.' : 'Signup needs approval again.');
           }} />
         Anyone who logs in may create a kitchen (no approval)
       </label>

@@ -4298,10 +4298,7 @@ export type Database = {
         Args: { p_new_phone: string; p_reason: string; p_user: string };
         Returns: Json;
       };
-      admin_phone_change_done: {
-        Args: { p_new_phone: string; p_old_last4?: string; p_reason: string; p_user: string };
-        Returns: Json;
-      };
+      admin_phone_change_done: { Args: { p_change: string }; Returns: Json };
       admin_platform_admins: { Args: Record<PropertyKey, never>; Returns: Json };
       admin_remove_platform_admin: {
         Args: { p_reason: string; p_user: string };
@@ -4331,6 +4328,8 @@ export type Database = {
         Args: { p_approved?: boolean; p_id: string; p_reason?: string };
         Returns: undefined;
       };
+      admin_set_vendor_signup: { Args: { p_open: boolean; p_reason: string }; Returns: undefined };
+      admin_sign_out_user: { Args: { p_reason: string; p_user: string }; Returns: Json };
       admin_switch_requests: { Args: { p_status?: string }; Returns: Json };
       admin_transfer_ownership: {
         Args: { p_kitchen: string; p_member: string; p_old_owner?: string; p_reason?: string };
