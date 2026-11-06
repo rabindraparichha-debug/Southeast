@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { addDays, formatServiceDate } from '@tiffin/core';
+import { t } from '@/i18n';
 import { colors, radius, space } from './theme';
 
 export type Tone = 'green' | 'amber' | 'red' | 'blue' | 'gray';
@@ -33,12 +34,12 @@ export function DateStepper({ value, min, max, onChange, label }: {
   return (
     <View style={styles.stepper}>
       {label ? <Text style={styles.stepLabel}>{label}</Text> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel="Previous day" disabled={!canPrev}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('dates.prevDay')} disabled={!canPrev}
         onPress={() => onChange(prev)} style={[styles.stepBtn, !canPrev && { opacity: 0.35 }]}>
         <Text style={styles.stepTxt}>‹</Text>
       </Pressable>
       <Text style={styles.stepValue}>{formatServiceDate(value)}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Next day" disabled={!canNext}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('dates.nextDay')} disabled={!canNext}
         onPress={() => onChange(next)} style={[styles.stepBtn, !canNext && { opacity: 0.35 }]}>
         <Text style={styles.stepTxt}>›</Text>
       </Pressable>

@@ -104,6 +104,17 @@ export function oldSheetKeys(keys: readonly string[], kitchenId: string, keepFro
   });
 }
 
+/** How many customers the list loads, so also the most the saved copy holds for offline search. */
+export const CUSTOMER_LIST_LIMIT = 200;
+
+/**
+ * True when an offline search runs over a saved list that was cut off at the load limit, so a
+ * customer past it is missing (the screen says so instead of a plain "no match").
+ */
+export function offlineSearchPartial(savedCount: number, query: string, limit: number = CUSTOMER_LIST_LIMIT): boolean {
+  return query.trim() !== '' && savedCount >= limit;
+}
+
 type Searchable = {
   name?: string | null; line1?: string | null; area?: string | null; landmark?: string | null;
   phone?: string | null; phone_last4?: string | null;

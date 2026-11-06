@@ -2,18 +2,20 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SLOT_LABEL, addDays, istDate } from '@tiffin/core';
 import type { ClosureResult, MealSlot } from '@tiffin/db';
-import { cachedFetch, useCacheScope } from '@/lib/cached-fetch';
+import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
 import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { closureLabel } from '@/lib/vendor-changes';
 import { t } from '@/i18n';
 import { Button, Card, Chip, ErrorText, Input, Muted } from './ui';
 import { ConfirmBox, DateStepper, kit } from './change-kit';
+import { StaleNote } from './offline-banner';
 import { colors, space } from './theme';
 
 type Closure = { id: string; closed_on: string; slot: MealSlot | null; reason: string | null };
 type SlotChoice = 'all' | MealSlot;
 type Form = { date: string; slot: SlotChoice; reason: string; preview: ClosureResult | null };
+type Props = { kitchenId: string; isOwner: boolean; version?: unknown; onChanged?: () => void };
 
 const slotArg = (s: SlotChoice) => (s === 'all' ? undefined : s);
 
@@ -22,13 +24,19 @@ const slotArg = (s: SlotChoice) => (s === 'all' ? undefined : s);
  * tomorrow" / "Close another date" (previewed first: how many meals are not cooked or charged)
  * and Remove. Staff see the list. A closure can only be set while the meal is still open (D-125);
  * the slot cards say "Kitchen closed" for it. `version` changes whenever Today reloads.
+ *
+ * Tabs stay mounted when the owner switches kitchen, so the card starts over for each kitchen: a
+ * preview or Remove opened for one kitchen can never be confirmed against another.
  */
-export function ClosuresCard({ kitchenId, isOwner, version, onChanged }: {
-  kitchenId: string; isOwner: boolean; version?: unknown; onChanged?: () => void;
-}) {
+export function ClosuresCard(props: Props) {
+  return <KitchenClosures key={props.kitchenId} {...props} />;
+}
+
+function KitchenClosures({ kitchenId, isOwner, version, onChanged }: Props) {
   const scope = useCacheScope();
   const today = istDate();
   const [rows, setRows] = useState<Closure[]>([]);
+  const [loadIssue, setLoadIssue] = useState<Stale | null>(null); // the list is a saved copy, or failed
   const [form, setForm] = useState<Form | null>(null);
   const [removing, setRemoving] = useState<Closure | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +55,8 @@ export function ClosuresCard({ kitchenId, isOwner, version, onChanged }: {
       },
     }).then((res) => {
       if (!alive) return;
-      // Offline: the saved list, minus days already past (Today's banner says it is a saved copy).
+      // Failed: the saved list (minus days already past) with a note saying so, or only the note.
+      setLoadIssue(res.stale);
       if (res.data) setRows(res.data.filter((c) => c.closed_on >= today));
     });
     return () => {
@@ -107,13 +116,14 @@ export function ClosuresCard({ kitchenId, isOwner, version, onChanged }: {
     done(t('closure.removed', { meals: (data as unknown as ClosureResult | null)?.meals ?? 0 }));
   }
 
-  // Staff with nothing coming up: no card at all.
-  if (!isOwner && rows.length === 0) return null;
+  // Staff with nothing coming up: no card at all (unless the list could not be loaded).
+  if (!isOwner && rows.length === 0 && !loadIssue) return null;
 
   return (
     <Card>
       <Text style={styles.title}>{t('closure.title')}</Text>
-      {rows.length === 0 && <Muted>{t('closure.none')}</Muted>}
+      <StaleNote stale={loadIssue} />
+      {rows.length === 0 && (!loadIssue || loadIssue.savedAt) && <Muted>{t('closure.none')}</Muted>}
       {rows.map((c) => (
         <View key={c.id} style={styles.item}>
           <View style={kit.row}>

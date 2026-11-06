@@ -185,7 +185,7 @@ export function AddressCard({ customerId, kitchenId, isOwner, version, onChanged
       {editing && (
         <View style={{ gap: 8 }}>
           <Label>{t('address.label')}</Label>
-          <Input value={f.label} onChangeText={field('label')} placeholder="Home / Office" testID="address-label" />
+          <Input value={f.label} onChangeText={field('label')} placeholder={t('address.labelHint')} testID="address-label" />
           <Label>{t('customer.flat')}</Label>
           <Input value={f.line1} onChangeText={field('line1')} testID="address-line1" />
           <Label>{t('customer.area')}</Label>

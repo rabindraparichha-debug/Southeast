@@ -4,7 +4,7 @@ import { SLOT_LABEL, addDays, formatServiceDate, istDate } from '@tiffin/core';
 import type { ChangeResult } from '@tiffin/db';
 import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { lockedMealChips, mealList, previewCounts, waiveFor, type LockedChip, type MealRow } from '@/lib/vendor-changes';
+import { lockedMealChips, lockedMealCounts, mealList, waiveFor, type LockedChip, type MealRow } from '@/lib/vendor-changes';
 import { t } from '@/i18n';
 import { Button, Card, Chip, ErrorText, Label, Muted } from './ui';
 import { CheckRow, ConfirmBox, kit } from './change-kit';
@@ -27,6 +27,7 @@ export function LockedMealsCard({ customerId, version, onChanged }: { customerId
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState(''); // could not load: say so instead of hiding the card
   const [saved, setSaved] = useState('');
   const [reload, setReload] = useState(0);
 
@@ -34,13 +35,15 @@ export function LockedMealsCard({ customerId, version, onChanged }: { customerId
     let alive = true;
     void supabase
       .from('meal_orders')
-      .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, locked_at')
+      .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, locked_at, subscription:subscriptions(status)')
       .eq('customer_id', customerId)
       .gte('service_date', today)
       .lte('service_date', addDays(today, 1))
       .not('locked_at', 'is', null)
-      .then(({ data }) => {
-        if (alive && data) setRows(data as MealRow[]);
+      .then(({ data, error: e }) => {
+        if (!alive) return;
+        setLoadError(e ? t('offline.failed', { error: friendlyError(e) }) : '');
+        if (data) setRows(data as MealRow[]);
       });
     return () => {
       alive = false;
@@ -82,15 +85,17 @@ export function LockedMealsCard({ customerId, version, onChanged }: { customerId
     onChanged?.();
   }
 
-  if (!chips.length && !saved && !error) return null;
+  if (!chips.length && !saved && !error && !loadError) return null;
   const shown = pending?.preview ?? null;
-  const counts = shown ? previewCounts(shown.affected) : null;
+  // One order per preview: the meal counts follow its qty (the lock charges and credits all of it).
+  const counts = shown && pending ? { total: shown.affected.length, ...lockedMealCounts(shown.affected, pending.chip.meal.qty) } : null;
   const chipLabel = (c: LockedChip) =>
     c.action === 'waive' ? t('locked.waive', { meal: mealText(c.meal) }) : t('locked.skip', { meal: mealText(c.meal) });
 
   return (
     <Card>
       <Label>{t('locked.title')}</Label>
+      <ErrorText>{loadError}</ErrorText>
       {chips.length > 0 && <Text style={kit.small}>{t('locked.hint')}</Text>}
       {chips.length > 0 && (
         <View style={kit.chips}>

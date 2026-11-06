@@ -5,7 +5,7 @@ import type { ChangeResult, ReactivateResult, SubscriptionStatus } from '@tiffin
 import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import {
-  cancelFromDefault, holdLabel, mealList, previewCounts, reactivatedWithoutBalance, sortSubscriptions, subscriptionActions,
+  cancelFromDefault, cancelSplit, holdLabel, mealList, reactivatedWithoutBalance, sortSubscriptions, subscriptionActions,
   type Hold,
 } from '@/lib/vendor-changes';
 import { t } from '@/i18n';
@@ -37,6 +37,7 @@ export function SubscriptionsCard({ customerId, kitchenId, version, onChanged }:
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState(''); // holds or notice period could not load: never shown as "none"
   const [saved, setSaved] = useState<{ text: string; warn: boolean } | null>(null);
   const [reload, setReload] = useState(0);
 
@@ -60,6 +61,8 @@ export function SubscriptionsCard({ customerId, kitchenId, version, onChanged }:
         map[x.id] = (results[i]?.data ?? []) as unknown as Hold[];
       });
       setHolds(map);
+      const failed = results.find((r) => r.error)?.error ?? k.error;
+      setLoadError(failed ? t('offline.failed', { error: friendlyError(failed) }) : '');
     })();
     return () => {
       alive = false;
@@ -134,13 +137,14 @@ export function SubscriptionsCard({ customerId, kitchenId, version, onChanged }:
   return (
     <Card>
       <Label>{t('subs.title')}</Label>
+      <ErrorText>{loadError}</ErrorText>
       {subs.length === 0 && <Muted>{t('subs.none')}</Muted>}
       {subs.map((s) => {
         const can = subscriptionActions(s.status);
         const mine = can.holds ? holds[s.id] ?? [] : [];
         const open = pending?.subId === s.id ? pending : null;
         const cancelPreview = open?.kind === 'cancel' ? open.preview : null;
-        const counts = cancelPreview ? previewCounts(cancelPreview.affected) : null;
+        const split = cancelPreview ? cancelSplit(cancelPreview.affected) : null;
         return (
           <View key={s.id} style={kit.item} testID={`sub-${s.id}`}>
             <View style={kit.row}>
@@ -200,8 +204,12 @@ export function SubscriptionsCard({ customerId, kitchenId, version, onChanged }:
                     ? t('subs.cancelNow')
                     : t('subs.cancelLast', { date: formatServiceDate(addDays(open.from, -1)) })}
                 </Muted>
-                {cancelPreview && counts && (
-                  <Muted>{counts.total ? t('subs.cancelAffects', { n: counts.total, meals: mealList(cancelPreview.affected) }) : t('actions.noneAffected')}</Muted>
+                {split && (
+                  <Muted>{split.removed.length ? t('subs.cancelAffects', { n: split.removed.length, meals: mealList(split.removed) }) : t('actions.noneAffected')}</Muted>
+                )}
+                {/* Count already frozen (locked or past the cutoff): the cancel leaves these as they are. */}
+                {split && split.frozen.length > 0 && (
+                  <Text style={kit.warn}>{t('subs.cancelFrozen', { n: split.frozen.length, meals: mealList(split.frozen) })}</Text>
                 )}
                 <Text style={kit.small}>{t('subs.cancelRefund')}</Text>
                 <Button title={t('subs.cancelConfirm')} onPress={confirm} busy={busy} disabled={!open.preview} />

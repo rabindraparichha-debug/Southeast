@@ -6,12 +6,13 @@
 import { describe, expect, it } from 'vitest';
 import { SLOT_LABEL, formatServiceDate } from '@tiffin/core';
 import {
-  CACHE_MAX_AGE_MS, CACHE_PREFIX, cacheKey, filterCachedCustomers, isOfflineError, makeEntry, oldSheetKeys, readEntry,
-  stripPhones, toErrorLike, type CacheScope,
+  CACHE_MAX_AGE_MS, CACHE_PREFIX, CUSTOMER_LIST_LIMIT, cacheKey, filterCachedCustomers, isOfflineError, makeEntry,
+  offlineSearchPartial, oldSheetKeys, readEntry, stripPhones, toErrorLike, type CacheScope,
 } from '../../apps/mobile/src/lib/screen-cache.ts';
 import {
-  cancelFromDefault, clampDate, closureLabel, dateRange, holdEnd, holdLabel, lockedMealChips, mealList, previewCounts,
-  reactivatedWithoutBalance, showChanged, sortSubscriptions, subscriptionActions, waiveFor, type Hold, type MealRow,
+  cancelFromDefault, cancelSplit, closureLabel, dateRange, holdEnd, holdLabel, lockedMealChips, lockedMealCounts, mealList,
+  previewCounts, reactivatedWithoutBalance, showChanged, sortSubscriptions, subscriptionActions, waiveFor, type Hold,
+  type MealRow,
 } from '../../apps/mobile/src/lib/vendor-changes.ts';
 
 const owner: CacheScope = { userId: 'u-owner', kitchenId: 'k-1', role: 'owner' };
@@ -132,6 +133,16 @@ describe('screen copies: packing list pruning and offline search', () => {
     // A staff copy has no numbers, so digits find nobody.
     expect(filterCachedCustomers(stripPhones(rows), '98610')).toEqual([]);
   });
+
+  it('says an offline search may miss people only when the saved list was cut at the limit', () => {
+    expect(CUSTOMER_LIST_LIMIT).toBe(200);
+    expect(offlineSearchPartial(200, 'ravi')).toBe(true);
+    expect(offlineSearchPartial(199, 'ravi')).toBe(false); // the whole list is saved
+    expect(offlineSearchPartial(200, '')).toBe(false); // no search: the list itself is shown
+    expect(offlineSearchPartial(200, '   ')).toBe(false);
+    expect(offlineSearchPartial(0, 'ravi')).toBe(false); // nothing saved: the banner already says so
+    expect(offlineSearchPartial(50, 'ravi', 50)).toBe(true);
+  });
 });
 
 describe('upcoming holds (Undo chips)', () => {
@@ -150,6 +161,21 @@ describe('upcoming holds (Undo chips)', () => {
     expect(holdEnd({ to_date: null, resumed_from: '2026-11-15' })).toBe('2026-11-14');
     expect(holdLabel({ ...pause, to_date: null, resumed_from: '2026-11-15' })).toBe(`Pause ${dateRange('2026-11-10', '2026-11-14')}`);
     expect(holdLabel({ ...base, after_cutoff: true })).toBe(`Skip ${formatServiceDate('2026-11-10')} (late)`);
+  });
+
+  it('a hold never reads longer than it is: a resume after its end leaves the end date alone', () => {
+    // Skip 10 Nov, later an open pause from 12 Nov resumed from 15 Nov: subscription_holds also
+    // gives the skip resumed_from = 15 Nov.
+    expect(holdEnd({ to_date: '2026-11-10', resumed_from: '2026-11-15' })).toBe('2026-11-10');
+    expect(holdLabel({ ...base, resumed_from: '2026-11-15' })).toBe(`Skip ${formatServiceDate('2026-11-10')}`);
+    // A dated pause cut short by a resume ends the day before it.
+    expect(holdEnd({ to_date: '2026-11-20', resumed_from: '2026-11-15' })).toBe('2026-11-14');
+    // Resume the day after the end: same end either way.
+    expect(holdEnd({ to_date: '2026-11-14', resumed_from: '2026-11-15' })).toBe('2026-11-14');
+    expect(holdEnd({ to_date: '2026-11-10', resumed_from: null })).toBe('2026-11-10');
+    expect(holdEnd({ to_date: null, resumed_from: null })).toBeNull();
+    expect(holdLabel({ ...base, type: 'pause', to_date: '2026-11-12', resumed_from: '2026-11-20' }))
+      .toBe(`Pause ${dateRange('2026-11-10', '2026-11-12')}`);
   });
 
   it('only live subscriptions list holds and can cancel; only cancelled ones reactivate', () => {
@@ -191,6 +217,29 @@ describe('previews', () => {
     expect(mealList(affected, 2)).toBe(`${formatServiceDate('2026-11-07')} Lunch, ${formatServiceDate('2026-11-07')} Dinner…`);
     expect(mealList(affected.slice(0, 1))).toBe(`${formatServiceDate('2026-11-07')} Lunch`);
   });
+
+  it('a cancel removes only meals still open; frozen ones stay as they are', () => {
+    // Cancel at 21:30 from tomorrow: Sat lunch is already locked (late), the rest is still open.
+    const cancel = [
+      { date: '2026-11-07', slot: 'lunch' as const, late: true, charged: false, credited: false },
+      { date: '2026-11-07', slot: 'dinner' as const, late: false, charged: false, credited: false },
+      { date: '2026-11-08', slot: 'lunch' as const, late: false, charged: false, credited: false },
+    ];
+    const { removed, frozen } = cancelSplit(cancel);
+    expect(removed.map((a) => `${a.date} ${a.slot}`)).toEqual(['2026-11-07 dinner', '2026-11-08 lunch']);
+    expect(frozen.map((a) => `${a.date} ${a.slot}`)).toEqual(['2026-11-07 lunch']);
+    expect(cancelSplit([])).toEqual({ removed: [], frozen: [] });
+  });
+
+  it('locked-meal counts follow the meal’s qty (the lock charges and credits all of it)', () => {
+    const charged = [{ date: '2026-11-06', slot: 'dinner' as const, late: true, charged: true, credited: false }];
+    const credited = [{ date: '2026-11-06', slot: 'dinner' as const, late: true, charged: false, credited: true }];
+    expect(lockedMealCounts(charged, 2)).toEqual({ charged: 2, credited: 0 });
+    expect(lockedMealCounts(credited, 3)).toEqual({ charged: 0, credited: 3 });
+    expect(lockedMealCounts(charged, 1)).toEqual({ charged: 1, credited: 0 });
+    expect(lockedMealCounts(charged, 0)).toEqual({ charged: 1, credited: 0 }); // bad qty: never shows 0 meals
+    expect(lockedMealCounts([], 2)).toEqual({ charged: 0, credited: 0 });
+  });
 });
 
 describe('locked meals (skip after the lock, "don’t charge")', () => {
@@ -225,6 +274,17 @@ describe('locked meals (skip after the lock, "don’t charge")', () => {
     expect(chips.map((c) => `${c.meal.id}:${c.action}`)).toEqual(['late-charged:waive']);
   });
 
+  it('offers nothing for a cancelled subscription (every change to it is refused)', () => {
+    const cancelled = { status: 'cancelled' };
+    const chips = lockedMealChips([
+      meal({ id: 'cancelled-locked', subscription: cancelled }),
+      meal({ id: 'cancelled-late-skip', status: 'skipped', charged: true, subscription: cancelled }),
+      meal({ id: 'live', slot: 'dinner', subscription: { status: 'active' } }),
+      meal({ id: 'no-embed', service_date: '2026-11-07', subscription: null }),
+    ], today);
+    expect(chips.map((c) => `${c.meal.id}:${c.action}`)).toEqual(['live:skip', 'no-embed:skip']);
+  });
+
   it('a waive chip always sends "don’t charge"; a skip only when ticked', () => {
     expect(waiveFor('waive', false)).toBe(true);
     expect(waiveFor('skip', false)).toBe(false);
@@ -239,12 +299,6 @@ describe('dates, closures and the rider badge', () => {
     expect(cancelFromDefault('2026-11-06', -3)).toBe('2026-11-06');
     expect(cancelFromDefault('2026-11-06', null)).toBe('2026-11-07');
     expect(cancelFromDefault('2026-11-30', 2)).toBe('2026-12-02');
-  });
-
-  it('keeps a date within bounds', () => {
-    expect(clampDate('2026-11-01', '2026-11-06', '2026-12-01')).toBe('2026-11-06');
-    expect(clampDate('2026-12-05', '2026-11-06', '2026-12-01')).toBe('2026-12-01');
-    expect(clampDate('2026-11-10', '2026-11-06')).toBe('2026-11-10');
   });
 
   it('labels a closure', () => {

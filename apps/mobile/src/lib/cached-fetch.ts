@@ -10,10 +10,15 @@ import { cacheKey, isOfflineError, toErrorLike, type CacheEntry, type CacheScope
 import { useAuth } from './session';
 
 export type { Stale } from './screen-cache';
-export { clearScreenCache } from './cache-storage';
 
 /** A slow load shows the saved copy after this long (a fast one never flashes it). */
 const EARLY_MS = 1200;
+
+/** A failed load of a screen that keeps no copy on the phone, for StaleScreen (null: it worked). */
+export function failedLoad(e: ErrorLike | null | undefined): Stale | null {
+  if (!e) return null;
+  return { savedAt: null, offline: isOfflineError(e), error: friendlyError({ message: e.message ?? undefined, code: e.code ?? undefined }) };
+}
 
 /** Who the copies belong to (null before login: nothing is saved or read). */
 export function useCacheScope(): CacheScope | null {

@@ -23,9 +23,15 @@ export function dateRange(from: string, to: string): string {
   return to === from ? formatServiceDate(from) : `${formatServiceDate(from)} – ${formatServiceDate(to)}`;
 }
 
-/** Last day a hold keeps meals away: its end date, or the day before an open pause was resumed. */
+/**
+ * Last day a hold keeps meals away: its end date, or the day before a later resume, whichever is
+ * earlier (subscription_holds sets resumed_from for closed holds too, even when the resume starts
+ * after the hold has ended).
+ */
 export function holdEnd(h: Pick<Hold, 'to_date' | 'resumed_from'>): string | null {
-  return h.resumed_from ? addDays(h.resumed_from, -1) : h.to_date;
+  const resumed = h.resumed_from ? addDays(h.resumed_from, -1) : null;
+  if (resumed && h.to_date) return resumed < h.to_date ? resumed : h.to_date;
+  return resumed ?? h.to_date;
 }
 
 /** Chip text for an upcoming skip or pause: "Pause Tue, 10 Nov – Thu, 12 Nov · Lunch (late)". */
@@ -52,6 +58,25 @@ export function previewCounts(affected: readonly Affected[]): { total: number; c
   };
 }
 
+/**
+ * Meals charged / given back in a locked-meal preview. That preview always covers one order, and
+ * the lock charges (and "don't charge" credits) its full qty, so rows are multiplied by the qty.
+ */
+export function lockedMealCounts(affected: readonly Affected[], qty: number): { charged: number; credited: number } {
+  const n = Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 1;
+  const c = previewCounts(affected);
+  return { charged: c.charged * n, credited: c.credited * n };
+}
+
+/**
+ * A cancel preview split in two: meals really removed, and meals whose count is already frozen
+ * (late: locked or past the cutoff). The cancel leaves frozen ones as they are (refresh_orders
+ * never touches a frozen slot): still cooked and charged unless they were already skipped.
+ */
+export function cancelSplit<T extends Pick<Affected, 'late'>>(affected: readonly T[]): { removed: T[]; frozen: T[] } {
+  return { removed: affected.filter((a) => !a.late), frozen: affected.filter((a) => a.late) };
+}
+
 export type MealRow = {
   id: string;
   subscription_id: string;
@@ -62,6 +87,8 @@ export type MealRow = {
   charged: boolean;
   charge_waived?: boolean | null;
   locked_at: string | null;
+  /** Embedded subscriptions(status): a cancelled subscription's frozen meals cannot be changed. */
+  subscription?: { status: SubscriptionStatus | string } | null;
 };
 
 /**
@@ -73,12 +100,16 @@ export type LockedChip = { meal: MealRow; action: LockedAction };
 
 const ON_ITS_WAY = new Set(['locked', 'prepared', 'out']);
 
-/** Today's and tomorrow's meals whose count is frozen, as chips (earliest first). */
+/**
+ * Today's and tomorrow's meals whose count is frozen, as chips (earliest first). None for a
+ * cancelled subscription: apply_change refuses every change to it (subscription_cancelled).
+ */
 export function lockedMealChips(meals: readonly MealRow[], today: string): LockedChip[] {
   const tomorrow = addDays(today, 1);
   const chips: LockedChip[] = [];
   for (const m of meals) {
     if (!m.locked_at || (m.service_date !== today && m.service_date !== tomorrow)) continue;
+    if (m.subscription?.status === 'cancelled') continue;
     if (ON_ITS_WAY.has(m.status)) chips.push({ meal: m, action: 'skip' });
     else if (m.status === 'skipped' && m.charged && !m.charge_waived) chips.push({ meal: m, action: 'waive' });
   }
@@ -95,13 +126,6 @@ export function waiveFor(action: LockedAction, dontCharge: boolean): boolean {
 export function cancelFromDefault(today: string, noticeDays: number | null | undefined): string {
   const n = Number.isFinite(noticeDays) ? Math.max(0, Math.floor(noticeDays as number)) : 1;
   return addDays(today, n);
-}
-
-/** Keeps a date inside [min, max] (YYYY-MM-DD strings compare in date order). */
-export function clampDate(date: string, min: string, max?: string): string {
-  if (date < min) return min;
-  if (max && date > max) return max;
-  return date;
 }
 
 type SubLike = { id: string; status: SubscriptionStatus | string; created_at: string };

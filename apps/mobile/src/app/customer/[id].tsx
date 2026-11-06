@@ -11,6 +11,8 @@ import { CustomerExtras } from '@/components/customer-extras';
 import { SubscriptionsCard } from '@/components/subscriptions-card';
 import { LockedMealsCard } from '@/components/locked-meals';
 import { AddressCard } from '@/components/address-card';
+import { StaleScreen } from '@/components/offline-banner';
+import { failedLoad, type Stale } from '@/lib/cached-fetch';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -33,6 +35,7 @@ export default function CustomerDetail() {
   const [busy, setBusy] = useState(false);
   const [cash, setCash] = useState<CashProposal | null>(null);
   const [link, setLink] = useState<{ url: string; amount: number; meals: number } | null>(null);
+  const [failed, setFailed] = useState<Stale | null>(null); // e.g. opened offline from the saved list
   const today = istDate();
 
   const load = useCallback(async () => {
@@ -45,6 +48,7 @@ export default function CustomerDetail() {
       isOwner ? supabase.from('customer_balances').select('meals').eq('customer_id', id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     setC(cust.data);
+    setFailed(failedLoad(cust.error));
     setMeals((orders.data ?? []) as Meal[]);
     setSubs((s.data ?? []) as Sub[]);
     setBalance((b.data as { meals: number } | null)?.meals ?? null);
@@ -102,7 +106,7 @@ export default function CustomerDetail() {
     setLink({ url: res.short_url, amount: res.amount_paise, meals: res.meals });
   }
 
-  if (!c) return null;
+  if (!c) return failed ? <StaleScreen stale={failed} onRetry={load} /> : null;
   const canCall = isOwner && c.phone && !c.phone.includes('•');
   const price = subs[0]?.plan?.price_per_meal_paise ?? null;
 
