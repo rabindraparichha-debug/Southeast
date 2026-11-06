@@ -796,3 +796,56 @@ Audit items 24 (rest) and 35 (docs/VENDOR_FIRST_AUDIT.md). Migration `2026111600
 - New keys added to `en.ts` later fall back to English in Odia and Hindi until a translator adds them; `tests/integration/i18n-drafts.test.ts` warns about any key a draft is missing, fails on keys English no longer has, and checks that `{placeholders}` survive.
 - Next: a native Odia reviewer for the rider, Today and phone desk strings first (about 150), then the rest; then Hindi.
 
+
+## Vendor-first wave 3: safety (2026-11-06)
+
+Implementation choices for the audit's work-order items 27, 33 and 37–41 (docs/VENDOR_FIRST_AUDIT.md). Migrations `20261112000100`–`20261112000700`; tests `supabase/tests/14_safety_wave3.test.sql`, `tests/integration/w3-safety.test.ts`, `tests/integration/public-forms.test.ts`.
+
+### D-141 Phase flags in the screens and the entry points
+- Seven platform switches, all **off** in Phase 1: `customer_whatsapp`, `customer_portal`, `online_payments`, `marketplace`, `growth`, `extras`, `kitchen_switching`. `public.feature_flags()` returns them to anyone (anon and signed in); a missing key is off, and other `platform_settings` rows (operational settings) are never exposed. Admins switch them on the new **Admin → Phase switches** page.
+- What each one opens:
+  - `customer_whatsapp`: the inbox (web nav and page, mobile tab), the WhatsApp invite on a customer, care settings (with `customer_portal`). Wave 2's outbox gate already holds customer messages while it is off.
+  - `customer_portal`: `/c/[token]` and every `portal_*` function (gated once in `private.portal_customer`), "page link" controls on a customer.
+  - `online_payments`: every payment link (owner, customer page, payer, WhatsApp bot), gated once in `private.payment_link_record`; the Payment link tab, pay buttons, the payout checklist item and the Commission admin page.
+  - `marketplace`: `/find`, `/kitchens`, `/k/[slug]`, `kitchen_profile`, `kitchen_directory`, `submit_lead`, `lead_choose`, `lead_confirm`, the public listing settings, the "profile" and "listed" checklist items, Leads/Funnel/Reviews in admin. It needs `customer_whatsapp` too in practice (the lead confirmation link goes out on WhatsApp).
+  - `growth`: `/vendors`, `submit_vendor_application` (so also the WhatsApp "Hi VENDOR" sign-up, `wa_vendor_apply`, which calls it), Vendor applications and Funnel in admin (wave 2's growth crons).
+  - `extras`: Insights, festival specials (page and link, mobile card), the at-risk card, referrals on a customer, Complaint scores in admin.
+- Pages of a switched-off phase answer **404** (`notFound()`); nav items disappear. Admin pages stay reachable by URL; only the admin menu is filtered (the Kitchen switching and Phase switches pages always show, since that is where the flags are turned on).
+- The public kitchen page no longer returns the kitchen's location (it was ~110 m, roughly a home cook's home); the page never used it.
+- Tests: pgTAP switches flags on inside its transaction; integration suites call `enableFlags()` (as the admin) and never switch a flag off, because files run in parallel.
+
+### D-142 Vendor terms, data processing agreement and the operator on the legal pages
+- `/legal/vendor-terms` and `/legal/dpa`: plain-language drafts, marked **DRAFT for a lawyer**, version `2026-11-draft-1`. The kitchen owner accepts both with one tick at onboarding (web and mobile). Owners of existing kitchens are sent to `/onboarding/terms` (web) or see an "Accept the vendor terms" card (mobile) until they accept; staff are never blocked.
+- Recorded in the existing `consents` table: `customer_id` null, purposes `vendor_terms` and `data_processing`, basis `kitchen_owner`, channel `web` or `app`, `notice_version` = the document version, `recorded_by` = the owner. One row per document and version (idempotent), audited. Only the kitchen's **owner** can accept (not a deputy or manager); a stale version is refused (`terms_outdated`). Bumping `private.vendor_terms_versions()` (with the web and mobile constants and the pages) asks every owner again.
+- The operator's legal name, address, grievance officer and contact come from `NEXT_PUBLIC_OPERATOR_NAME`, `NEXT_PUBLIC_OPERATOR_ADDRESS`, `NEXT_PUBLIC_GRIEVANCE_OFFICER`, `NEXT_PUBLIC_GRIEVANCE_CONTACT`. A `next build` against a hosted Supabase URL fails without the name and the contact (placeholders such as `[name]`, `(name)` or `example.in` do not count); builds against a local or LAN stack are not checked, so CI keeps working.
+- The privacy policy now lists Cloudflare Turnstile (public forms).
+- **Your call:** the operator details, the grievance officer, and a lawyer's review of `/privacy`, `/terms`, `/legal/vendor-terms`, `/legal/dpa` (liability, governing law, audit rights and retention periods are marked as placeholders).
+
+### D-143 Revocable customer-page links
+- The owner can **stop all links** of a customer (`revoke_customer_page_links`) or hand out **a new link that stops the old ones** (`rotate_customer_page_link`); a revoked link gets the same "expired" answer as a wrong one.
+- A customer has at most **3 live links**: issuing a fourth (bot "my page", payer message, trial follow-up, owner share) revokes the oldest.
+- Owners only (with wave 2, managers too through `require_role('{owner}')`); staff, riders, other kitchens and admins cannot.
+
+### D-144 Public forms: CAPTCHA, rate limits, and a pick confirmed on the phone
+- `submit_lead`, `lead_choose` and `submit_vendor_application` are no longer callable by anon. The website calls the `public-forms` Edge Function, which checks a **Cloudflare Turnstile** token for the two forms (not for the pick: the lead token from the form is the proof) and calls the database as the service role with the caller's IP. Without `TURNSTILE_SECRET_KEY` the CAPTCHA is off **only on a local stack**; a hosted project refuses the forms (`captcha_not_configured`), like wave 1's fail-closed mocks.
+- Rate limits (fixed windows; subjects stored only as keyed hashes, never raw IPs): lead form 10 per IP per hour, 30 per IP per day, 500 per hour in all, plus the existing 5 per phone per day; pick 20 per IP per hour, 5 per lead per hour, 3 confirmation messages per lead per day; vendor form 5 per IP per hour, 20 per IP per day, 200 per hour in all, 3 per phone per day. IP and overall limits answer `rate_limited`, phone and lead limits `too_many_requests`. The IP is Cloudflare's header, else the first `X-Forwarded-For`: best effort, which is why phone and overall limits back it up.
+- **No number oracle:** picking a kitchen no longer converts the lead. It sends a `lead_confirm` WhatsApp link (24 h) to the phone and answers the same way for every number. The phone holder opens `/find/confirm/<token>`, which converts (unchanged `private.convert_lead`) and continues to the trial payment; "already a customer of this kitchen" is shown only to them. Opening the link again shows the same booking with a fresh page link.
+- A phone whose open lead already picked a kitchen gets an ordinary shortlist for what was just typed (it used to get that kitchen back), and its pick answers "sent" without sending anything.
+- The form needs the visitor's own location (a pin or a known area), and that location is used even if an older enquiry on the same phone had a pin, so a stranger never sees distances from someone else's home. The lead token expires after 24 hours. Pick and confirm re-check that the kitchen still takes platform customers.
+- `lead_confirm_v1` is the only template sent without WhatsApp opt-in: the person just asked for it by typing their number and agreeing to be contacted about the enquiry. It needs Meta approval like every template.
+
+### D-145 Refunds are claimed before Razorpay is called
+- `razorpay-refund` first calls `claim_refund_for_gateway` (owner): the same checks as before, then the row moves to `processing` under a row lock. A second click or tab gets `refund_in_progress` (HTTP 409) and never reaches Razorpay.
+- Our refund id is sent as Razorpay's idempotency key (`X-Refund-Idempotency`) and `receipt`. A definite refusal (a 4xx answer) releases the claim (`failed`, with the reason in `refunds.gateway_error`; retry or pay in cash). A timeout keeps the claim; the webhook settles it, or after 15 minutes without a Razorpay id the claim is stale and the owner can retry with the same key.
+
+### D-146 Route transfers are confirmed; commission on every payment path
+- A captured online payment gets `payments.transfer_status = pending`. Razorpay's `transfer.processed`, `transfer.settled`, `transfer.failed` and `transfer.reversed` webhooks update it (matched by our payment id in the transfer's notes, else the Razorpay payment id), with the transfer id, the account it really went to and any error. Settled never steps back to processed.
+- A failed transfer queues `transfer_failed_v1` to the kitchen's owners and shows on **Admin → Commission** ("Route transfers needing attention"), as do transfers still pending a day after capture and transfers paid to another account than the kitchen's.
+- Every payment-link path, the WhatsApp bot included, builds Razorpay's input from the same record (`linkInputFromRecord`), so the Route transfer is always the kitchen's share (amount minus any commission). Before, the bot path sent the whole amount. Still mock/test only; `RAZORPAY_ALLOW_LIVE` stays unset.
+- **Your call (Razorpay setup):** subscribe the webhook to the four `transfer.*` events.
+
+### D-147 Verified is separate from listed
+- `kitchens.verified_at` / `verified_by` / `verification_note`: the platform team checked the FSSAI certificate (Admin → Kitchens → Verify FSSAI). A verified kitchen stays private until someone presses List.
+- A person can list a kitchen only once it is verified (`not_verified`); verifying needs an FSSAI number (`fssai_required`); a listed kitchen cannot be un-verified (`kitchen_listed`). Kitchens already listed were backfilled as verified.
+- Once verified, the owner can no longer change the FSSAI number, even while private (it used to lock only once listed, so it could change between the check and listing). The platform team still can.
+- Owners see "FSSAI checked by Tiffin" in Settings and as a checklist step; the "Listed on the platform" step shows only once the marketplace is on. Suspending now asks for confirmation.

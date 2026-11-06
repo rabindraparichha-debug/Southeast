@@ -363,6 +363,24 @@ Known gaps:
 - Review fixes (2026-11-06): a report naming the old run of a stop the owner moved (`move_stop`) is accepted (it used to be refused and dropped); a report that arrives after the same action synced is stored closed and never reopens; reports keep `customer_id`.
 - On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)`; renumber D-128 – D-130 into the global sequence (the migration headers cite the decision by title, not number).
 
+## Vendor-first wave 3 — safety (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md "Recommended work order" items 27, 33 and 37–41. Defaults: D-141 – D-147.
+Migrations `20261112000100` – `20261112000700`; pgTAP `14_safety_wave3.test.sql` (113 checks); integration
+`tests/integration/w3-safety.test.ts` and `public-forms.test.ts` (unit).
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 27 | Phase flags reach the screens: `feature_flags()`; gated RPCs (portal, payment links, public pages, lead and vendor forms); web nav, pages (404), settings and customer cards, admin nav and an admin "Phase switches" page; mobile inbox tab, home cards, checklist | ✅ | `20261112000100_phase_flags.sql`, `apps/web/src/lib/flags.ts`, `apps/mobile/src/lib/flags.ts` (D-141) |
+| 33 | Legal: operator and grievance officer from env, production build fails without them; vendor terms and DPA pages (drafts), accepted at onboarding (web and mobile) and recorded in `consents`; owners asked until they accept | ✅ (text needs a lawyer) | `20261112000500_vendor_terms.sql`, `/legal/vendor-terms`, `/legal/dpa`, `/onboarding/terms`, `next.config.ts` (D-142) |
+| 37 | Customer-page links: revoke all, rotate, at most 3 live | ✅ | `20261112000200_portal_link_revoke.sql`, customer page card (D-143) |
+| 38 | Refund claimed before Razorpay: one gateway refund per click storm; idempotency key | ✅ | `20261112000300_refund_claim.sql`, `razorpay-refund` (D-145) |
+| 39 | Public forms behind the `public-forms` function: Turnstile, per-IP/phone/overall limits; lead pick confirmed on the phone (no number oracle); lead token expires | ✅ (needs a Turnstile key on hosted) | `20261112000400_public_forms.sql`, `supabase/functions/public-forms`, `/find/confirm/[token]` (D-144) |
+| 40 | Route transfers confirmed (`transfer.*` webhooks, owner alert, admin list); commission on the WhatsApp payment path | ✅ mock/test | `20261112000700_route_transfers.sql`, `_shared/razorpay.ts` `linkInputFromRecord` (D-146) |
+| 41 (part) | Verified separate from listed (admin Verify, listing needs it, FSSAI locked once verified) | ✅ | `20261112000600_kitchen_verification.sql`, admin Kitchens (D-147) |
+
+Left for others: outbox rows stuck in `sending` (item 41, second half) belong to the outbox work (wave 2 / outbox reliability). Founder actions: D-142 (legal text, operator, grievance officer), D-144 (Turnstile keys).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

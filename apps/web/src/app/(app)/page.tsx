@@ -7,10 +7,11 @@ import { Card, LinkButton, PageHeader, Stat } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
 import { ChangeFeed } from '@/components/change-feed';
 import { OnboardingChecklist } from '@/components/onboarding-checklist';
-import { checklistItems } from '@/lib/checklist';
+import { checklistItems, phaseChecklist } from '@/lib/checklist';
 import { UpcomingClosures } from './upcoming-closures';
 import { getTranslator } from '@/lib/i18n/server';
 import { localeOf } from '@/lib/i18n/translate';
+import { getFlags } from '@/lib/flags';
 
 export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
@@ -32,11 +33,13 @@ export default async function TodayPage() {
   let paused = 0;
   let checklist: ReturnType<typeof checklistItems> = [];
   if (isOwner) {
-    const [{ data: subs }, { data: list }] = await Promise.all([
+    const [{ data: subs }, { data: list }, flags, { data: k }] = await Promise.all([
       supabase.from('subscriptions').select('status').eq('kitchen_id', kitchen.kitchenId),
       supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId }),
+      getFlags(),
+      supabase.from('kitchens').select('verified_at').eq('id', kitchen.kitchenId).maybeSingle(),
     ]);
-    checklist = checklistItems(list);
+    checklist = phaseChecklist(checklistItems(list), flags, Boolean(k?.verified_at));
     active = (subs ?? []).filter((s) => s.status === 'active' || s.status === 'low_balance').length;
     paused = (subs ?? []).filter((s) => s.status === 'paused').length;
   }

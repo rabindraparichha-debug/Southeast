@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { formatIstShort } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { requireFlag } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { Badge, Card, PageHeader } from '@/components/ui';
 import { Thread } from './thread';
 import { BroadcastForm } from './broadcast-form';
 
 export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
+  await requireFlag('customer_whatsapp'); // Phase 2 (D-141)
   const { kitchen } = await requireKitchen(['owner']);
   const sp = await searchParams;
   const supabase = await createClient();

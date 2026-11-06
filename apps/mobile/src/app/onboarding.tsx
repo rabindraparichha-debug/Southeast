@@ -4,6 +4,8 @@ import { useAuth } from '@/lib/session';
 import { useRider } from '@/lib/rider-store';
 import { friendlyError } from '@/lib/errors';
 import { Button, Card, ErrorText, Input, Label, Muted, Screen } from '@/components/ui';
+import { TermsCheckbox } from '@/components/vendor-terms';
+import { acceptVendorTerms } from '@/lib/legal';
 import { t } from '@/i18n';
 
 export default function Onboarding() {
@@ -14,6 +16,7 @@ export default function Onboarding() {
   const [area, setArea] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [terms, setTerms] = useState(false);
 
   async function create() {
     setBusy(true);
@@ -23,6 +26,8 @@ export default function Onboarding() {
       setBusy(false);
       return setError(friendlyError(error));
     }
+    // Vendor terms and DPA (D-142): recorded in consents; if this fails, Today asks again.
+    await acceptVendorTerms(data.id);
     await selectKitchen(data.id);
     await reload();
   }
@@ -35,8 +40,9 @@ export default function Onboarding() {
         <Input value={name} onChangeText={setName} placeholder="Maa Tarini Tiffin" />
         <Label>{t('onboarding.area')}</Label>
         <Input value={area} onChangeText={setArea} placeholder="Patia" />
+        <TermsCheckbox checked={terms} onChange={setTerms} />
         <ErrorText>{error}</ErrorText>
-        <Button title={t('onboarding.create')} onPress={create} busy={busy} disabled={name.trim().length < 2} />
+        <Button title={t('onboarding.create')} onPress={create} busy={busy} disabled={name.trim().length < 2 || !terms} />
       </Card>
       {unsynced > 0 && <Muted>{t('account.unsynced', { n: unsynced })}</Muted>}
       {/* Logging out would wipe rider actions still on this phone: blocked until they are sent. */}

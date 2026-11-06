@@ -1,27 +1,31 @@
 'use client';
 
-import { useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
 import Link from 'next/link';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { addDays, formatPaise, istDate, normalizePhone } from '@tiffin/core';
 import type { DietType, MealSlot } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyErrorIn } from '@/lib/errors';
+import { publicForm } from '@/lib/public-forms';
 import { track } from '@/lib/analytics';
 import { BUDGETS, ratingLabel, type LeadChoice, type LeadSource, type ShortlistKitchen, type SubmitLeadResult } from '@/lib/public';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
+import { Turnstile } from '@/components/turnstile';
 
 // The browser keeps the lead token (and the pick) for this tab, so a refresh keeps the shortlist.
 const KEY = 'tiffin.find.v1';
-type Saved = {
+export type Saved = {
   token: string;
   result: SubmitLeadResult;
+  /** A pick waiting for the phone holder to open the WhatsApp confirmation link (D-144). */
+  sent?: { kitchen_name: string; phone_last4: string | null };
   choice?: LeadChoice & { kitchen_id: string };
   payment?: 'cash' | 'error';
 };
 const listeners = new Set<() => void>();
 let memoryRaw: string | null = null; // fallback when sessionStorage is blocked
-const store = {
+export const store = {
   subscribe(fn: () => void) {
     listeners.add(fn);
     return () => listeners.delete(fn);
@@ -57,9 +61,12 @@ const DIETS: { value: DietType; label: string }[] = [
   { value: 'jain', label: 'Jain' },
 ];
 
-type Props = { areas: string[]; source: LeadSource; campaign: string | null; initialArea: string; kitchenSlug: string | null; gclid?: string | null };
+type Props = {
+  areas: string[]; source: LeadSource; campaign: string | null; initialArea: string; kitchenSlug: string | null; gclid?: string | null;
+  turnstileSiteKey?: string | null;
+};
 
-export function FindClient({ areas, source, campaign, initialArea, kitchenSlug, gclid }: Props) {
+export function FindClient({ areas, source, campaign, initialArea, kitchenSlug, gclid, turnstileSiteKey }: Props) {
   const raw = useSyncExternalStore(store.subscribe, store.get, () => null);
   const saved = useMemo<Saved | null>(() => {
     if (!raw) return null;
@@ -71,11 +78,13 @@ export function FindClient({ areas, source, campaign, initialArea, kitchenSlug, 
   }, [raw]);
 
   if (saved?.choice) return <Chosen saved={saved} />;
+  if (saved?.sent) return <ConfirmSent saved={saved} />;
   if (saved) return <Shortlist saved={saved} kitchenSlug={kitchenSlug} />;
-  return <LeadForm areas={areas} source={source} campaign={campaign} initialArea={initialArea} kitchenSlug={kitchenSlug} gclid={gclid} />;
+  return <LeadForm areas={areas} source={source} campaign={campaign} initialArea={initialArea} kitchenSlug={kitchenSlug} gclid={gclid}
+    turnstileSiteKey={turnstileSiteKey} />;
 }
 
-function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: Props) {
+function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid, turnstileSiteKey = null }: Props) {
   const tomorrow = addDays(istDate(), 1);
   const knownArea = areas.find((a) => a.toLowerCase() === initialArea.toLowerCase()) ?? '';
   const [f, setF] = useState({
@@ -86,6 +95,9 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: 
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const [captchaRound, setCaptchaRound] = useState(0);
+  const onToken = useCallback((t: string | null) => setCaptcha(t), []);
 
   function locate() {
     setError('');
@@ -112,8 +124,9 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: 
     if (!phone) return setError('Enter a valid 10-digit Indian mobile number.');
     if (!f.area && !coords) return setError('Choose your area or share your location.');
     if (!f.consent) return setError('Please tick the box to agree to be contacted.');
+    if (turnstileSiteKey && !captcha) return setError('Please complete the check above the button.');
     setBusy(true);
-    const { data, error } = await supabaseBrowser().rpc('submit_lead', {
+    const { data, error } = await publicForm<SubmitLeadResult>('submit_lead', {
       p_name: f.name.trim(),
       p_phone: phone,
       p_area: f.area || undefined,
@@ -128,10 +141,11 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: 
       p_consent: true,
       p_whatsapp_opt_in: f.whatsapp,
       p_language: 'en',
-    });
+    }, captcha);
     setBusy(false);
-    if (error) return setError(friendlyErrorIn('public', error));
-    const result = data as unknown as SubmitLeadResult;
+    setCaptchaRound((n) => n + 1); // a CAPTCHA token works once
+    if (error || !data) return setError(friendlyErrorIn('public', error));
+    const result = data;
     // Best effort: a lost click id only means this lead isn't reported back to Google Ads.
     if (gclid) await supabaseBrowser().rpc('lead_attach_gclid', { p_token: result.token, p_gclid: gclid }).then(() => undefined, () => undefined);
     track('lead_submitted', { source, campaign, area: f.area || (coords ? 'shared_location' : null) });
@@ -201,6 +215,7 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: 
           <input type="checkbox" className="mt-0.5" checked={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.checked })} />
           <span>Send me updates on WhatsApp</span>
         </label>
+        <Turnstile siteKey={turnstileSiteKey} onToken={onToken} resetKey={captchaRound} />
         <Alert>{error}</Alert>
         <Button type="submit" className="w-full py-3 text-base" disabled={busy}>{busy ? 'Finding kitchens…' : 'Show kitchens near me'}</Button>
         <p className="text-center text-xs text-ink-500">Free to use. We never hold your money: you pay the kitchen directly.</p>
@@ -230,25 +245,18 @@ function Shortlist({ saved, kitchenSlug }: { saved: Saved; kitchenSlug: string |
   const kitchens = [...valid].sort((a, b) => Number(b.slug === kitchenSlug) - Number(a.slug === kitchenSlug));
   const askedMissing = kitchenSlug && kitchens.length > 0 && !kitchens.some((k) => k.slug === kitchenSlug);
 
+  // Picking sends a confirmation link to the phone on WhatsApp; the booking and payment continue
+  // from that link, so the page never says whether a number already belongs to a kitchen (D-144).
   async function pick(k: ShortlistKitchen) {
     setError('');
     setBusy(k.kitchen_id);
-    const supabase = supabaseBrowser();
-    const { data, error } = await supabase.rpc('lead_choose', { p_token: saved.token, p_kitchen: k.kitchen_id });
-    if (error) {
-      setBusy(null);
-      return setError(friendlyErrorIn('public', error));
-    }
-    const choice = { ...(data as unknown as LeadChoice), kitchen_id: k.kitchen_id };
-    const next: Saved = { ...saved, choice };
-    track('kitchen_picked', { kitchen: k.slug, area: k.area });
-    const pay = await startPayment(choice, k.slug);
-    if (pay === 'redirected') {
-      store.set(next);
-      return;
-    }
+    const { data, error } = await publicForm<{ status: string; kitchen_name: string; phone_last4: string | null }>(
+      'lead_choose', { p_token: saved.token, p_kitchen: k.kitchen_id });
     setBusy(null);
-    store.set({ ...next, payment: pay });
+    if (error || !data) return setError(friendlyErrorIn('public', error));
+    track('kitchen_picked', { kitchen: k.slug, area: k.area });
+    store.set({ ...saved, sent: { kitchen_name: data.kitchen_name, phone_last4: data.phone_last4 } });
+    window.scrollTo({ top: 0 });
   }
 
   if (['trial', 'converted', 'renewed'].includes(saved.result.status) || (saved.result.kitchens.length > 0 && valid.length === 0)) {
@@ -314,8 +322,24 @@ function Shortlist({ saved, kitchenSlug }: { saved: Saved; kitchenSlug: string |
   );
 }
 
+function ConfirmSent({ saved }: { saved: Saved }) {
+  const s = saved.sent!;
+  return (
+    <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-ink-100" data-testid="confirm-sent">
+      <div className="text-4xl" aria-hidden>📲</div>
+      <h1 className="mt-2 text-lg font-semibold">Check WhatsApp to confirm</h1>
+      <p className="mt-1 text-sm text-ink-700">
+        We sent a link to {s.phone_last4 ? `your number ending ${s.phone_last4}` : 'your number'}. Open it to start your trial with{' '}
+        <strong>{s.kitchen_name}</strong> and pay.
+      </p>
+      <p className="mt-3 text-xs text-ink-500">The link works for 24 hours. No message? Check the number and search again.</p>
+      <button className="mt-4 text-sm text-ink-500 underline" onClick={() => store.set(null)}>Search again</button>
+    </div>
+  );
+}
+
 /** Asks the payment-link function for the trial payment page; goes there when it exists. */
-async function startPayment(choice: LeadChoice, kitchenSlug: string | null): Promise<'redirected' | 'cash' | 'error'> {
+export async function startPayment(choice: LeadChoice, kitchenSlug: string | null): Promise<'redirected' | 'cash' | 'error'> {
   const { data, error } = await supabaseBrowser().functions.invoke('razorpay-payment-link', {
     body: { token: choice.portal_token, meals: choice.trial_meals },
   });
@@ -332,7 +356,7 @@ async function startPayment(choice: LeadChoice, kitchenSlug: string | null): Pro
   return 'error';
 }
 
-function Chosen({ saved }: { saved: Saved }) {
+export function Chosen({ saved }: { saved: Saved }) {
   const c = saved.choice!;
   const [busy, setBusy] = useState(false);
   const [payment, setPayment] = useState(saved.payment);

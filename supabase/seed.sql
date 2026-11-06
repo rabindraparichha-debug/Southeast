@@ -364,7 +364,8 @@ select vault.create_secret('http://localhost:3000', 'public_web_url');
 
 -- Kitchen A goes live on the platform (it has an FSSAI number) and takes platform leads (kitchens
 -- opt in since D-119); B stays private until it adds one.
-update public.kitchens set status = 'active', accepts_platform_leads = true,
+update public.kitchens set status = 'active', accepts_platform_leads = true, verified_at = now(),
+  verification_note = 'FSSAI certificate checked (seed)',
   description = 'Home-style Odia meals cooked fresh every morning by Sunita and her family. Dalma, saga, besara and a sweet on Sundays. Steel tiffins, delivered hot around Patia and KIIT.',
   cuisine_tags = '{Odia,Home-style,Veg,Fish curry}'
 where id = '10000000-0000-4000-a000-00000000000a';
@@ -380,10 +381,14 @@ insert into auth.identities (id, user_id, provider_id, provider, identity_data, 
 values (gen_random_uuid(), '00000000-0000-4000-a000-000000000021', '00000000-0000-4000-a000-000000000021', 'phone',
   '{"sub":"00000000-0000-4000-a000-000000000021","phone":"919000000021","phone_verified":true}', now(), now(), now());
 
+-- The vendor sign-up form is behind the 'growth' phase flag (off, as in production); the demo
+-- applications are filed with it switched on for a moment.
+update public.platform_settings set enabled = true where key = 'growth';
 select public.submit_vendor_application('Lopamudra Swain', '+919000000021', 'Infocity Home Kitchen', 'Infocity', 15,
   null, 'instagram', 'ig-vendors-oct', true, true);
 select public.submit_vendor_application('Kabita Nayak', '+919861000951', 'Kabita''s Rasoi', 'Khandagiri', 25,
   null, 'website', null, true, true);
+update public.platform_settings set enabled = false where key = 'growth';
 
 insert into public.kitchens (id, name, slug, owner_id, address, area, lat, lng, service_radius_km, fssai_no,
   capacity_lunch, capacity_dinner, weekly_off, description, cuisine_tags, trial_meals)
@@ -399,7 +404,8 @@ insert into public.plans (kitchen_id, name, slots, diet, days_of_week, price_per
   ('10000000-0000-4000-a000-00000000000c', 'Home Veg Lunch', '{lunch}', 'veg', '{1,2,3,4,5,6}', 6500, 'Rice, dal, sabzi, 3 roti, salad'),
   ('10000000-0000-4000-a000-00000000000c', 'Lunch + Dinner Combo', '{lunch,dinner}', 'veg', '{1,2,3,4,5,6}', 6000, 'Two veg meals a day'),
   ('10000000-0000-4000-a000-00000000000c', 'Chicken Lunch', '{lunch}', 'nonveg', '{1,2,3,4,5,6}', 8500, 'Chicken curry, rice, roti');
-update public.kitchens set status = 'active', accepts_platform_leads = true where id = '10000000-0000-4000-a000-00000000000c';
+update public.kitchens set status = 'active', accepts_platform_leads = true, verified_at = now(),
+  verification_note = 'FSSAI certificate checked (seed)' where id = '10000000-0000-4000-a000-00000000000c';
 insert into public.menus (kitchen_id, service_date, slot, dishes, published)
 select '10000000-0000-4000-a000-00000000000c', (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
        case sl.slot when 'lunch' then array['Jeera rice', 'Dal tadka', 'Seasonal sabzi', 'Roti', 'Salad']
@@ -461,3 +467,12 @@ begin
   update public.notifications_outbox set status = 'cancelled', last_error = 'seed'
   where status = 'pending' and template in ('payment_receipt', 'new_platform_customer', 'vendor_welcome', 'lead_welcome', 'low_balance_reminder');
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Vendor terms and data processing agreement (wave 3, D-142): the seed kitchens' owners accepted
+-- the current draft versions, so the demo opens straight into the dashboard.
+-- ---------------------------------------------------------------------------
+insert into public.consents (kitchen_id, customer_id, purpose, basis, channel, notice_version, recorded_by)
+select k.id, null, x.purpose, 'kitchen_owner', 'web', private.vendor_terms_versions() ->> x.purpose, k.owner_id
+from public.kitchens k cross join (values ('vendor_terms'), ('data_processing')) as x(purpose)
+where k.id in ('10000000-0000-4000-a000-00000000000a', '10000000-0000-4000-a000-00000000000b', '10000000-0000-4000-a000-00000000000c');

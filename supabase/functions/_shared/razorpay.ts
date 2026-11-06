@@ -67,17 +67,31 @@ function randomId(prefix: string): string {
   return `${prefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 14)}`;
 }
 
-async function api<T>(cfg: RazorpayConfig, path: string, body: unknown): Promise<T> {
+/** Razorpay answered with an error status (as opposed to a timeout or a network error). */
+export class RazorpayApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+  /** 4xx: Razorpay refused the request for good (retrying the same request will not help). */
+  get definite(): boolean {
+    return this.status >= 400 && this.status < 500 && this.status !== 409 && this.status !== 429;
+  }
+}
+
+async function api<T>(cfg: RazorpayConfig, path: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`https://api.razorpay.com/v1${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${btoa(`${cfg.keyId}:${cfg.keySecret}`)}`,
       'Content-Type': 'application/json',
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(`Razorpay ${path} failed: ${res.status} ${JSON.stringify(json)}`);
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new RazorpayApiError(res.status, `Razorpay ${path} failed: ${res.status} ${JSON.stringify(json)}`);
   return json as T;
 }
 
@@ -99,10 +113,28 @@ export type CreatedLink = { id: string; shortUrl: string; expiresAt: string };
  * The Route transfer for a payment: the kitchen's share goes to its linked account; the platform
  * keeps only the commission (0 unless the platform set a rate for platform-sourced customers).
  */
-export function routeTransfer(amountPaise: number, transferPaise: number | null | undefined, linkedAccountId: string) {
+export function routeTransfer(amountPaise: number, transferPaise: number | null | undefined, linkedAccountId: string, paymentId?: string) {
   const amount = transferPaise ?? amountPaise;
   if (!Number.isInteger(amount) || amount <= 0 || amount > amountPaise) throw new Error('invalid_transfer');
-  return { account: linkedAccountId, amount, currency: 'INR', on_hold: 0 };
+  const transfer = { account: linkedAccountId, amount, currency: 'INR', on_hold: 0 };
+  // Our payment id travels with the transfer, so transfer.* webhooks find the payment (wave 3).
+  return paymentId ? { ...transfer, notes: { payment_id: paymentId } } : transfer;
+}
+
+/** What every payment-link path passes to Razorpay, from the row private.payment_link_record returns. */
+export type LinkRecord = {
+  payment_id: string; amount_paise: number; meals: number; linked_account_id: string;
+  customer_name: string; customer_phone?: string | null; kitchen_name: string;
+  transfer_paise?: number | null; commission_paise?: number | null;
+};
+
+/** The same link input on every path (owner, customer page, payer, WhatsApp bot), commission included. */
+export function linkInputFromRecord(rec: LinkRecord, description?: string | null): LinkInput {
+  return {
+    paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description || `${rec.meals} meals`,
+    customerName: rec.customer_name, customerPhone: rec.customer_phone ?? null, linkedAccountId: rec.linked_account_id,
+    kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
+  };
 }
 
 /** Request body for POST /payment_links (also built in mock mode, so tests can check it). */
@@ -118,7 +150,7 @@ export function paymentLinkBody(input: LinkInput, expireBy: number): Record<stri
     expire_by: expireBy,
     notes: { payment_id: input.paymentId },
     // Route: the kitchen's share is transferred to its linked account; we hold no customer balance.
-    options: { order: { transfers: [routeTransfer(input.amountPaise, input.transferPaise, input.linkedAccountId)] } },
+    options: { order: { transfers: [routeTransfer(input.amountPaise, input.transferPaise, input.linkedAccountId, input.paymentId)] } },
   };
 }
 
@@ -137,15 +169,20 @@ export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): 
   return { id: link.id, shortUrl: link.short_url, expiresAt: new Date(link.expire_by * 1000).toISOString() };
 }
 
-/** Refunds an online payment (reversing the Route transfer). */
+/** Request body for POST /payments/:id/refund (also built in mock mode, so tests can check it). */
+export function refundBody(amountPaise: number, refundId: string): Record<string, unknown> {
+  return { amount: amountPaise, speed: 'normal', reverse_all: 1, receipt: refundId, notes: { refund_id: refundId } };
+}
+
+/**
+ * Refunds an online payment (reversing the Route transfer). Our refund id is sent as Razorpay's
+ * idempotency key (X-Refund-Idempotency) and receipt, so a retry after an unclear answer (a timeout)
+ * cannot refund twice. The caller claims the refund row first (claim_refund_for_gateway).
+ */
 export async function createRefund(cfg: RazorpayConfig, razorpayPaymentId: string, amountPaise: number, refundId: string): Promise<{ id: string }> {
+  const body = refundBody(amountPaise, refundId);
   if (cfg.mode === 'mock') return { id: randomId('rfnd_mock_') };
-  return api<{ id: string }>(cfg, `/payments/${razorpayPaymentId}/refund`, {
-    amount: amountPaise,
-    speed: 'normal',
-    reverse_all: 1,
-    notes: { refund_id: refundId },
-  });
+  return api<{ id: string }>(cfg, `/payments/${razorpayPaymentId}/refund`, body, { 'X-Refund-Idempotency': refundId });
 }
 
 /** Builds a webhook body shaped like Razorpay's, for mock mode and tests. */

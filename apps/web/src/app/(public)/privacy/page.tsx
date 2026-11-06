@@ -67,6 +67,7 @@ export default function PrivacyPage() {
           <li><strong>Razorpay</strong>, to process payments and refunds.</li>
           <li><strong>Meta (WhatsApp Business Platform)</strong>, to deliver WhatsApp messages.</li>
           <li><strong>Supabase</strong>, which hosts our database, files and servers.</li>
+          <li><strong>Cloudflare Turnstile</strong>, which checks that a person (not a script) is filling in our public forms. It sees your IP address and browser details for that check only.</li>
           <li><strong>Sentry</strong> (error reports) and <strong>PostHog</strong> (anonymous analytics), only if enabled, and without phone numbers or names.</li>
           <li>Government or law-enforcement authorities when the law requires it.</li>
         </ul>

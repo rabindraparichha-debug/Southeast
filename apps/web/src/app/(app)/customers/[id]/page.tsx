@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { SLOT_LABEL, addDays, formatPaise, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { getFlags } from '@/lib/flags';
 import { createClient } from '@/lib/supabase/server';
 import { Badge, Card, DIET_LABEL, DIET_TONE, LANGUAGE_LABEL, PageHeader, STATUS_LABEL, STATUS_TONE } from '@/components/ui';
 import { AddressManager } from './address-manager';
@@ -27,6 +28,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const { data: c } = await supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle();
   if (!c) notFound();
   const isOwner = kitchen.role === 'owner';
+  const flags = await getFlags();
 
   const { data: addresses } = await supabase
     .from('addresses')
@@ -166,7 +168,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           />
         )}
 
-        {isOwner && (
+        {isOwner && flags.extras && (
           <ReferralCard
             customerId={c.id!}
             code={extra?.referral_code ?? null}
@@ -187,15 +189,17 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             balanceMeals={balance?.meals ?? 0}
             valuePaise={(value as { amount_paise?: number } | null)?.amount_paise ?? 0}
             unitPricePaise={livePlan?.price_per_meal_paise ?? null}
-            onlineEnabled={payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
+            onlineEnabled={flags.online_payments && payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
+            onlinePhase={flags.online_payments}
             payments={payments ?? []}
             refunds={refunds ?? []}
           />
         )}
 
-        {isOwner && (
+        {isOwner && (flags.customer_whatsapp || flags.customer_portal) && (
           <WhatsAppCard customerId={c.id!} customerName={c.name!} customerPhone={c.phone} kitchenName={kitchen.kitchenName}
-            kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null} />
+            kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null}
+            whatsapp={flags.customer_whatsapp} portal={flags.customer_portal} />
         )}
 
         {isOwner && (

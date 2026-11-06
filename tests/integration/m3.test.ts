@@ -3,7 +3,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { istDate } from '@tiffin/core';
 import { hmacSha256Hex, mockEvent } from '../../supabase/functions/_shared/razorpay.ts';
-import { env, loginAs, type Client } from './helpers';
+import { enableFlags, env, loginAs, type Client } from './helpers';
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET ?? 'local-dev-webhook-secret';
 
@@ -43,6 +43,7 @@ describe('M3: payments, webhooks and refunds through the Edge Functions', () => 
     const kitchenId = (kitchen as { id: string }).id;
 
     const admin = await loginAs('+919000000099');
+    await enableFlags(admin.client, ['online_payments']); // Phase 2 flag, off by default (D-141)
     const verified = await admin.client.rpc('set_payout_account', { p_kitchen: kitchenId, p_account_id: 'acc_TestIntegration1', p_kyc_status: 'verified' });
     expect(verified.error).toBeNull();
 

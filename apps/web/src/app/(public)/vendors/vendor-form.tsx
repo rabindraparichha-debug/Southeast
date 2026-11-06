@@ -1,19 +1,25 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { formatPhone, normalizePhone } from '@tiffin/core';
-import { supabaseBrowser } from '@/lib/supabase/client';
+import { publicForm } from '@/lib/public-forms';
 import { friendlyErrorIn } from '@/lib/errors';
 import { track } from '@/lib/analytics';
 import type { LeadSource } from '@/lib/public';
 import { Alert, Button, Field, Input } from '@/components/ui';
+import { Turnstile } from '@/components/turnstile';
 
-export function VendorForm({ areas, source, campaign }: { areas: string[]; source: LeadSource; campaign: string | null }) {
+export function VendorForm({ areas, source, campaign, turnstileSiteKey = null }: {
+  areas: string[]; source: LeadSource; campaign: string | null; turnstileSiteKey?: string | null;
+}) {
   const [f, setF] = useState({ name: '', phone: '', kitchen: '', area: '', subscribers: '', fssai: '', consent: false, whatsapp: true });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const [captchaRound, setCaptchaRound] = useState(0);
+  const onToken = useCallback((t: string | null) => setCaptcha(t), []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -24,9 +30,10 @@ export function VendorForm({ areas, source, campaign }: { areas: string[]; sourc
     const fssai = f.fssai.replace(/\s/g, '');
     if (fssai && !/^\d{14}$/.test(fssai)) return setError('FSSAI numbers have 14 digits. Leave it empty if you don’t have it yet.');
     if (!f.consent) return setError('Please tick the box to agree to be contacted.');
+    if (turnstileSiteKey && !captcha) return setError('Please complete the check above the button.');
     const subs = f.subscribers ? Number(f.subscribers) : undefined;
     setBusy(true);
-    const { error } = await supabaseBrowser().rpc('submit_vendor_application', {
+    const { error } = await publicForm<string>('submit_vendor_application', {
       p_name: f.name.trim(),
       p_phone: phone,
       p_kitchen_name: f.kitchen.trim() || undefined,
@@ -37,8 +44,10 @@ export function VendorForm({ areas, source, campaign }: { areas: string[]; sourc
       p_campaign: campaign ?? undefined,
       p_consent: true,
       p_whatsapp_opt_in: f.whatsapp,
-    });
+    }, captcha);
     setBusy(false);
+    // A CAPTCHA token works once: get a fresh one for the next try.
+    setCaptchaRound((n) => n + 1);
     if (error) return setError(friendlyErrorIn('public', error));
     // Area only when it is one of the known areas (the field is free text).
     const area = areas.find((a) => a.toLowerCase() === f.area.trim().toLowerCase()) ?? (f.area.trim() ? 'other' : null);
@@ -92,6 +101,7 @@ export function VendorForm({ areas, source, campaign }: { areas: string[]; sourc
           <input type="checkbox" className="mt-0.5" checked={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.checked })} />
           <span>Send me setup help on WhatsApp</span>
         </label>
+        <Turnstile siteKey={turnstileSiteKey} onToken={onToken} resetKey={captchaRound} />
         <Alert>{error}</Alert>
         <Button type="submit" className="w-full py-3 text-base" disabled={busy}>{busy ? 'Sending…' : 'Join free'}</Button>
       </form>

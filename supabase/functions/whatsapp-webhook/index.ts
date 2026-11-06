@@ -2,7 +2,7 @@
 import { handleWhatsAppWebhook } from './handler.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
-import { createPaymentLink, loadConfig as loadRazorpay } from '../_shared/razorpay.ts';
+import { createPaymentLink, linkInputFromRecord, loadConfig as loadRazorpay, type LinkRecord } from '../_shared/razorpay.ts';
 import { AI_OUTPUT_SCHEMA, type AiResult, type Complete } from '../_shared/ai.ts';
 import { rpc as callRpc } from '../_shared/http.ts';
 
@@ -60,11 +60,9 @@ Deno.serve(async (req) => {
     report: (e, code) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code } }),
     send: (to, out) => sendWhatsApp(cfg, to, out),
     createLink: async (record) => {
-      const link = await createPaymentLink(loadRazorpay(env), {
-        paymentId: record.payment_id, amountPaise: record.amount_paise, description: `${record.meals} meals`,
-        customerName: record.customer_name, customerPhone: record.customer_phone, linkedAccountId: record.linked_account_id,
-        kitchenName: record.kitchen_name,
-      });
+      // Same input as every other payment-link path: the Route transfer is the kitchen's share
+      // (amount minus any platform commission), not the whole amount (wave 3, audit item 40).
+      const link = await createPaymentLink(loadRazorpay(env), linkInputFromRecord(record as unknown as LinkRecord));
       await rpc('attach_payment_link', { p_payment: record.payment_id, p_link_id: link.id, p_short_url: link.shortUrl, p_expires_at: link.expiresAt });
       return link.shortUrl;
     },

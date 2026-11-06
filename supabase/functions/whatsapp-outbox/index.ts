@@ -5,7 +5,7 @@
 import { corsHeaders, json, rpc as callRpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 import { loadWaConfig, previewOf, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
-import { renderOutbox } from '../_shared/templates.ts';
+import { CUSTOMER_TEMPLATES_WITHOUT_OPT_IN, renderOutbox } from '../_shared/templates.ts';
 import type { Lang } from '../_shared/bot-i18n.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
         counts.skipped++;
         continue;
       }
-      if (r.recipient_type !== 'member' && !r.in_window && !r.opted_in) {
+      if (r.recipient_type !== 'member' && !r.in_window && !r.opted_in && !CUSTOMER_TEMPLATES_WITHOUT_OPT_IN.has(r.template)) {
         await complete(false, null, 'not_opted_in', null, true);
         counts.skipped++;
         continue;

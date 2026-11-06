@@ -4,18 +4,14 @@
 // P6: for platform-sourced customers the Route transfer is the amount minus the platform commission.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
+import { createPaymentLink, linkInputFromRecord, loadConfig, type LinkRecord } from '../_shared/razorpay.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-type Record_ = {
-  payment_id: string; amount_paise: number; meals: number; linked_account_id: string;
-  customer_name: string; customer_phone: string | null; kitchen_name: string;
-  transfer_paise?: number | null; commission_paise?: number | null;
-};
+type Record_ = LinkRecord;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -46,11 +42,7 @@ Deno.serve(async (req) => {
 
   // Step 2: Razorpay (or mock). Step 3, as the service role: attach the link to our row.
   try {
-    const link = await createPaymentLink(cfg, {
-      paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description ?? `${rec.meals} meals`,
-      customerName: rec.customer_name, customerPhone: rec.customer_phone, linkedAccountId: rec.linked_account_id,
-      kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
-    });
+    const link = await createPaymentLink(cfg, linkInputFromRecord(rec, description));
     const attach = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'attach_payment_link',
       { p_payment: rec.payment_id, p_link_id: link.id, p_short_url: link.shortUrl, p_expires_at: link.expiresAt });
     if (attach.error) throw new Error(attach.error.message);

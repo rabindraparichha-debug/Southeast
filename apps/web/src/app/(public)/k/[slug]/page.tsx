@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { formatPaise, formatServiceDate, isoDow, WEEKDAYS } from '@tiffin/core';
 import { createClient } from '@/lib/supabase/server';
+import { getFlags, requireFlag } from '@/lib/flags';
 import { photoUrl, ratingLabel, type KitchenProfile } from '@/lib/public';
 import { DIET_LABEL } from '@/components/ui';
 
@@ -15,7 +16,7 @@ const getProfile = cache(async (slug: string): Promise<KitchenProfile | null> =>
 
 export async function generateMetadata({ params }: PageProps<'/k/[slug]'>): Promise<Metadata> {
   const { slug } = await params;
-  const k = await getProfile(slug);
+  const k = (await getFlags()).marketplace ? await getProfile(slug) : null;
   if (!k) return { title: 'Kitchen not found · Tiffin Bhubaneswar' };
   return {
     title: `${k.name}${k.area ? `, ${k.area}` : ''} · Tiffin Bhubaneswar`,
@@ -33,6 +34,7 @@ function days(iso: number[]) {
 
 // Public kitchen page (active kitchens only).
 export default async function KitchenPage({ params }: PageProps<'/k/[slug]'>) {
+  await requireFlag('marketplace'); // Phase 2/3 (D-141)
   const { slug } = await params;
   const k = await getProfile(slug);
   if (!k) notFound();

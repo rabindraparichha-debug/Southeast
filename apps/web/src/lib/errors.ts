@@ -120,6 +120,18 @@ const MESSAGES: Record<string, string> = {
   invalid_change_type: 'To undo a skip or pause, use Undo on it.',
   not_cancelled: 'This subscription is not cancelled.',
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
+  // Vendor-first wave 3: safety
+  refund_in_progress: 'This refund is already being sent to Razorpay. Wait a minute, then refresh.',
+  gateway_rejected: 'Razorpay refused this refund. Pay it in cash or UPI, or try again later.',
+  rate_limited: 'Too many requests right now. Please try again in a while.',
+  captcha_failed: 'Please complete the check (“I am human”) and try again.',
+  captcha_not_configured: 'This form is not open yet.',
+  invalid_request: 'Something was missing. Please refresh the page and try again.',
+  terms_outdated: 'The terms were updated meanwhile. Refresh the page and read the new version.',
+  invalid_channel: 'Something went wrong. Please try again.',
+  not_verified: 'Check the kitchen’s FSSAI certificate first (Verify), then list it.',
+  fssai_required: 'Add the kitchen’s 14-digit FSSAI number before verifying it.',
+  kitchen_listed: 'This kitchen is listed. Make it private before removing its verification.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -150,6 +162,10 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
     already_converted: 'You have already picked a kitchen. Check WhatsApp for your customer page link.',
     already_customer: 'You are already a customer of this kitchen. Message them on WhatsApp to restart.',
     no_plan: 'This kitchen has no plan for your meal times right now. Please pick another one.',
+    location_required: 'Choose your area or share your location.',
+    rate_limited: 'Too many tries from this connection. Please try again in an hour or WhatsApp us.',
+    feature_disabled: 'This page is not open yet.',
+    kitchen_not_available: 'This kitchen can’t take new customers from the website right now. Please pick another one.',
   },
   admin: {
     consent_required: 'The caller must agree to be contacted.',

@@ -35,9 +35,11 @@ export async function loginAs(phone: string): Promise<{ client: Client; accessTo
   for (let attempt = 0; ; attempt++) {
     const { error } = await client.auth.signInWithOtp({ phone });
     if (!error) break;
-    // GoTrue enforces a short gap between OTP requests for the same phone.
-    if (attempt < 3 && /after \d+ seconds|rate limit/i.test(error.message)) {
-      await new Promise((r) => setTimeout(r, 6000));
+    // GoTrue enforces a short gap between OTP requests for the same phone (several suites log in
+    // the same seed users at once): wait as long as it asks, a few times.
+    const wait = /after (\d+) seconds/i.exec(error.message);
+    if (attempt < 8 && (wait || /rate limit/i.test(error.message))) {
+      await new Promise((r) => setTimeout(r, (wait ? Number(wait[1]) + 1 : 6) * 1000));
       continue;
     }
     throw error;
@@ -62,4 +64,27 @@ export async function rest(path: string, accessToken: string, init: RequestInit 
   });
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null };
+}
+
+/**
+ * Phase 2 flags are off by default (wave 3, D-141). A suite that tests those features switches them
+ * on as an admin; suites never switch one off again (test files run in parallel).
+ */
+export async function enableFlags(admin: Client, keys: string[]): Promise<void> {
+  for (const key of keys) {
+    const { error } = await admin.rpc('admin_set_platform_flag', { p_key: key, p_enabled: true });
+    if (error) throw error;
+  }
+}
+
+/** Calls the public-forms Edge Function like the website does (no CAPTCHA on a local stack). */
+export async function publicForm<T = unknown>(action: string, args: Record<string, unknown>, ip?: string) {
+  const { url, anonKey } = env();
+  const res = await fetch(`${url}/functions/v1/public-forms`, {
+    method: 'POST',
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) },
+    body: JSON.stringify({ action, args }),
+  });
+  const body = (await res.json()) as { data?: T; error?: string };
+  return { status: res.status, data: body.data as T, error: body.error };
 }

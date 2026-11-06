@@ -20,10 +20,12 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 
    | Function | Deploy with |
    |---|---|
-   | `razorpay-payment-link`, `razorpay-refund`, `whatsapp-outbox`, `notebook-import`, `route-optimize` | `supabase functions deploy <name>` |
+   | `razorpay-payment-link`, `razorpay-refund`, `whatsapp-outbox`, `notebook-import`, `route-optimize`, `public-forms` | `supabase functions deploy <name>` |
    | `razorpay-webhook`, `whatsapp-webhook`, `lead-intake`, `lead-email`, `ads-conversions`, `weather-alerts` | `supabase functions deploy <name> --no-verify-jwt` (they check their own signature or key, matching `supabase/config.toml`) |
 
    Not deployed: `razorpay-mock` (local only).
+
+   `public-forms` (wave 3) carries the website lead form, the kitchen pick and the vendor sign-up. On a hosted project it needs `TURNSTILE_SECRET_KEY` (and the web app `NEXT_PUBLIC_TURNSTILE_SITE_KEY`), else it answers `captcha_not_configured`. Those forms only open when the platform switches `marketplace` / `growth` on (Admin → Phase switches).
 5. Secrets: `supabase secrets set KEY=value`, with real random values. `supabase/functions/.env.example` lists the names, but its values are local placeholders: never copy that file to a hosted project. Set `PLATFORM_ENV=staging` or `PLATFORM_ENV=production` on every hosted project. Mock modes (Razorpay, WhatsApp, the notebook-import fixture) run only when `PLATFORM_ENV` is `local`, so a hosted project without keys refuses (`payments_not_configured`, `whatsapp_not_configured`, `ai_not_configured`) instead of pretending to work. Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
 6. Web: deploy as usual. Mobile: `eas build` / `eas update` (docs/RELEASE.md).
 

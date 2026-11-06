@@ -1,14 +1,17 @@
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
+import { requireFlag } from '@/lib/flags';
 import { PortalClient, type Portal } from './portal-client';
 
 export const metadata: Metadata = { title: 'My tiffin', robots: { index: false, follow: false } };
 
 // Customer page opened from the WhatsApp magic link. No login: every RPC checks the token.
 export default async function CustomerPortal({ params }: PageProps<'/c/[token]'>) {
+  const flags = await requireFlag('customer_portal'); // Phase 2 (D-141)
   const { token } = await params;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('portal_get', { p_token: token });
+  // A revoked or expired link (D-143) gets the same answer as a wrong one.
   if (error || !data) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md items-center px-6 text-center">
@@ -20,5 +23,6 @@ export default async function CustomerPortal({ params }: PageProps<'/c/[token]'>
       </main>
     );
   }
-  return <PortalClient token={token} initial={data as unknown as Portal} grievance={process.env.NEXT_PUBLIC_GRIEVANCE_CONTACT ?? ''} />;
+  return <PortalClient token={token} initial={data as unknown as Portal} grievance={process.env.NEXT_PUBLIC_GRIEVANCE_CONTACT ?? ''}
+    onlinePayments={flags.online_payments} />;
 }

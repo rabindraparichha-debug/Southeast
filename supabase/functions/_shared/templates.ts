@@ -267,6 +267,16 @@ export const TEMPLATES: Record<string, Def> = {
     params: (p) => [((p.kitchens as { name: string }[] | undefined) ?? []).map((k) => k.name).join(', ') || 'see the list'],
     quickReplies: () => [{ payload: 'l_show', title: { en: 'Show kitchens', hi: 'किचन दिखाएँ', or: 'କିଚେନ୍ ଦେଖାନ୍ତୁ' } }],
   },
+  // Wave 3: the website visitor picked a kitchen; only the phone holder can confirm it (D-144).
+  lead_confirm: {
+    name: 'lead_confirm_v1', category: 'UTILITY',
+    text: {
+      en: 'Namaskar {{1}}! To start your trial of {{2}} meals with {{3}}, open this link: {{4}} If you did not ask for this, ignore this message.',
+      hi: 'नमस्कार {{1}}! {{3}} के साथ {{2}} भोजन का ट्रायल शुरू करने के लिए यह लिंक खोलें: {{4}} अगर आपने यह नहीं माँगा, तो इस संदेश को अनदेखा करें।',
+      or: 'ନମସ୍କାର {{1}}! {{3}} ସହିତ {{2}} ଭୋଜନର ଟ୍ରାଏଲ୍ ଆରମ୍ଭ କରିବାକୁ ଏହି ଲିଙ୍କ୍ ଖୋଲନ୍ତୁ: {{4}} ଆପଣ ଏହା ମାଗି ନାହାଁନ୍ତି ତେବେ ଏହି ବାର୍ତ୍ତାକୁ ଅଣଦେଖା କରନ୍ତୁ।',
+    },
+    params: (p) => [String(p.name ?? 'there'), String(p.trial_meals ?? ''), String(p.kitchen_name ?? ''), String(p.url ?? '')],
+  },
   vendor_welcome: {
     name: 'vendor_welcome_v1', category: 'UTILITY',
     text: {
@@ -290,6 +300,14 @@ export const TEMPLATES: Record<string, Def> = {
     name: 'new_platform_customer_v1', category: 'UTILITY',
     text: { en: '{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.' },
     params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.plan_name ?? ''), String(p.trial_meals ?? '')],
+  },
+  // Wave 3: Razorpay Route could not pay the kitchen its share of an online payment.
+  transfer_failed: {
+    name: 'transfer_failed_v1', category: 'UTILITY',
+    text: { en: '{{1}}: the transfer of {{2}} for an online payment on {{3}} to your bank account failed ({{4}}). Our team is looking into it.' },
+    params: (p, k) => [k, rupees(p.amount_paise),
+      p.paid_at ? new Date(String(p.paid_at)).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }) : 'recently',
+      String(p.error ?? 'transfer failed').slice(0, 120)],
   },
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',
@@ -354,5 +372,9 @@ export function renderOutbox(template: string, payload: Payload, lang: Lang, kit
   return { type: 'template', name: def.name, language: useLang, params, quickReplies: quick.map((q) => q.payload), preview: text };
 }
 
-/** Templates that may be sent to customers who have not opted in (none: all need opt-in). */
-export const CUSTOMER_TEMPLATES_WITHOUT_OPT_IN = new Set<string>();
+/**
+ * Templates that may be sent to someone who has not opted in to WhatsApp updates: only a message the
+ * person just asked for on our website by typing their number (the lead confirmation link; the lead
+ * agreed to be contacted about the enquiry). Everything else needs opt-in or the 24-hour window.
+ */
+export const CUSTOMER_TEMPLATES_WITHOUT_OPT_IN = new Set<string>(['lead_confirm']);

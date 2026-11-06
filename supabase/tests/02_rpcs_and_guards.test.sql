@@ -189,8 +189,9 @@ select ok((select count(*) from public.audit_log where table_name = 'customers' 
 
 -- FSSAI gate
 set local role authenticated;
+-- Wave 3: listing needs the platform's verification first, and verification needs an FSSAI number.
 select throws_ok($$select public.set_kitchen_status('10000000-0000-4000-a000-00000000000b', 'active')$$,
-  '23514', null, 'a kitchen without FSSAI cannot go live');
+  '22023', 'not_verified', 'a kitchen without FSSAI (so never verified) cannot go live');
 select lives_ok($$select public.set_kitchen_status('10000000-0000-4000-a000-00000000000a', 'active')$$,
   'a kitchen with FSSAI can go live');
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000001","role":"authenticated"}', true);

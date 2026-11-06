@@ -7,6 +7,7 @@ import { Alert, Badge, Card, PageHeader } from '@/components/ui';
 import { StatusButtons } from '../status-buttons';
 import { PayoutForm } from '../payout-form';
 import { FssaiForm } from './fssai-form';
+import { VerifyForm } from './verify-form';
 import type { AdminKitchen } from '../types';
 
 export const metadata: Metadata = { title: 'Kitchens · Admin' };
@@ -23,22 +24,27 @@ const KYC_TONE: Record<string, 'gray' | 'green' | 'amber' | 'red'> = { not_start
 export default async function AdminKitchensPage() {
   await requireAdmin();
   const supabase = await createClient();
-  const [{ data, error }, { data: payouts }] = await Promise.all([
+  const [{ data, error }, { data: payouts }, { data: checks }] = await Promise.all([
     supabase.rpc('admin_kitchens'),
     // admin_kitchens only says whether a linked account exists; the payout form needs the id itself.
     supabase.from('kitchen_payout_accounts').select('kitchen_id, razorpay_linked_account_id, kyc_status'),
+    // Verified (FSSAI checked) is separate from listed (D-147); admins read every kitchen.
+    supabase.from('kitchens').select('id, verified_at, verification_note'),
   ]);
+  const check = new Map((checks ?? []).map((c) => [c.id, c]));
   const kitchens = (data ?? []) as unknown as AdminKitchen[];
   const payout = new Map((payouts ?? []).map((p) => [p.kitchen_id, p]));
   const live = kitchens.filter((k) => k.status === 'active').length;
+  const verifiedCount = kitchens.filter((k) => check.get(k.id)?.verified_at).length;
 
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
-      <PageHeader title="Admin · Kitchens" subtitle={`${kitchens.length} kitchens · ${live} listed. Every change here is written to the audit log.`} />
+      <PageHeader title="Admin · Kitchens" subtitle={`${kitchens.length} kitchens · ${verifiedCount} verified · ${live} listed. Every change here is written to the audit log.`} />
       {error && <Alert>{error.message}</Alert>}
       <div className="space-y-4">
         {kitchens.map((k) => {
           const p = payout.get(k.id);
+          const v = check.get(k.id);
           const kyc = k.kyc_status ?? 'not_started';
           const pct = k.checklist_total ? Math.round((k.checklist_done / k.checklist_total) * 100) : 0;
           return (
@@ -48,6 +54,7 @@ export default async function AdminKitchensPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-semibold text-ink-900">{k.name}</h2>
                     <Badge tone={STATUS[k.status].tone}>{STATUS[k.status].label}</Badge>
+                    {v?.verified_at ? <Badge tone="green">FSSAI verified</Badge> : <Badge tone="amber">Not verified</Badge>}
                     {k.open_complaints > 0 && <Badge tone="red">{k.open_complaints} open complaint{k.open_complaints === 1 ? '' : 's'}</Badge>}
                   </div>
                   <p className="text-sm text-ink-500">
@@ -55,7 +62,7 @@ export default async function AdminKitchensPage() {
                     {k.status === 'active' && <> · <Link href={`/k/${k.slug}`} target="_blank" className="text-brand-700 hover:underline">Public page ↗</Link></>}
                   </p>
                 </div>
-                <StatusButtons kitchenId={k.id} status={k.status} hasFssai={Boolean(k.fssai_no)} />
+                <StatusButtons kitchenId={k.id} status={k.status} hasFssai={Boolean(k.fssai_no)} verified={Boolean(v?.verified_at)} />
               </div>
 
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
@@ -88,6 +95,11 @@ export default async function AdminKitchensPage() {
                     FSSAI {k.fssai_no ? <span className="font-mono text-ink-800">{k.fssai_no}</span> : <Badge tone="amber">Missing</Badge>}
                   </div>
                   <FssaiForm kitchenId={k.id} fssai={k.fssai_no} />
+                  <div className="mb-1 mt-3 text-xs font-medium text-ink-600">
+                    Verification {v?.verified_at ? <span className="text-ink-800">checked {istDateTime(v.verified_at)}</span> : <Badge tone="amber">Not checked</Badge>}
+                  </div>
+                  <VerifyForm kitchenId={k.id} verifiedAt={v?.verified_at ?? null} note={v?.verification_note ?? null}
+                    listed={k.status === 'active'} hasFssai={Boolean(k.fssai_no)} />
                 </div>
                 <div>
                   <div className="mb-1 text-xs font-medium text-ink-600">Razorpay payout account</div>

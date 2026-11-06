@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { createClient } from '@/lib/supabase/server';
+import { requireFlag } from '@/lib/flags';
 import { firstParam, webSource } from '@/lib/public';
 import { VendorForm } from './vendor-form';
 
@@ -18,6 +19,7 @@ const FEATURES = [
 ];
 
 export default async function VendorsPage({ searchParams }: PageProps<'/vendors'>) {
+  await requireFlag('growth'); // vendor sign-up opens with the growth phase (D-141)
   const sp = await searchParams;
   const supabase = await createClient();
   const { data: areas } = await supabase.rpc('list_areas');
@@ -42,7 +44,8 @@ export default async function VendorsPage({ searchParams }: PageProps<'/vendors'
           You need an FSSAI registration (basic registration is enough for a home kitchen). We help you set up.
         </p>
       </section>
-      <VendorForm areas={Array.isArray(areas) ? (areas as string[]) : []} source={webSource(sp.src)} campaign={firstParam(sp.c) ?? null} />
+      <VendorForm areas={Array.isArray(areas) ? (areas as string[]) : []} source={webSource(sp.src)} campaign={firstParam(sp.c) ?? null}
+        turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null} />
     </div>
   );
 }
