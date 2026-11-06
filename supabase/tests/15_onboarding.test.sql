@@ -405,8 +405,10 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000011","role":"authenticated"}', true);
 insert into vals select 'cust', public.export_kitchen('85500000-0000-4000-f000-000000000001', 'customers');
 select is((select jsonb_array_length(v -> 'rows') from vals where k = 'cust'), 2, 'the owner exports every customer');
-select is((select v #>> '{rows,0,phone}' from vals where k = 'cust'), '+919555100001', 'with the full phone number');
-select is((select v #>> '{rows,0,address}' from vals where k = 'cust'), 'House 1', 'and the address');
+select is((select x ->> 'phone' from vals, jsonb_array_elements(v -> 'rows') x where k = 'cust' and x ->> 'name' = 'Support Customer 1'),
+  '+919555100001', 'with the full phone number');
+select is((select x ->> 'address' from vals, jsonb_array_elements(v -> 'rows') x where k = 'cust' and x ->> 'name' = 'Support Customer 1'),
+  'House 1', 'and the address');
 select is((select v -> 'next_offset' from vals where k = 'cust'), 'null'::jsonb, 'all in one page');
 select is(public.export_kitchen('85500000-0000-4000-f000-000000000001', 'customers', 0, 1) -> 'next_offset', '1'::jsonb, 'pages continue');
 select ok(jsonb_array_length(public.export_kitchen('85500000-0000-4000-f000-000000000001', 'meal_orders') -> 'rows') >= 12,

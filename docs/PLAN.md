@@ -344,6 +344,26 @@ Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sq
 
 Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
 
+## Vendor-first wave 4: onboarding and founder support (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md Phase 1 steps 2, 4, 5 and 7 (work order 34, parts of 21, 33 and 35). Defaults: D-126 – D-133.
+Migrations `20261113000100` – `20261113000600`; pgTAP `15_onboarding.test.sql` (156 checks); integration `onboarding.test.ts`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 1 | New kitchens need an approved application, an allowed number or `open_vendor_signup` | ✅ | `create_kitchen`, `vendor_allowed_phones`, `admin_set_vendor_approval`, `admin_allow_vendor_phone`, Admin → Access, Admin → Vendor applications (D-126) |
+| 2 | Odia / non-Latin kitchen names get a valid web address; short error codes | ✅ | `private.kitchen_slug`, `create_kitchen` (D-127) |
+| 3 | Invited staff/riders never see "Set up your kitchen"; retry on a slow network | ✅ | `onboarding_status`, web `onboarding/gate.tsx`, mobile `components/onboarding-gate.tsx` |
+| 4 | Founder support: kitchen detail, logged reveal, phone change, ownership transfer, platform admins, support contact | ✅ | `admin_actions`, `admin_kitchen_detail`, Edge Function `admin-change-phone`, `admin_transfer_ownership`, `admin_add/remove_platform_admin`, `/admin/kitchens/[id]`, `/admin/access` (D-128, D-129, D-133) |
+| 5 | Plan price from a date ("₹80 from next month"), charged per service date | ✅ | `plan_prices`, `set_plan_price`, `cancel_plan_price`, `charge_orders`, cron `tiffin-plan-prices`, Plans editor (D-130) |
+| 6 | Phoned-in complaints | ✅ web | `log_complaint`, customer page Complaints card (D-131) |
+| 7 | Export my kitchen (ZIP of CSVs), request to close | ✅ | `export_kitchen`, `kitchen_close_requests`, `/settings/export`, `@tiffin/core` `toCsvText`/`zipFiles` (D-132) |
+
+Known gaps:
+- Mobile has no "Log complaint" form yet (web only).
+- After wave 2 merges, `log_complaint`, `export_kitchen` and the plan price RPCs should also allow the **manager** role (and `export_kitchen` the accountant), and `admin_transfer_ownership` could offer "becomes manager".
+- The dues list values meals owed at today's plan price until wave 2's rupee dues (D-115).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

@@ -6,6 +6,7 @@ import { KitchenSwitcher } from '@/components/kitchen-switcher';
 import { InstallApp } from '@/components/pwa';
 import { SignOutButton } from '@/components/sign-out-button';
 import { RiderSync } from '@/components/rider-sync';
+import { SupportLink } from '@/components/support-link';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
@@ -57,6 +58,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
         <Nav items={items} />
         <div className="mt-3 flex items-start justify-between gap-3 md:absolute md:bottom-4 md:mt-0 md:block md:space-y-3">
           <InstallApp />
+          <SupportLink className="block text-xs text-brand-700 hover:underline" />
           <SignOutButton />
         </div>
       </aside>

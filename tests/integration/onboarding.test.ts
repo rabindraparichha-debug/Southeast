@@ -9,6 +9,14 @@ import { KITCHEN_A, env, loginAs, type Client } from './helpers';
 
 type Login = { client: Client; accessToken: string; userId: string };
 
+// One OTP login per number for the whole file: GoTrue refuses a second code request for the same
+// number within seconds, and other suites log in as the admin at the same time.
+const logins = new Map<string, Promise<Login>>();
+function login(phone: string): Promise<Login> {
+  if (!logins.has(phone)) logins.set(phone, loginAs(phone));
+  return logins.get(phone)!;
+}
+
 async function callFunction(name: string, accessToken: string, body: unknown) {
   const { url, anonKey } = env();
   const res = await fetch(`${url}/functions/v1/${name}`, {
@@ -23,11 +31,11 @@ async function callFunction(name: string, accessToken: string, body: unknown) {
 describe('Wave 4: approval gate and onboarding', () => {
   let admin: Login;
   beforeAll(async () => {
-    admin = await loginAs('+919000000099');
+    admin = await login('+919000000099');
   });
 
   it('refuses an unapproved number, and an allowed number may create a kitchen', async () => {
-    const vendor = await loginAs('+919000000156');
+    const vendor = await login('+919000000156');
     const refused = await vendor.client.rpc('create_kitchen', { p_name: 'Gate Test Kitchen' });
     expect(refused.error?.message).toBe('not_approved');
     let status = (await vendor.client.rpc('onboarding_status')).data as unknown as OnboardingStatus;
@@ -83,7 +91,7 @@ describe('Wave 4: approval gate and onboarding', () => {
 
 describe('Wave 4: admin-change-phone Edge Function', () => {
   it('changes a login phone (admin only, with a reason) and signs the user out', async () => {
-    const admin = await loginAs('+919000000099');
+    const admin = await login('+919000000099');
     const member = await loginAs('+919000000151');
 
     const noReason = await callFunction('admin-change-phone', admin.accessToken, { user_id: member.userId, new_phone: '9000000152' });
@@ -173,15 +181,17 @@ describe('Wave 4: owner tools', () => {
     expect(page.rows).toHaveLength(1);
     expect(String(page.rows[0]!.phone)).toMatch(/^\+919\d{9}$/);
     expect(page.next_offset).toBeNull();
-    const staffA = await loginAs('+919000000002');
-    const denied = await staffA.client.rpc('export_kitchen', { p_kitchen: KITCHEN_A, p_part: 'customers' });
+    const outsider = await login('+919000000156'); // not a member of either kitchen
+    const denied = await outsider.client.rpc('export_kitchen', { p_kitchen: KITCHEN_A, p_part: 'customers' });
     expect(denied.error?.message).toBe('forbidden');
+    const notMine = await outsider.client.rpc('export_kitchen', { p_kitchen: kitchenId, p_part: 'customers' });
+    expect(notMine.error?.message).toBe('forbidden');
   });
 
   it('files a close request the platform team resolves', async () => {
     const { data: id, error } = await owner.client.rpc('request_kitchen_close', { p_kitchen: kitchenId, p_reason: 'Integration test' });
     expect(error).toBeNull();
-    const admin = await loginAs('+919000000099');
+    const admin = await login('+919000000099');
     const { data: open } = await admin.client.rpc('admin_close_requests', {});
     expect((open as { id: string }[]).some((r) => r.id === id)).toBe(true);
     const resolved = await admin.client.rpc('admin_resolve_close_request', { p_id: id as string, p_status: 'declined', p_note: 'Test only' });

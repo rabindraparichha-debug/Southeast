@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { WEEKDAYS, formatPaise, rupeesToPaise } from '@tiffin/core';
+import { WEEKDAYS, formatPaise, formatServiceDate, istDate, rupeesToPaise } from '@tiffin/core';
 import type { DietType, MealSlot } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -13,9 +13,12 @@ type Plan = {
   price_per_meal_paise: number; description: string | null; active: boolean;
 };
 
-const empty = { name: '', slots: ['lunch'] as MealSlot[], diet: 'veg' as DietType, days_of_week: [1, 2, 3, 4, 5, 6], price: '', description: '', active: true };
+/** A price change that starts on a later date (plan_prices). */
+type ScheduledPrice = { id: string; plan_id: string; price_per_meal_paise: number; effective_from: string };
 
-export function PlansEditor({ kitchenId, plans }: { kitchenId: string; plans: Plan[] }) {
+const empty = { name: '', slots: ['lunch'] as MealSlot[], diet: 'veg' as DietType, days_of_week: [1, 2, 3, 4, 5, 6], price: '', description: '', active: true, priceFrom: '' };
+
+export function PlansEditor({ kitchenId, plans, scheduled = [] }: { kitchenId: string; plans: Plan[]; scheduled?: ScheduledPrice[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | 'new' | null>(plans.length === 0 ? 'new' : null);
   const [f, setF] = useState(empty);
@@ -28,9 +31,16 @@ export function PlansEditor({ kitchenId, plans }: { kitchenId: string; plans: Pl
       setF(empty);
       setEditing('new');
     } else {
-      setF({ name: p.name, slots: p.slots, diet: p.diet, days_of_week: p.days_of_week, price: String(p.price_per_meal_paise / 100), description: p.description ?? '', active: p.active });
+      setF({ name: p.name, slots: p.slots, diet: p.diet, days_of_week: p.days_of_week, price: String(p.price_per_meal_paise / 100), description: p.description ?? '', active: p.active, priceFrom: '' });
       setEditing(p.id);
     }
+  }
+
+  async function cancelScheduled(id: string) {
+    if (!window.confirm('Cancel this price change?')) return;
+    const { error } = await supabaseBrowser().rpc('cancel_plan_price', { p_id: id });
+    if (error) return setError(friendlyError(error));
+    router.refresh();
   }
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -44,14 +54,20 @@ export function PlansEditor({ kitchenId, plans }: { kitchenId: string; plans: Pl
     setBusy(true);
     const values = {
       name: f.name.trim(), slots: f.slots, diet: f.diet, days_of_week: [...f.days_of_week].sort(),
-      price_per_meal_paise: paise, description: f.description || null, active: f.active,
+      description: f.description || null, active: f.active,
     };
     const supabase = supabaseBrowser();
+    const current = plans.find((p) => p.id === editing);
     const { error } = editing === 'new'
-      ? await supabase.from('plans').insert({ ...values, kitchen_id: kitchenId })
+      ? await supabase.from('plans').insert({ ...values, price_per_meal_paise: paise, kitchen_id: kitchenId })
       : await supabase.from('plans').update(values).eq('id', editing!);
+    // A price change goes through set_plan_price: now, or from a later date (meals before it keep the old price).
+    const priceError = !error && current && (paise !== current.price_per_meal_paise || (f.priceFrom && f.priceFrom > istDate()))
+      ? (await supabase.rpc('set_plan_price', { p_plan: current.id, p_price_paise: paise, p_from: f.priceFrom && f.priceFrom > istDate() ? f.priceFrom : undefined })).error
+      : null;
     setBusy(false);
     if (error) return setError(error.code === '23505' ? 'A plan with this name already exists.' : friendlyError(error));
+    if (priceError) return setError(friendlyError(priceError));
     setEditing(null);
     router.refresh();
   }
@@ -69,6 +85,12 @@ export function PlansEditor({ kitchenId, plans }: { kitchenId: string; plans: Pl
                 <div className="text-ink-500">
                   {formatPaise(p.price_per_meal_paise)} per meal · {p.slots.join(' + ')} · {p.days_of_week.map((d) => WEEKDAYS[d - 1]?.short).join(' ')}
                 </div>
+                {scheduled.filter((x) => x.plan_id === p.id).map((x) => (
+                  <div key={x.id} className="text-amber-700">
+                    {formatPaise(x.price_per_meal_paise)} from {formatServiceDate(x.effective_from)}{' '}
+                    <button type="button" className="text-xs text-ink-500 hover:underline" onClick={() => void cancelScheduled(x.id)}>Cancel</button>
+                  </div>
+                ))}
               </div>
               <Button variant="ghost" onClick={() => open(p)}>Edit</Button>
             </li>
@@ -114,6 +136,11 @@ export function PlansEditor({ kitchenId, plans }: { kitchenId: string; plans: Pl
                 ))}
               </div>
             </fieldset>
+            {editing !== 'new' && (
+              <Field label="New price applies from" hint="Leave empty to change it now. Meals before this date keep the old price.">
+                <Input type="date" min={istDate()} value={f.priceFrom} onChange={(e) => setF({ ...f, priceFrom: e.target.value })} />
+              </Field>
+            )}
             <Field label="What’s included (shown to customers later)"><Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Rice, dal, 2 sabzi, roti" /></Field>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (available for new subscriptions)</label>
             <Alert>{error}</Alert>

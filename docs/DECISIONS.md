@@ -46,6 +46,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-106 | Kitchen switching: platform customers only, admin approves, flag off | ⏳ PENDING | P6 |
 | D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
 | D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
+| D-126 – D-133 | Wave 4 defaults (approval gate, non-Latin kitchen names, admin actions log, phone change / ownership / admins, dated plan prices, phoned-in complaints, export and close requests, support contact) | Decided | Wave 4 |
 
 ---
 
@@ -729,3 +730,44 @@ Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14�
 - Weekly off for one meal: `kitchens.weekly_off_lunch` / `weekly_off_dinner` (ISO days), on top of the whole-day `weekly_off`.
 - Customers are not told automatically (Phase 1 has no customer channel); the owner tells them.
 
+## Vendor-first wave 4: onboarding and founder support (2026-11-06)
+
+Implementation choices for the audit's Phase 1 steps 2, 4, 5 and 7 (docs/VENDOR_FIRST_AUDIT.md; work order 34 and parts of 21, 33, 35). Migrations `20261113000100`–`20261113000600`; tests `supabase/tests/15_onboarding.test.sql`, `tests/integration/onboarding.test.ts`.
+
+### D-126 New kitchens need approval
+- `create_kitchen` works only for a signed-in user whose **confirmed** phone has a vendor application the platform team approved (`vendor_applications.approved_at`), or a number the team added (`vendor_allowed_phones`), or when the platform setting `open_vendor_signup` is on (default **off**). Owners of an existing kitchen and platform admins are always allowed (they were approved before). Otherwise `not_approved`.
+- Approval is a flag next to the existing statuses (new / contacted / onboarding / live / rejected keep working): a rejected application cannot be approved without changing its status first.
+- "Set up your kitchen" (web and mobile) first claims waiting invites and asks `onboarding_status`: invited staff and riders go to their kitchen; if the check fails or an invite is still waiting (slow network) they get **Try again**, never the form; unapproved numbers see "Ask the Tiffin team to approve your number" with the support link.
+- The local seed allows the spare test numbers +919000000100 … 199 except 155–159 (used to test the refusal).
+- No WhatsApp message is sent on approval (Phase 1: the founder calls the vendor).
+
+### D-127 Kitchen names in any script
+- A name with no Latin letters or digits (Odia, Hindi…) gets the web address `kitchen-<6 random hex>`; a taken address gets a 4-character suffix. Name, FSSAI, location and explicit-address problems return short codes (`invalid_name`, `invalid_fssai`, `invalid_location`, `invalid_slug`), never a constraint error.
+
+### D-128 Admin actions log
+- `admin_actions` (append-only) records every founder support action: admin, kitchen, action, target, reason, before/after (phones only as last 4 digits). Admins read all; a kitchen's **owner** can read the actions on their kitchen (transparency: "who changed my phone?"). Staff and riders cannot.
+- Actions that change someone's access need a reason (`reason_required`): phone change, ownership transfer, adding/removing admins, allowing a number (its note), resolving a close request. Approving an application and revealing a phone take an optional note.
+- Reveals are logged twice: `audit_log` (ACCESS, as for every reveal) and `admin_actions`.
+
+### D-129 Phone change, ownership transfer, platform admins
+- **Phone change** (lost or changed SIM) runs in the Edge Function `admin-change-phone`: it checks the admin and the number as the caller (`admin_phone_change_check`), changes `auth.users.phone` (confirmed) with the Auth admin API, then `admin_phone_change_done` re-reads `auth.users` (nothing is logged unless the phone really changed), deletes the user's sessions (refresh tokens; an access token lives at most an hour) and logs one action per kitchen the person belongs to. A number already used by another account is refused (`phone_in_use`).
+- **Ownership transfer** moves the owner role to an existing member of the kitchen (invite them first); the old owner becomes staff (default) or leaves; a removed owner stops being a default rider. Exactly one owner remains.
+- **Platform admins** are added by phone (the person must have logged in once: `no_account`) and removed with a reason; the last admin can never be removed (`last_admin`). Keep at least two.
+
+### D-130 Plan prices with a start date
+- `plan_prices` holds dated prices; a meal is charged the price in force on its **service date** (the lock reads it directly, `private.charge_orders`). `set_plan_price(plan, price, from)`: today or empty changes the price now; a later date (up to a year) schedules it; `cancel_plan_price` drops a change that has not started. A direct edit of `plans.price_per_meal_paise` still works and is recorded as a change from today.
+- `plans.price_per_meal_paise` stays "today's price" for every screen; the daily job `tiffin-plan-prices` (00:05 IST) moves it when a scheduled price starts. Charging never waits for that job.
+- The first dated change stores the old price as a baseline (`effective_from = -infinity`), so a meal locked late (catch-up after an outage) still gets the price of its own date.
+- "Don't charge" credits for meals not frozen yet use the same dated price.
+- In this base the dues list still values meals owed at today's plan price (as before); rupee dues from each meal's own amount are wave 2 (D-115). Scheduling a price changes no dues until the date.
+
+### D-131 Phoned-in complaints
+- `log_complaint(customer, category, note, subscription?)`, owner only, channel `vendor`. It starts as **responded** (the kitchen heard it), so the 2-hour escalation to the platform team never picks it up; the owner resolves it with `resolve_complaint` as usual. The first-complaint credit follows the kitchen setting (off by default, D-119).
+- Shown on the web customer page (new Complaints card with "Log complaint" and Resolve) and in the inbox for customers with a conversation. Not yet on mobile.
+
+### D-132 Export my kitchen and close requests
+- `export_kitchen(kitchen, part, offset, limit)`, owner only, pages of up to 5,000 rows: customers (full phone numbers, default address), subscriptions, payments, balance entries, meal orders of the last 12 months. The web page **Settings → Your data** builds one ZIP of CSV files in the browser (rupee columns, UTF-8 with BOM, spreadsheet formulas defused). Every customers page read is logged (`audit_log` ACCESS, reason `kitchen_export`).
+- "Request to close my kitchen" files one open `kitchen_close_requests` row per kitchen; the owner can withdraw it. The platform team handles it by hand (export, suspend, erase what the law allows) and records `closed` or `declined` with a note. Nothing is deleted automatically.
+
+### D-133 Support contact
+- `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` (digits with country code): "Help: WhatsApp the Tiffin team" in the web sidebar, onboarding and Your data, and on the mobile Account and onboarding screens. Hidden when unset.

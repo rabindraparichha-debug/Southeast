@@ -1,5 +1,6 @@
 import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
 import { PageHeader } from '@/components/ui';
 import { SettingsForm } from './settings-form';
 import { ListingForm } from './listing-form';
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
       <ListingForm kitchen={k} />
       <SettingsForm kitchen={k} settings={s} />
       <CareForm settings={s} />
+      <p className="mt-6 text-sm"><Link href="/settings/export" className="text-brand-700 hover:underline">Your data: export my kitchen, or ask to close it →</Link></p>
     </>
   );
 }

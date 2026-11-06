@@ -64,6 +64,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
 
 ## Conventions (follow these in every change)
 
@@ -98,7 +99,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Customer requests go through `private.apply_change()`; the vendor RPC is `request_schedule_change(..., p_dry_run)`. Always preview first in the UI.
 - Counted order = `status <> 'skipped' or charged`. The lock (`private.lock_slot`) is idempotent. Never add a second path that posts `meal` entries.
 - Use `private.now()` / `private.ist_today()` in SQL, never `now()`, so tests can set `app.now`.
-- pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST).
+- pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST), `tiffin-plan-prices` (00:05 IST, wave 4).
 
 **Money (M3)**
 - Every recharge, refund, credit and adjustment is one `balance_entries` row.
@@ -171,6 +172,15 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
 
+**Onboarding and founder support (wave 4)**
+- New kitchens need approval (D-126): `create_kitchen` checks `private.vendor_signup_basis()` (approved application, `vendor_allowed_phones`, `open_vendor_signup` flag, existing owner, admin). Change who may sign up there, not in the apps. The seed allows the spare test numbers except 00155 – 00159; a new integration test that creates a kitchen must use an allowed number.
+- "Set up your kitchen" is gated by `onboarding_status()` (web `app/onboarding/gate.tsx`, mobile `components/onboarding-gate.tsx`): invited people are joined and sent to their kitchen, never shown the create form.
+- Every founder support action writes `admin_actions` through `private.log_admin_action()` (append-only; reasons via `private.require_reason()`). Never change `private.audit_row` for this. Admin RPCs start with `perform private.require_admin()`.
+- Login phones change only through the Edge Function `admin-change-phone` (Auth admin API, service role), between `admin_phone_change_check` and `admin_phone_change_done` called as the admin.
+- Prices: a meal is charged the plan price in force on its service date (`plan_prices`, read by `private.charge_orders`; `private.plan_price_on()` elsewhere). Change prices with `set_plan_price(plan, price, from)`; `plans.price_per_meal_paise` is "today's price", moved by `tiffin-plan-prices`.
+- Phoned-in complaints: `log_complaint` (channel `vendor`, starts `responded`). Exports: `export_kitchen` (owner, paged; customer pages are logged); CSV/ZIP helpers in `@tiffin/core` (`toCsvText`, `zipFiles`). Closing a kitchen is a request (`kitchen_close_requests`), never a delete.
+- Support contact: `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` via `SupportLink` (hidden when unset).
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -222,7 +232,7 @@ WhatsApp and AI Edge Function secrets (same file):
 | `PUBLIC_WEB_URL` | Base URL for customer page links |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
-Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites), `NEXT_PUBLIC_GRIEVANCE_CONTACT` and `NEXT_PUBLIC_SUPPORT_WHATSAPP` (vendor support link; mobile: `EXPO_PUBLIC_SUPPORT_WHATSAPP`).
 
 Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 

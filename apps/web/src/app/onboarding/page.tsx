@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { OnboardingForm } from './onboarding-form';
+import { OnboardingGate } from './gate';
 
 export default async function OnboardingPage() {
   const session = await getSession();
@@ -13,7 +14,9 @@ export default async function OnboardingPage() {
         kitchen as staff or rider, ask them to check the number they used.
       </p>
       <div className="mt-6 rounded-xl bg-white p-6 shadow-sm ring-1 ring-ink-100">
-        <OnboardingForm />
+        <OnboardingGate>
+          <OnboardingForm />
+        </OnboardingGate>
       </div>
     </main>
   );

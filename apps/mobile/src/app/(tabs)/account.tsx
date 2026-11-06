@@ -5,6 +5,7 @@ import { Button, Card, Chip, ErrorText, Label, Muted, Screen } from '@/component
 import { colors, space } from '@/components/theme';
 import { useRider } from '@/lib/rider-store';
 import { LegalLinks } from '@/components/legal-links';
+import { SupportLink } from '@/components/support-link';
 import { t } from '@/i18n';
 
 export default function Account() {
@@ -42,6 +43,7 @@ export default function Account() {
       {unsynced > 0 && <Muted>{t('account.unsynced', { n: unsynced })}</Muted>}
       {blocked && unsynced > 0 && <ErrorText>{t('account.logoutBlocked')}</ErrorText>}
       <Button title={t('account.signOut')} onPress={logOut} variant="secondary" disabled={unsynced > 0} busy={busy} />
+      <SupportLink />
       <LegalLinks />
     </Screen>
   );

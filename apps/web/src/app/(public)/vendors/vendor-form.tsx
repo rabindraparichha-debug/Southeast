@@ -52,11 +52,13 @@ export function VendorForm({ areas, source, campaign }: { areas: string[]; sourc
         <div className="text-4xl" aria-hidden>🙏</div>
         <h2 className="mt-2 text-lg font-semibold">Thank you, {f.name.trim().split(' ')[0]}!</h2>
         <p className="mt-1 text-sm text-ink-700">Our team will call or WhatsApp you on {formatPhone(done)} within a day.</p>
-        <p className="mt-4 text-sm font-medium text-ink-900">Don’t want to wait?</p>
-        <Link href="/login" className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-3 font-medium text-white hover:bg-brand-700">
-          Start now: log in with this number
+        <p className="mt-4 text-sm text-ink-700">
+          Once we approve your number on that call, log in with it to set up your kitchen, plans and customers. It’s free.
+        </p>
+        <Link href="/login" className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-3 font-medium text-white hover:bg-brand-700">
+          Log in with this number
         </Link>
-        <p className="mt-2 text-xs text-ink-500">Set up your plans and customers today. It’s free.</p>
+        <p className="mt-2 text-xs text-ink-500">Logged in before we called? You’ll see “waiting for approval” until then.</p>
       </aside>
     );
   }
