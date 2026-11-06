@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SLOT_LABEL, formatIstShort, formatServiceDate } from '@tiffin/core';
+import { formatIstShort, formatServiceDate } from '@tiffin/core';
 import type { SlotSummary, SlotTotals } from '@tiffin/db';
 import { colors, radius, space } from './theme';
-import { t } from '@/i18n';
+import { locale, t } from '@/i18n';
 
 // P5/P6 counts. Optional: counts locked before P5 don't have them.
 type Totals = SlotTotals & { veg_switched?: number; by_health?: Record<string, number> };
@@ -22,17 +22,17 @@ export function SlotCard({ s, onPress }: { s: SlotSummary; onPress?: () => void 
   return (
     <Pressable onPress={onPress} style={styles.card} accessibilityRole="button">
       <View style={styles.row}>
-        <Text style={styles.title}>{formatServiceDate(s.service_date)} · {SLOT_LABEL[s.slot]}</Text>
+        <Text style={styles.title}>{formatServiceDate(s.service_date, locale())} · {t(`slot.${s.slot}`)}</Text>
         <Text style={[styles.badge, s.locked ? styles.final : styles.preview]}>{s.locked ? t('today.final') : t('today.preview')}</Text>
       </View>
       <Text style={styles.sub}>
         {s.closed
           ? t('today.kitchenClosed') + (s.closure_reason ? ` · ${s.closure_reason}` : '')
-          : s.locked ? t('today.lockedAt', { time: formatIstShort(s.locked_at!) }) : t('today.closesAt', { time: formatIstShort(s.cutoff_at) })}
+          : s.locked ? t('today.lockedAt', { time: formatIstShort(s.locked_at!, locale()) }) : t('today.closesAt', { time: formatIstShort(s.cutoff_at, locale()) })}
       </Text>
       <Text style={styles.big}>{totals.total_meals} <Text style={styles.sub}>{t('today.meals')}</Text></Text>
       <Text style={styles.sub}>
-        Veg {totals.by_diet.veg} · Non-veg {totals.by_diet.nonveg} · Jain {totals.by_diet.jain}
+        {t('diet.veg')} {totals.by_diet.veg} · {t('diet.nonveg')} {totals.by_diet.nonveg} · {t('diet.jain')} {totals.by_diet.jain}
       </Text>
       {(totals.veg_switched ?? 0) > 0 && <Text style={styles.veg}>{t('today.vegSwitched', { n: totals.veg_switched ?? 0 })}</Text>}
       {health ? <Text style={styles.health}>{t('today.health', { list: health })}</Text> : null}

@@ -2,7 +2,7 @@ import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { formatIstShort, formatPaise, SLOT_LABEL } from '@tiffin/core';
+import { formatIstShort, formatPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
@@ -13,7 +13,7 @@ import {
 import { cashOf } from '@/lib/rider-queue';
 import { useAuth } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
-import { t } from '@/i18n';
+import { locale, t } from '@/i18n';
 
 const STATUS_COLOR = { pending: colors.inkSoft, delivered: colors.veg, failed: colors.danger } as const;
 
@@ -99,7 +99,7 @@ export default function Rider() {
         <View style={styles.chips}>
           {rider.runs.map((r) => (
             <Chip key={r.id} selected={r.id === run?.id} onPress={() => setRunId(r.id)}
-              label={`${manyKitchens ? `${r.kitchen_name} · ` : ''}${SLOT_LABEL[r.slot]} · ${r.route_name}`} />
+              label={`${manyKitchens ? `${r.kitchen_name} · ` : ''}${t(`slot.${r.slot}`)} · ${r.route_name}`} />
           ))}
         </View>
       )}
@@ -119,7 +119,7 @@ export default function Rider() {
             <Card style={{ marginBottom: space(1) }}>
               {manyKitchens && <Text style={styles.kitchen}>{run.kitchen_name}</Text>}
               <View style={styles.row}>
-                <Text style={styles.runTitle}>{SLOT_LABEL[run.slot]} · {run.route_name}</Text>
+                <Text style={styles.runTitle}>{t(`slot.${run.slot}`)} · {run.route_name}</Text>
                 <Text style={styles.muted}>{run.planned_km ? t('rider.km', { km: run.planned_km }) : ''}</Text>
               </View>
               <Muted>{t('rider.progress', { done, total: run.stops.length })}</Muted>
@@ -135,7 +135,7 @@ export default function Rider() {
               )}
               {run.status === 'out' && allDone && <Button title={t('rider.finish')} onPress={finish} busy={busy} />}
               {run.status === 'done' && <Muted>{t('rider.done')}</Muted>}
-              {rider.fetchedAt && <Text style={styles.small}>{t('rider.lastUpdated', { time: formatIstShort(rider.fetchedAt) })}</Text>}
+              {rider.fetchedAt && <Text style={styles.small}>{t('rider.lastUpdated', { time: formatIstShort(rider.fetchedAt, locale()) })}</Text>}
             </Card>
           }
           renderItem={({ item }) => <StopRow stop={item} />}
@@ -146,7 +146,7 @@ export default function Rider() {
 }
 
 function StopRow({ stop }: { stop: RiderStop }) {
-  const diets = Object.entries(stop.diets ?? {}).map(([d, n]) => `${n} ${d === 'nonveg' ? 'non-veg' : d}`).join(', ');
+  const diets = Object.entries(stop.diets ?? {}).map(([d, n]) => `${n} ${t(`dietShort.${d}`)}`).join(', ');
   return (
     <Pressable onPress={() => router.push({ pathname: '/stop/[id]', params: { id: stop.id } })}
       style={({ pressed }) => [styles.stop, stop.status !== 'pending' && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}>
@@ -193,7 +193,7 @@ function NeedsAttention({ items, runs }: { items: AttentionItem[]; runs: RiderRu
           <View key={a.op.op} style={styles.attentionItem}>
             <Text style={styles.name}>{t(`rider.attention.kind.${a.op.kind}`)}{a.op.stopId ? `: ${stopName(a.op.stopId)}` : ''}</Text>
             <Text style={styles.addr}>{friendlyError({ message: a.reason })}</Text>
-            {extra ? <Text style={styles.small}>{extra} · {formatIstShort(a.op.at)}</Text> : <Text style={styles.small}>{formatIstShort(a.op.at)}</Text>}
+            {extra ? <Text style={styles.small}>{extra} · {formatIstShort(a.op.at, locale())}</Text> : <Text style={styles.small}>{formatIstShort(a.op.at, locale())}</Text>}
             <View style={styles.row}>
               <View style={{ flex: 1 }}><Button title={t('rider.attention.retry')} variant="secondary" onPress={() => void retryAttention(a.op.op)} /></View>
               <View style={{ flex: 1 }}><Button title={t('rider.attention.discard')} variant="secondary" onPress={() => discard(a)} /></View>

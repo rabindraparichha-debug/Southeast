@@ -8,6 +8,7 @@ import { friendlyError } from '@/lib/errors';
 import { isNetworkError, uuid } from '@/lib/rider-store';
 import { readPhotoBytes } from '@/lib/stock';
 import { supabase } from '@/lib/supabase';
+import { BILL_PHOTO, shrinkPhoto } from '@/lib/photo';
 import { t } from '@/i18n';
 import { Button, Card, Chip, ErrorText, Muted } from './ui';
 import { colors, radius, space } from './theme';
@@ -71,7 +72,7 @@ export function DispatchPhotoCard({ kitchenId, version }: { kitchenId: string; v
       if (!perm.granted) return setError(t('dispatch.cameraDenied'));
       const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.4, allowsEditing: false, exif: false });
       if (shot.canceled || !shot.assets[0]) return;
-      uri = shot.assets[0].uri;
+      uri = await shrinkPhoto(shot.assets[0].uri, BILL_PHOTO);
     } catch {
       return setError(t('dispatch.cameraFailed'));
     }

@@ -9,6 +9,7 @@ import { Alert, PageHeader } from '@/components/ui';
 import { DeliveryTabs } from './tabs';
 import { LiveBoardView } from './live-board';
 import { DispatchPhotoCard, type DispatchPhoto } from './dispatch-photo';
+import { SyncRejectsCard } from './sync-rejects';
 
 function neighbours(date: string, slot: MealSlot) {
   const prev = slot === 'dinner' ? { date, slot: 'lunch' as const } : { date: addDays(date, -1), slot: 'dinner' as const };
@@ -32,6 +33,8 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
   const board = data as unknown as LiveBoard | null;
   const { prev, next } = neighbours(date, slot);
   const isOwner = kitchen.role === 'owner';
+  // Rider actions the server refused (D-126): owner only, open ones.
+  const { data: rejects } = isOwner ? await supabase.rpc('sync_rejects', { p_kitchen: kitchen.kitchenId }) : { data: null };
 
   return (
     <>
@@ -56,6 +59,7 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
         }
       />
       <DeliveryTabs isOwner={isOwner} />
+      {rejects && <SyncRejectsCard rows={rejects} />}
       {error || !data ? (
         <Alert>{friendlyError(error)}</Alert>
       ) : (

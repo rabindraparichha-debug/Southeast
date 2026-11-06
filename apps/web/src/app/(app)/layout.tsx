@@ -6,10 +6,14 @@ import { KitchenSwitcher } from '@/components/kitchen-switcher';
 import { InstallApp } from '@/components/pwa';
 import { SignOutButton } from '@/components/sign-out-button';
 import { RiderSync } from '@/components/rider-sync';
+import { LanguagePicker } from '@/components/language-picker';
+import { getTranslator } from '@/lib/i18n/server';
+import { translateNav } from '@/lib/i18n/translate';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
   const role = session.kitchen.role;
+  const { lang, t } = await getTranslator(); // D-128: nav and Today only so far
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
 
@@ -38,7 +42,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   if (session.isAdmin) items.push({ href: '/admin', label: 'Admin', icon: '🛡️' });
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen md:flex" lang={lang}>
       <aside className="border-b border-ink-200 bg-white p-3 print:hidden md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-r md:border-b-0 md:p-4">
         <div className="mb-3 flex items-center gap-2 md:mb-6">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">🍱</span>
@@ -50,13 +54,14 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           <input
             name="q"
             type="search"
-            placeholder="Search name, phone, area…"
+            placeholder={t('nav.search')}
             className="w-full rounded-lg border-0 bg-ink-50 px-3 py-2 text-sm ring-1 ring-ink-200 focus:ring-2 focus:ring-brand-500"
           />
         </form>
-        <Nav items={items} />
+        <Nav items={translateNav(items, lang)} />
         <div className="mt-3 flex items-start justify-between gap-3 md:absolute md:bottom-4 md:mt-0 md:block md:space-y-3">
           <InstallApp />
+          <LanguagePicker current={lang} />
           <SignOutButton />
         </div>
       </aside>

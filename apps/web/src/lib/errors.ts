@@ -156,6 +156,17 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   health: { consent_required: 'Tick the box to confirm the customer agreed to share this health information.' },
   special: { already_exists: 'A special with this name already exists for that meal.' },
   office: { already_exists: 'An office with this name already exists.', invalid_payer: 'Choose who pays for this office (a customer of this kitchen).' },
+  // Owner's list of rider actions the server refused (D-126): why it was refused.
+  sync_reject: {
+    already_done: 'Someone else had already marked this stop, so this record (and any cash on it) was not saved.',
+    otp_wrong: 'The delivery code was wrong, so the stop stayed pending.',
+    forbidden: 'The run was no longer assigned to this rider, or it was from an earlier day.',
+    not_found: 'The stop or run was rebuilt or removed before the phone could send this.',
+    wrong_tiffin: 'The scanned sticker belonged to another stop.',
+    invalid_photo: 'The proof photo could not be uploaded.',
+    otp_locked: 'Too many wrong delivery codes for this stop.',
+    stops_pending: 'The run could not be finished: some stops were still pending.',
+  },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */

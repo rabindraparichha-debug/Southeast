@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { Text } from 'react-native';
 import { useKitchen } from '@/lib/session';
 import { colors } from '@/components/theme';
-import { t } from '@/i18n';
+import { t, useLanguage } from '@/i18n';
 
 function icon(emoji: string) {
   const TabIcon = () => <Text style={{ fontSize: 20 }}>{emoji}</Text>;
@@ -12,8 +12,10 @@ function icon(emoji: string) {
 export default function TabsLayout() {
   const { role } = useKitchen();
   const isRider = role === 'rider';
+  // A new language re-renders every tab (they read t() while rendering). D-128.
+  const lang = useLanguage();
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: colors.brand, headerTitleStyle: { fontWeight: '600' } }}>
+    <Tabs key={lang} screenOptions={{ tabBarActiveTintColor: colors.brand, headerTitleStyle: { fontWeight: '600' } }}>
       <Tabs.Screen name="index" options={{ title: t('tabs.today'), tabBarIcon: icon('📋'), href: isRider ? null : undefined }} />
       <Tabs.Screen name="customers" options={{ title: t('tabs.customers'), tabBarIcon: icon('👥'), href: isRider ? null : undefined }} />
       <Tabs.Screen name="stock" options={{ title: t('tabs.stock'), tabBarIcon: icon('📦'), href: isRider ? null : undefined }} />

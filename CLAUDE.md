@@ -64,6 +64,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00180 – 90000 00189 | Spare for the held-back apps track (`held-apps.test.ts` uses 00180 – 00182) |
 
 ## Conventions (follow these in every change)
 
@@ -170,6 +171,13 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
+
+**Held-back apps (D-126 – D-128)**
+- A rider action that moves to "needs attention" is also reported to `report_sync_reject` (best effort, own storage key, `lib/rider-reject.ts` in both apps, kept identical). Never let a report block, reorder or drop a queued action; the queue rules stay in `rider-queue.ts`. Reports never carry the photo, its path, the delivery code or a phone; the server rebuilds the summary from a whitelist (`private.sync_reject_summary`).
+- `rider_sync_rejects`: riders read their own rows, owners read/resolve their kitchen's (`sync_rejects`, `resolve_sync_reject`), admins all; staff nothing.
+- Mobile photos go through `shrinkPhoto()` (`apps/mobile/src/lib/photo.ts`) before they are saved or queued; never queue a full-size camera file.
+- Adding a native module: install with `EXPO_OFFLINE=1 npx expo install`, bump `expo.version` in `apps/mobile/app.json` (runtime version policy `appVersion`) so no over-the-air update reaches an install without it, and say a new APK/TestFlight build is needed.
+- Mobile text goes through `t()`; dates through the `@tiffin/core` helpers with `locale()` from `@/i18n`. New keys go in `en.ts`; Odia/Hindi drafts (`or.ts`, `hi.ts`) fall back to English until a translator adds them. Web: only the nav and Today use `lib/i18n` (`getTranslator()` on the server); keep other pages English until the drafts are reviewed.
 
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.

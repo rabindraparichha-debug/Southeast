@@ -18,6 +18,7 @@ import {
   afterFailure, classifyError, isDue, judgeResult, requeue, sanitizeAttention, sanitizeQueue, withTimeout,
   type AttentionItem, type ErrorLike, type QueuedOp,
 } from './rider-queue';
+import { keepReport, rejectReport, sanitizeReports, trimReports, type RejectReport } from './rider-reject';
 
 export type { AttentionItem, QueuedOp } from './rider-queue';
 
@@ -83,6 +84,7 @@ type State = {
 const CACHE_KEY = 'rider.runs';
 const QUEUE_KEY = 'rider.queue';
 const ATTENTION_KEY = 'rider.attention';
+const REPORTS_KEY = 'rider.rejectReports';
 const PHOTO_PREFIX = 'rider.photo:';
 const photoKey = (op: string) => `${PHOTO_PREFIX}${op}`;
 const RPC_TIMEOUT_MS = 20_000;
@@ -259,11 +261,71 @@ async function send(q: QueuedOp): Promise<SendResult> {
   }
 }
 
-/** Moves an action to "needs attention" (photo and cash kept). */
+/** Moves an action to "needs attention" (photo and cash kept), and tells the owner (best effort). */
 function parkItem(q: QueuedOp, reason: string): AttentionItem {
   const { tries: _t, nextAt: _n, lastError: _e, ...op } = q;
   void _t; void _n; void _e;
-  return { op, reason, at: new Date().toISOString() };
+  const item = { op, reason, at: new Date().toISOString() };
+  reportReject(item);
+  return item;
+}
+
+// ---------------------------------------------------------------------------
+// Reports of refused actions for the owner (rider_sync_rejects, D-126). Separate from the queue and
+// best effort: saved under their own key, sent when the server can be reached, never blocking or
+// changing a queued action or a "needs attention" item.
+// ---------------------------------------------------------------------------
+let reports: RejectReport[] | null = null;
+
+async function loadReports(): Promise<RejectReport[]> {
+  if (reports) return reports;
+  try {
+    reports = sanitizeReports(await idbGet<unknown>(REPORTS_KEY));
+  } catch {
+    reports = [];
+  }
+  return reports;
+}
+
+function reportReject(item: AttentionItem) {
+  const report = rejectReport(item, state.runs);
+  if (!report) return;
+  void (async () => {
+    try {
+      reports = trimReports([...(await loadReports()), report], Date.now());
+      await idbSet({ [REPORTS_KEY]: reports });
+    } catch {
+      // best effort
+    }
+    void flushReports();
+  })();
+}
+
+let flushing: Promise<void> | null = null;
+/** Sends saved reports; stops at the first one the server cannot take yet (no network, busy). */
+export function flushReports(): Promise<void> {
+  flushing ??= (async () => {
+    try {
+      for (const report of [...(await loadReports())]) {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
+        let keep: boolean;
+        try {
+          const { error, status } = await withTimeout(supabaseBrowser().rpc('report_sync_reject', report), RPC_TIMEOUT_MS);
+          keep = !!error && keepReport({ ...error, status });
+        } catch (e) {
+          keep = keepReport({ message: String((e as Error).message), name: (e as Error).name });
+        }
+        if (keep) break;
+        reports = (reports ?? []).filter((r) => r !== report);
+        await idbSet({ [REPORTS_KEY]: reports });
+      }
+    } catch {
+      // best effort: tried again with the next sync
+    } finally {
+      flushing = null;
+    }
+  })();
+  return flushing;
 }
 
 function clearQueuedFlag(stopId?: string) {
@@ -339,6 +401,7 @@ export function syncQueue(opts: { force?: boolean } = {}): Promise<void> {
       set({ syncing: false });
       syncing = null;
       schedule();
+      void flushReports();
     }
     // Refused actions were shown as done: reload the day so the screen shows the server's state.
     if (parked) await reloadRuns();
@@ -476,8 +539,9 @@ export async function resetRider() {
   state = initial();
   loading = null;
   currentUser = null;
+  reports = null;
   try {
-    await idbDelete([CACHE_KEY, QUEUE_KEY, ATTENTION_KEY, ...(await idbKeys(PHOTO_PREFIX))]);
+    await idbDelete([CACHE_KEY, QUEUE_KEY, ATTENTION_KEY, REPORTS_KEY, ...(await idbKeys(PHOTO_PREFIX))]);
   } catch {
     // best effort
   }

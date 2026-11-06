@@ -59,12 +59,12 @@ export const WEEKDAYS: { iso: number; short: string; long: string }[] = [
 
 export const SLOT_LABEL: Record<Slot, string> = { lunch: 'Lunch', dinner: 'Dinner' };
 
-/** "2026-11-03" -> "Tue, 3 Nov" */
-export function formatServiceDate(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+/** "2026-11-03" -> "Tue, 3 Nov". `locale` lets an app with a language picker show Odia or Hindi ("or-IN"). */
+export function formatServiceDate(date: string, locale = 'en-IN'): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** A timestamptz -> "Mon 9:00 pm" in IST. */
-export function formatIstShort(at: string | Date): string {
-  return new Date(at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: 'numeric', minute: '2-digit' });
+/** A timestamptz -> "Mon 9:00 pm" in IST (`locale` as above). */
+export function formatIstShort(at: string | Date, locale = 'en-IN'): string {
+  return new Date(at).toLocaleString(locale, { timeZone: 'Asia/Kolkata', weekday: 'short', hour: 'numeric', minute: '2-digit' });
 }

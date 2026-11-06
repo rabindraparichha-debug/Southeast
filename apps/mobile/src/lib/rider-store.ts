@@ -17,6 +17,8 @@ import {
   afterFailure, classifyError, completeStopArgs, isDue, judgeResult, parseAttention, parseQueue, requeue,
   type AttentionItem, type ErrorLike, type QueuedOp,
 } from './rider-queue';
+import { keepReport, rejectReport, sanitizeReports, trimReports, type RejectReport } from './rider-reject';
+import { proofPhotoBytes } from './photo';
 import { supabase } from './supabase';
 
 export type { AttentionItem, QueuedOp } from './rider-queue';
@@ -81,6 +83,7 @@ type State = {
 const CACHE_KEY = 'tiffin.rider.runs';
 const QUEUE_KEY = 'tiffin.rider.queue';
 const ATTENTION_KEY = 'tiffin.rider.attention';
+const REPORTS_KEY = 'tiffin.rider.rejectReports';
 
 const initial = (): State => ({
   loaded: false, runs: [], queue: [], attention: [], fetchedAt: null, online: true, syncing: false, lastError: null,
@@ -225,7 +228,7 @@ async function send(q: QueuedOp): Promise<SendResult> {
   if (q.photoUri && q.photoPath && !q.uploaded) {
     if (photoMissing(q.photoUri)) return { ok: false, error: { message: 'invalid_photo' } };
     try {
-      const bytes = await readBytes(q.photoUri);
+      const bytes = await proofPhotoBytes(q.photoUri, readBytes);
       const { error } = await supabase.storage.from('proofs').upload(q.photoPath, bytes, { contentType: 'image/jpeg' });
       // A retry after a lost response finds the photo already there: that is fine.
       if (error && !/exist|duplicate/i.test(error.message)) {
@@ -259,11 +262,70 @@ async function send(q: QueuedOp): Promise<SendResult> {
   }
 }
 
-/** Moves an action to "needs attention" (photo and cash kept). */
+/** Moves an action to "needs attention" (photo and cash kept), and tells the owner (best effort). */
 function parkItem(q: QueuedOp, reason: string): AttentionItem {
   const { tries: _t, nextAt: _n, lastError: _e, ...op } = q;
   void _t; void _n; void _e;
-  return { op, reason, at: new Date().toISOString() };
+  const item = { op, reason, at: new Date().toISOString() };
+  reportReject(item);
+  return item;
+}
+
+// ---------------------------------------------------------------------------
+// Reports of refused actions for the owner (rider_sync_rejects, D-126). Separate from the queue and
+// best effort: saved under their own key, sent when the server can be reached, never blocking or
+// changing a queued action or a "needs attention" item.
+// ---------------------------------------------------------------------------
+let reports: RejectReport[] | null = null;
+
+async function loadReports(): Promise<RejectReport[]> {
+  if (reports) return reports;
+  try {
+    reports = sanitizeReports(JSON.parse((await AsyncStorage.getItem(REPORTS_KEY)) ?? '[]'));
+  } catch {
+    reports = [];
+  }
+  return reports;
+}
+
+function reportReject(item: AttentionItem) {
+  const report = rejectReport(item, state.runs);
+  if (!report) return;
+  void (async () => {
+    try {
+      reports = trimReports([...(await loadReports()), report], Date.now());
+      await AsyncStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+    } catch {
+      // best effort
+    }
+    void flushReports();
+  })();
+}
+
+let flushing: Promise<void> | null = null;
+/** Sends saved reports; stops at the first one the server cannot take yet (no network, busy). */
+export function flushReports(): Promise<void> {
+  flushing ??= (async () => {
+    try {
+      for (const report of [...(await loadReports())]) {
+        let keep: boolean;
+        try {
+          const { error, status } = await supabase.rpc('report_sync_reject', report);
+          keep = !!error && keepReport({ ...error, status });
+        } catch (e) {
+          keep = keepReport({ message: String((e as Error).message), name: (e as Error).name });
+        }
+        if (keep) break;
+        reports = (reports ?? []).filter((r) => r !== report);
+        await AsyncStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+      }
+    } catch {
+      // best effort: tried again with the next sync
+    } finally {
+      flushing = null;
+    }
+  })();
+  return flushing;
 }
 
 function clearQueuedFlag(stopId?: string) {
@@ -339,6 +401,7 @@ export function syncQueue(opts: { force?: boolean } = {}): Promise<void> {
       set({ syncing: false });
       syncing = null;
       schedule();
+      void flushReports();
     }
     // Refused actions were shown as done: reload the day so the screen shows the server's state.
     if (parked) await reloadRuns();
@@ -468,6 +531,7 @@ export async function resetRider() {
   for (const a of state.attention) dropPhoto(a.op.photoUri);
   state = initial();
   loading = null;
-  await AsyncStorage.multiRemove([CACHE_KEY, QUEUE_KEY, ATTENTION_KEY]);
+  reports = null;
+  await AsyncStorage.multiRemove([CACHE_KEY, QUEUE_KEY, ATTENTION_KEY, REPORTS_KEY]);
   listeners.forEach((l) => l());
 }

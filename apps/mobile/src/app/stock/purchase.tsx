@@ -8,6 +8,7 @@ import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components
 import { ItemPicker, UnitChips } from '@/components/stock-ui';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
+import { BILL_PHOTO, shrinkPhoto } from '@/lib/photo';
 import { uuid } from '@/lib/rider-store';
 import { useKitchen } from '@/lib/session';
 import { convertQty, parseQty, readPhotoBytes, type PurchaseResult, type StockRow, type StockUnit } from '@/lib/stock';
@@ -91,7 +92,7 @@ export default function Purchase() {
       if (!perm.granted) return setError(t('stock.purchase.cameraDenied'));
       const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.5, allowsEditing: false, exif: false });
       if (shot.canceled || !shot.assets[0]) return;
-      setPhoto({ uri: shot.assets[0].uri, path: `${kitchen.kitchenId}/${billDate}-${uuid()}.jpg`, uploaded: false });
+      setPhoto({ uri: await shrinkPhoto(shot.assets[0].uri, BILL_PHOTO), path: `${kitchen.kitchenId}/${billDate}-${uuid()}.jpg`, uploaded: false });
     } catch {
       setError(t('stock.purchase.cameraFailed'));
     }

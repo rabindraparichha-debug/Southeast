@@ -8,10 +8,13 @@ import { SlotCard } from '@/components/slot-card';
 import { ChangeFeed } from '@/components/change-feed';
 import { OnboardingChecklist } from '@/components/onboarding-checklist';
 import { checklistItems } from '@/lib/checklist';
+import { getTranslator } from '@/lib/i18n/server';
+import { localeOf } from '@/lib/i18n/translate';
 
 export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
   const supabase = await createClient();
+  const { lang, t } = await getTranslator(); // Odia/Hindi drafts (D-128)
 
   if (kitchen.role === 'rider') redirect('/rider');
 
@@ -40,9 +43,9 @@ export default async function TodayPage() {
   return (
     <>
       <PageHeader
-        title="Today"
-        subtitle={new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' })}
-        actions={<LinkButton href="/menu" variant="secondary">Menu</LinkButton>}
+        title={t('today.title')}
+        subtitle={new Date().toLocaleDateString(localeOf(lang), { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long' })}
+        actions={<LinkButton href="/menu" variant="secondary">{t('today.menu')}</LinkButton>}
       />
 
       {isOwner && <OnboardingChecklist items={checklist} />}
@@ -52,16 +55,16 @@ export default async function TodayPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <Card title="Changes since last count" className="lg:col-span-2">
+        <Card title={t('today.changes')} className="lg:col-span-2">
           <ChangeFeed changes={changes ?? []} linkCustomers={isOwner || kitchen.role === 'staff'} />
         </Card>
         <div className="space-y-4">
-          <Stat label="Customers" value={customerCount ?? 0} />
-          {isOwner && <Stat label="Active subscriptions" value={active} hint={paused ? `${paused} paused` : undefined} />}
+          <Stat label={t('today.customers')} value={customerCount ?? 0} />
+          {isOwner && <Stat label={t('today.active')} value={active} hint={paused ? t('today.paused', { n: paused }) : undefined} />}
           {isOwner && (
             <div className="flex flex-wrap gap-2">
-              <LinkButton href="/customers/new">Add customer</LinkButton>
-              <LinkButton href="/customers/import" variant="secondary">Import</LinkButton>
+              <LinkButton href="/customers/new">{t('today.addCustomer')}</LinkButton>
+              <LinkButton href="/customers/import" variant="secondary">{t('today.import')}</LinkButton>
             </div>
           )}
         </div>

@@ -10,6 +10,7 @@ import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, isNetworkError, keepPhoto, useRider, uuid } from '@/lib/rider-store';
 import { checkScan, normalizeScanToken } from '@/lib/rider-queue';
+import { PROOF_PHOTO, shrinkPhoto } from '@/lib/photo';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/i18n';
 
@@ -37,7 +38,7 @@ async function gps(): Promise<{ lat: number; lng: number; accuracy: number | nul
 
 /** "2 veg, 1 non-veg" from the stop's diet counts. */
 function dietText(diets: Record<string, number> | null): string {
-  return Object.entries(diets ?? {}).map(([d, n]) => `${n} ${d === 'nonveg' ? 'non-veg' : d}`).join(', ');
+  return Object.entries(diets ?? {}).map(([d, n]) => `${n} ${t(`dietShort.${d}`)}`).join(', ');
 }
 
 function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
@@ -119,7 +120,8 @@ export default function StopScreen() {
       if (!perm.granted) return setError(t('rider.cameraDenied'));
       const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.4, allowsEditing: false, exif: false });
       if (shot.canceled || !shot.assets[0]) return;
-      photoUri = await keepPhoto(shot.assets[0].uri, op);
+      // Shrunk before it is queued, so the queued action stays small (D-127).
+      photoUri = await keepPhoto(await shrinkPhoto(shot.assets[0].uri, PROOF_PHOTO), op);
       photoPath = `${run.kitchen_id}/${run.service_date}/${stop.id}-${op.slice(0, 8)}.jpg`;
     }
     setBusy(true);

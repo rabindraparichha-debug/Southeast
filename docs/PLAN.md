@@ -344,6 +344,23 @@ Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sq
 
 Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
 
+## Held-back apps track (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md items 24 (rest) and 35. Decisions D-126 – D-128. Migration `20261116000100_rider_sync_rejects.sql`;
+pgTAP `15_rider_sync_rejects.test.sql` (64 checks); Vitest `rider-reject.test.ts`, `i18n-drafts.test.ts`, `held-apps.test.ts`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 1 | Server record of rider actions the server refused; owner list + "Mark handled" (web Delivery, mobile Today); auto-close on a later sync | ✅ | `rider_sync_rejects`, `report_sync_reject`, `sync_rejects`, `resolve_sync_reject`; `lib/rider-reject.ts` (both apps) (D-126) |
+| 2 | Mobile photos shrunk before they are saved or queued (proof 1280 px / 0.7, bills and dispatch 1600 px / 0.75); old full-size queued proofs shrunk at upload | ✅ needs a new build | `apps/mobile/src/lib/photo.ts`, `expo-image-manipulator` (D-127) |
+| 3 | Queue sync on network reconnect (NetInfo), on top of the app-in-front and 1-minute triggers | ✅ needs a new build | `apps/mobile/src/lib/use-reconnect-sync.ts`, `@react-native-community/netinfo` (D-127) |
+| 4 | Odia/Hindi groundwork: mobile picker (per phone), drafts for every mobile key, audited literals moved to keys; web helper + `tiffin_lang` cookie for the nav and Today only | ✅ drafts, need a native reviewer | `apps/mobile/src/i18n/{or,hi}.ts`, `components/language-picker.tsx`, `apps/web/src/lib/i18n/` (D-128) |
+
+Known gaps:
+- **The two native modules need the next APK/TestFlight build.** `app.json` version is now 1.1.0, so the runtime version changes and no over-the-air update built from this code can reach a 1.0.0 install that lacks the modules.
+- **Translations are drafts**: written without a native speaker. A reviewer must check the ~470 mobile strings (rider, Today and phone desk first) before any pilot vendor sees them; the rest of the web app is still English.
+- Rider sync reports are best effort: a report still waiting when the rider logs out is dropped (the refused action itself still blocks log-out until it is retried or discarded).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

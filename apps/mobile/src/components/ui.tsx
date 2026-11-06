@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, radius, space } from './theme';
+import { t } from '@/i18n';
 
 export function Screen({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[styles.screen, style]}>{children}</View>;
@@ -61,7 +62,12 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
 }
 
 export const DIET_COLOR = { veg: colors.veg, nonveg: colors.nonveg, jain: colors.jain } as const;
-export const DIET_LABEL = { veg: 'Veg', nonveg: 'Non-veg', jain: 'Jain' } as const;
+/** Read at render time, so the label follows the app's language (D-128). */
+export const DIET_LABEL: Readonly<Record<'veg' | 'nonveg' | 'jain', string>> = {
+  get veg() { return t('diet.veg'); },
+  get nonveg() { return t('diet.nonveg'); },
+  get jain() { return t('diet.jain'); },
+};
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, padding: space(4), gap: space(3) },

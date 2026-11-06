@@ -5,6 +5,7 @@ import { Button, Card, Chip, ErrorText, Label, Muted, Screen } from '@/component
 import { colors, space } from '@/components/theme';
 import { useRider } from '@/lib/rider-store';
 import { LegalLinks } from '@/components/legal-links';
+import { LanguagePicker } from '@/components/language-picker';
 import { t } from '@/i18n';
 
 export default function Account() {
@@ -39,6 +40,7 @@ export default function Account() {
           </View>
         </Card>
       )}
+      <LanguagePicker />
       {unsynced > 0 && <Muted>{t('account.unsynced', { n: unsynced })}</Muted>}
       {blocked && unsynced > 0 && <ErrorText>{t('account.logoutBlocked')}</ErrorText>}
       <Button title={t('account.signOut')} onPress={logOut} variant="secondary" disabled={unsynced > 0} busy={busy} />
