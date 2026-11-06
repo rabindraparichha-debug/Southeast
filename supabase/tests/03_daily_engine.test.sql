@@ -1,4 +1,4 @@
--- M2 tests: generation, skip/pause/resume/address/cancel, cutoffs (incl. phone-close rule),
+-- M2 tests: generation, skip/pause/resume/address/cancel, cutoffs (vendor changes use the real cutoff),
 -- idempotent lock, balance entries, permissions. Uses a simulated clock (app.now).
 -- Calendar: 2026-11-01 is a Sunday; the test kitchen's weekly off is Sunday.
 begin;
@@ -132,35 +132,37 @@ select is((select count(*) from public.audit_log where table_name = 'count_snaps
   'each lock is audited exactly once');
 
 -- ===========================================================================
--- Phone-close rule: vendor-entered changes close at 19:00 the evening before
+-- Vendor-entered changes use the slot's real cutoff (D-116; the 19:00 phone-close rule is gone)
 -- ===========================================================================
 select set_config('app.now', '2026-11-03 19:30:00+05:30', true);
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-c000-000000000001","role":"authenticated"}', true);
 select is((public.request_schedule_change((select sub from t where n = 5), 'skip', '2026-11-04', p_dry_run => true) -> 'affected' -> 0 ->> 'charged')::boolean,
-  true, 'preview tells the vendor a 19:30 phone skip will be charged');
+  false, 'a 19:30 phone skip of tomorrow''s lunch (cutoff 21:00) is free');
 select is((select count(*) from public.schedule_changes where subscription_id = (select sub from t where n = 5)), 0::bigint,
   'preview writes nothing');
 select lives_ok($$select public.request_schedule_change((select sub from t where n = 5), 'skip', '2026-11-04')$$,
-  'owner records the late phone skip');
+  'owner records the phone skip');
 select lives_ok($$select public.request_schedule_change((select sub from t where n = 6), 'skip', '2026-11-04', p_waive_late => true)$$,
-  'owner records a late phone skip and waives the charge');
+  'owner records another phone skip with "don''t charge" ticked');
 reset role;
 select is((select status::text || '/' || charged::text from public.meal_orders
-           where subscription_id = (select sub from t where n = 5) and service_date = '2026-11-04'), 'skipped/true',
-  'late phone skip is charged');
+           where subscription_id = (select sub from t where n = 5) and service_date = '2026-11-04'), 'skipped/false',
+  'on-time phone skip is not charged');
 select is((select status::text || '/' || charged::text from public.meal_orders
            where subscription_id = (select sub from t where n = 6) and service_date = '2026-11-04'), 'skipped/false',
-  'waived late phone skip is not charged (slot still open)');
-select is((select late_waived from public.schedule_changes where subscription_id = (select sub from t where n = 6)), true,
-  'waiver is recorded');
+  'the other on-time phone skip is not charged either');
+select is((select late_waived::text || '/' || after_cutoff::text from public.schedule_changes where subscription_id = (select sub from t where n = 6)),
+  'false/false', 'nothing was late, so nothing is waived');
+select is((select count(*) from public.balance_entries where ref_type = 'meal_order_waiver'
+           and customer_id = (select cust from t where n = 6)), 0::bigint, 'and no credit is posted');
 select is((private.apply_change((select sub from t where n = 7), 'skip', '2026-11-04', null, null, null, 'whatsapp', false, null, false, null)
-          ->> 'after_cutoff')::boolean, false, 'WhatsApp skip at 19:30 is still on time');
+          ->> 'after_cutoff')::boolean, false, 'WhatsApp skip at 19:30 is on time too');
 select set_config('app.now', '2026-11-03 21:00:30+05:30', true);
 select private.run_due_locks();
 select is((select (totals ->> 'total_meals')::integer from public.count_snapshots
-           where kitchen_id = '30000000-0000-4000-c000-000000000001' and service_date = '2026-11-04' and slot = 'lunch'), 18,
-  'Wed lunch: 20 minus waived and WhatsApp skips = 18 (charged phone skip counted)');
+           where kitchen_id = '30000000-0000-4000-c000-000000000001' and service_date = '2026-11-04' and slot = 'lunch'), 17,
+  'Wed lunch: 20 minus three on-time skips = 17');
 
 -- ===========================================================================
 -- Pause and resume

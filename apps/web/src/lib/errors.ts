@@ -77,7 +77,7 @@ const MESSAGES: Record<string, string> = {
   otp_format: 'Enter the 4-digit code from the customer.',
   photo_failed: 'This photo could not be read. Take it again.',
   call_offline: 'Calling needs network. Try again when you are online.',
-  queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync before you log out.',
+  queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync (and deal with any that need attention in rider mode) before you log out.',
   pick_item: 'Choose an item first.',
   invalid_bill_amount: 'Enter the bill amount in rupees.',
   qty_invalid_count: 'Enter the counted quantity as a number (0 is fine).',
@@ -124,7 +124,14 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   supplier: { already_exists: 'A supplier with this name already exists.' },
   dish: { already_exists: 'A dish with this name already exists.' },
   // Rider mode: a run the rider may no longer act on (reassigned, or a day old).
-  rider: { forbidden: 'This run is not assigned to you any more, or it is from an earlier day. Ask the kitchen.' },
+  rider: {
+    forbidden: 'This run is not assigned to you any more, or it is from an earlier day. Ask the kitchen.',
+    // Actions kept in "needs attention" and the sync banner
+    otp_wrong: 'Wrong delivery code. Deliver again with a photo.',
+    already_done: 'Someone else already marked this stop. Tell the kitchen about any cash you collected.',
+    not_authenticated: 'Waiting for the network to renew your login.',
+    network: 'No network. It is sent when you are back online.',
+  },
   stock_take: { reason_required: 'Some items are off by more than the allowed difference. Give a reason for each before closing.' },
   // Public website forms (customers and kitchen owners, not logged in).
   public: {

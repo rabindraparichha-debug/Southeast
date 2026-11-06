@@ -5,6 +5,7 @@ import { Nav, type NavItem } from '@/components/nav';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
 import { InstallApp } from '@/components/pwa';
 import { SignOutButton } from '@/components/sign-out-button';
+import { RiderSync } from '@/components/rider-sync';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
@@ -59,6 +60,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           <SignOutButton />
         </div>
       </aside>
+      {/* Owners deliver too: their queued rider actions keep syncing from any page. */}
+      {role === 'owner' && <RiderSync userId={session.userId} />}
       <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
     </div>
   );

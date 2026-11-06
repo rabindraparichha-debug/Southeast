@@ -362,8 +362,9 @@ select kitchen_id, id, 'whatsapp', 'customer', 'whatsapp' from public.customers 
 -- ---------------------------------------------------------------------------
 select vault.create_secret('http://localhost:3000', 'public_web_url');
 
--- Kitchen A goes live on the platform (it has an FSSAI number); B stays private until it adds one.
-update public.kitchens set status = 'active',
+-- Kitchen A goes live on the platform (it has an FSSAI number) and takes platform leads (kitchens
+-- opt in since D-119); B stays private until it adds one.
+update public.kitchens set status = 'active', accepts_platform_leads = true,
   description = 'Home-style Odia meals cooked fresh every morning by Sunita and her family. Dalma, saga, besara and a sweet on Sundays. Steel tiffins, delivered hot around Patia and KIIT.',
   cuisine_tags = '{Odia,Home-style,Veg,Fish curry}'
 where id = '10000000-0000-4000-a000-00000000000a';
@@ -398,7 +399,7 @@ insert into public.plans (kitchen_id, name, slots, diet, days_of_week, price_per
   ('10000000-0000-4000-a000-00000000000c', 'Home Veg Lunch', '{lunch}', 'veg', '{1,2,3,4,5,6}', 6500, 'Rice, dal, sabzi, 3 roti, salad'),
   ('10000000-0000-4000-a000-00000000000c', 'Lunch + Dinner Combo', '{lunch,dinner}', 'veg', '{1,2,3,4,5,6}', 6000, 'Two veg meals a day'),
   ('10000000-0000-4000-a000-00000000000c', 'Chicken Lunch', '{lunch}', 'nonveg', '{1,2,3,4,5,6}', 8500, 'Chicken curry, rice, roti');
-update public.kitchens set status = 'active' where id = '10000000-0000-4000-a000-00000000000c';
+update public.kitchens set status = 'active', accepts_platform_leads = true where id = '10000000-0000-4000-a000-00000000000c';
 insert into public.menus (kitchen_id, service_date, slot, dishes, published)
 select '10000000-0000-4000-a000-00000000000c', (now() at time zone 'Asia/Kolkata')::date + g, sl.slot,
        case sl.slot when 'lunch' then array['Jeera rice', 'Dal tadka', 'Seasonal sabzi', 'Roti', 'Salad']

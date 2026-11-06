@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/lib/session';
+import { startRiderSync } from '@/lib/rider-store';
 import { installGlobalErrorHandler } from '@/lib/monitor';
 import { colors } from '@/components/theme';
 import { t } from '@/i18n';
@@ -15,9 +16,12 @@ function RootStack() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+  const signedIn = Boolean(session);
+  // Queued rider actions sync from any screen (and when the app comes back to the front), not only
+  // while the Rider tab is open.
+  useEffect(() => (signedIn ? startRiderSync() : undefined), [signedIn]);
   if (!ready) return null;
 
-  const signedIn = Boolean(session);
   return (
     <Stack screenOptions={{ headerTintColor: colors.ink, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={!signedIn}>

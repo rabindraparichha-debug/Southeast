@@ -3,6 +3,7 @@ import { requireKitchen } from '@/lib/session';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
 import { InstallApp } from '@/components/pwa';
 import { SignOutButton } from '@/components/sign-out-button';
+import { RiderSync } from '@/components/rider-sync';
 
 // Phone-first shell for rider mode and stock entry: no dashboard sidebar, big touch targets,
 // and both pages keep working offline once opened (see public/sw.js).
@@ -23,6 +24,7 @@ export default async function FieldLayout({ children }: LayoutProps<'/'>) {
         <SignOutButton formClassName="shrink-0 text-right" />
       </header>
       <div className="space-y-3 p-4">
+        {(role === 'rider' || role === 'owner') && <RiderSync userId={session.userId} />}
         <InstallApp variant="banner" />
         {children}
       </div>

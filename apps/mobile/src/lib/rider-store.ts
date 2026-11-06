@@ -292,11 +292,11 @@ let syncing: Promise<void> | null = null;
  */
 export function syncQueue(opts: { force?: boolean } = {}): Promise<void> {
   syncing ??= (async () => {
-    await loadRider();
-    if (!state.queue.length) return;
-    set({ syncing: true });
     let parked = false;
     try {
+      await loadRider();
+      if (!state.queue.length) return;
+      set({ syncing: true });
       while (state.queue.length) {
         const q = state.queue[0];
         if (!opts.force && !isDue(q, Date.now())) break;
@@ -333,6 +333,8 @@ export function syncQueue(opts: { force?: boolean } = {}): Promise<void> {
         await persist();
         break;
       }
+    } catch {
+      // storage or unexpected failure: the queue in memory is kept and saved with the next change
     } finally {
       set({ syncing: false });
       syncing = null;

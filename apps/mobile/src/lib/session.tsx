@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMemberships([]);
       return;
     }
-    const useCache = async () => {
+    const fallBackToCache = async () => {
       const cached = await cachedMemberships();
       if (cached) setMemberships(cached);
       fromCache.current = true;
@@ -55,11 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Without a live login the requests below would go out anonymously and see no memberships,
     // which would send a rider with unsynced deliveries to "Set up your kitchen".
     const { data: live } = await supabase.auth.getSession();
-    if (!live.session) return useCache();
+    if (!live.session) return fallBackToCache();
     // Staff/riders invited before their first login join their kitchen now.
     await supabase.rpc('claim_invites');
     const { data, error } = await supabase.from('members').select('role, kitchen:kitchens(id, name)').eq('user_id', s.user.id);
-    if (error) return useCache();
+    if (error) return fallBackToCache();
     const list = (data ?? [])
       .filter((m) => m.kitchen)
       .map((m) => ({ kitchenId: m.kitchen!.id, kitchenName: m.kitchen!.name, role: m.role }))

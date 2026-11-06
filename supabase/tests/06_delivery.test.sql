@@ -379,7 +379,7 @@ insert into run select 'wed_b', public.create_route('81000000-0000-4000-f000-000
 reset role;
 insert into public.delivery_runs (id, kitchen_id, route_id, service_date, slot, rider_id, status, started_at)
 values ('82000000-0000-4000-f000-000000000001', '81000000-0000-4000-f000-000000000001', (select id from run where k = 'wed_b'),
-        '2026-11-04', 'lunch', 'f1000000-0000-4000-f000-000000000004', 'out', now());
+        '2026-11-04', 'lunch', 'f1000000-0000-4000-f000-000000000004', 'out', private.now());
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f1000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
 select lives_ok($$ select public.move_stop((select id from public.delivery_stops where run_id = (select id from run where k = 'wed') and seq = 1),

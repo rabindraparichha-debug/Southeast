@@ -128,6 +128,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Rider actions go through `complete_stop` / `fail_stop` / `start_run` / `finish_run` with `p_at` (device time) and `p_client_op` (idempotency key). Never use `now()` for a rider's action time.
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
+- The queue never drops an action. Only the codes in `FINAL_ERRORS` (`rider-queue.ts`, mobile and web twins) are final, and those move to the saved "needs attention" list with photo and cash; everything else is retried with backoff. If a rider RPC gets a new `raise`, add the code there and in `tests/integration/rider-queue.test.ts`.
 
 **Inventory (M6)**
 - Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.
@@ -203,7 +204,8 @@ Edge Function secrets (`supabase/functions/.env`):
 
 | Variable | Notes |
 |---|---|
-| `RAZORPAY_MODE` | `mock` (default without keys) or `test` |
+| `PLATFORM_ENV` | `local` (default only when `SUPABASE_URL` is a local stack), `staging` or `production`. Mock modes (Razorpay, WhatsApp, notebook fixture) run only when local (`_shared/platform.ts`) |
+| `RAZORPAY_MODE` | `mock` (default without keys, local only) or `test` |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | `rzp_test_…` only |
 | `RAZORPAY_WEBHOOK_SECRET` | Must match the webhook secret set in Razorpay |
 | `PUBLIC_FUNCTIONS_URL` | Browser-reachable functions URL, used for mock payment pages |
