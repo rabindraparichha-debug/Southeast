@@ -1,11 +1,12 @@
 import { addDays, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { LinkButton, PageHeader } from '@/components/ui';
 import { MenuEditor } from './menu-editor';
 
 export default async function MenuPage() {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const supabase = await createClient();
   const today = istDate();
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));

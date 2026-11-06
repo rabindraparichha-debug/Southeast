@@ -13,7 +13,10 @@ export default async function TeamPage() {
   ]);
   return (
     <>
-      <PageHeader title="Team" subtitle="Staff see counts, production and inventory only — no money and no customer phone numbers. Riders see only their stops." />
+      <PageHeader
+        title="Team"
+        subtitle="Managers run the kitchen for you: customers, money and rider cash, but not settings, the inbox or the team. Accountants only read money. Staff see counts, production and inventory — no money and no customer phone numbers. Riders see only their stops."
+      />
       <TeamManager kitchenId={kitchen.kitchenId} members={members ?? []} invites={invites ?? []} currentUserId={userId} />
     </>
   );

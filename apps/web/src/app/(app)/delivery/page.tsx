@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL, addDays, formatServiceDate } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { currentDeliverySlot, isDate, type LiveBoard } from '@/lib/delivery';
@@ -18,7 +19,7 @@ function neighbours(date: string, slot: MealSlot) {
 
 // Live delivery board for one slot: runs, riders, stop progress and proof. Owner + staff.
 export default async function DeliveryPage({ searchParams }: PageProps<'/delivery'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const sp = await searchParams;
   const now = currentDeliverySlot();
   const date = isDate(sp.date) ? sp.date : now.date;
@@ -31,7 +32,7 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
   ]);
   const board = data as unknown as LiveBoard | null;
   const { prev, next } = neighbours(date, slot);
-  const isOwner = kitchen.role === 'owner';
+  const isOwner = isLead(kitchen.role); // owner or manager
 
   return (
     <>

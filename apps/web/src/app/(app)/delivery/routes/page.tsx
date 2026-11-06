@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import type { RoutePoints } from '@/lib/delivery';
@@ -12,7 +13,7 @@ import { RouteEditor } from './route-editor';
 
 // Saved routes per meal: default rider, active flag, and the stop order the daily runs follow.
 export default async function RoutesPage({ searchParams }: PageProps<'/delivery/routes'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const sp = await searchParams;
   const supabase = await createClient();
 
@@ -46,7 +47,7 @@ export default async function RoutesPage({ searchParams }: PageProps<'/delivery/
         title="Delivery routes"
         subtitle="Each meal has one or more routes. New customers join the nearest route automatically; the order you save here is what riders follow every day."
       />
-      <DeliveryTabs isOwner={kitchen.role === 'owner'} />
+      <DeliveryTabs isOwner={isLead(kitchen.role)} />
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <RoutesManager kitchenId={kitchen.kitchenId} routes={rows} riders={riders} selectedId={selected?.id ?? null} />

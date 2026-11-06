@@ -3,18 +3,21 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { normalizePhone } from '@tiffin/core';
-import type { DietType, LanguageCode } from '@tiffin/db';
+import type { BillingMode, DietType, LanguageCode } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { LocationPicker, type LatLng } from '@/components/location-picker';
 import { Alert, Button, Card, Field, Input, Select, Textarea } from '@/components/ui';
 
-export function CustomerForm({ kitchenId, kitchenCenter }: { kitchenId: string; kitchenCenter: LatLng | null }) {
+export function CustomerForm({ kitchenId, kitchenCenter, defaultBilling }: { kitchenId: string; kitchenCenter: LatLng | null; defaultBilling: BillingMode }) {
   const router = useRouter();
   const [f, setF] = useState({
     name: '', phone: '', diet: 'veg' as DietType, language: 'or' as LanguageCode, notes: '',
-    line1: '', area: '', landmark: '', delivery_notes: '', consent: false,
+    line1: '', area: '', landmark: '', delivery_notes: '', consent: false, billing: defaultBilling,
   });
+  // D-118: a phone already used by another customer (a sibling, a family phone) needs a yes from the vendor.
+  const [sharedAsked, setSharedAsked] = useState(false);
+  const [shared, setShared] = useState(false);
   const [pin, setPin] = useState<LatLng | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,9 +38,12 @@ export function CustomerForm({ kitchenId, kitchenCenter }: { kitchenId: string; 
       p_language: f.language,
       p_notes: f.notes || undefined,
       p_address: { line1: f.line1, area: f.area, landmark: f.landmark, delivery_notes: f.delivery_notes, lat: pin?.lat, lng: pin?.lng },
+      p_billing_mode: f.billing,
+      p_allow_shared_phone: shared,
     });
     if (error || !data) {
       setBusy(false);
+      if (error?.message === 'phone_in_use') setSharedAsked(true);
       return setError(friendlyError(error));
     }
     router.push(`/customers/${data}`);
@@ -52,7 +58,21 @@ export function CustomerForm({ kitchenId, kitchenCenter }: { kitchenId: string; 
             <Input value={f.name} onChange={set('name')} required maxLength={100} autoFocus />
           </Field>
           <Field label="Mobile number" hint="Saved encrypted. Staff and riders only ever see the last 4 digits.">
-            <Input value={f.phone} onChange={set('phone')} inputMode="tel" placeholder="98610 00001" required />
+            <Input value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); setSharedAsked(false); setShared(false); }} inputMode="tel" placeholder="98610 00001" required />
+          </Field>
+          {sharedAsked && (
+            <label className="flex items-start gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900 ring-1 ring-amber-200">
+              <input type="checkbox" className="mt-1" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+              <span>Yes, {f.name.trim() || 'this customer'} is a different person who shares this number (for example a brother or sister).</span>
+            </label>
+          )}
+          <Field label="Billing" hint={f.billing === 'monthly'
+            ? 'Meals go on the khata; you collect at month end. Nothing stops automatically. Add opening dues from the customer’s Money card.'
+            : 'The customer pays in advance for meals. Low balance alerts, and meals stop at your credit limit.'}>
+            <Select value={f.billing} onChange={(e) => setF({ ...f, billing: e.target.value as BillingMode })}>
+              <option value="monthly">Monthly (pay later)</option>
+              <option value="prepaid">Prepaid (pay in advance)</option>
+            </Select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Diet">

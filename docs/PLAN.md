@@ -342,10 +342,23 @@ Tests: `supabase/tests/14_billing.test.sql`, `15_roles_requests_phones_flags.tes
 accountant sections in `01_rls_isolation` and `02_rpcs_and_guards`; `tests/integration/wave2.test.ts`;
 core import validation (`packages/core`).
 
-Still to do (UI agents): billing mode on customer forms and lists, rupee balances and statements on
-web and mobile, void and backdate buttons, the approvals list, manager and accountant navigation,
-CSV download buttons, the import columns in the wizard, mobile error texts in use. Item 27 hides
-Phase 2 screens behind the flags.
+Web (branch `wave2/web`, apps/web only):
+- Roles: `apps/web/src/lib/roles.ts` decides pages and buttons. Managers get the owner's pages except
+  inbox, kitchen settings and team; accountants get Customers (masked phones, no addresses or meals),
+  Money, Bills, Costs, statements and the register, all read-only. Team invites managers and accountants.
+- Billing: the kitchen default in Settings, the choice on Add customer, a badge on lists and customer
+  pages, rupee dues on Money and the customer Money card (monthly), switching from the Money card.
+- Payments: payment date (backdating), note and an idempotency key on every save; Void with a reason;
+  monthly credits, adjustments and refunds in rupees. Purchases and waste pass `p_client_op` too.
+- Statement `/print/statement/[id]?month=YYYY-MM` (print, WhatsApp share from the vendor's phone),
+  "Bills for this month" on Money and `/money/bills`, CSV downloads (payments, dues aging, rider cash).
+- Rider requests: `/requests` (preview, don't-charge toggle, plan or address choice, approve or reject).
+- Shared phones: the confirm step on Add customer and edit, "shares this phone with" on the customer
+  page, a warning on phone search. Import shows the billing and dues columns.
+
+Still to do (UI agents): the same on mobile (billing, rupee balances, void and backdate, approvals,
+manager and accountant navigation, mobile error texts in use). Item 27 hides Phase 2 screens behind
+the flags.
 
 Known gaps:
 - The production sheet at the lock still goes to owners only (needs the wave-1 `lock_slot`).

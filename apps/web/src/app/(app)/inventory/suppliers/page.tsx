@@ -1,5 +1,6 @@
 import { formatPaise } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatIstDateTime } from '@/lib/inventory';
@@ -12,8 +13,8 @@ const METHOD_LABEL: Record<string, string> = { cash: 'Cash', upi_manual: 'UPI', 
 // Suppliers: staff can add and edit them; dues and payments are money, owner only
 // (supplier_dues / pay_supplier refuse staff, and supplier_payments RLS hides them).
 export default async function SuppliersPage() {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const supabase = await createClient();
   const [{ data: suppliers, error }, dues, payments] = await Promise.all([
     supabase.from('suppliers').select('id, name, phone, notes, active').eq('kitchen_id', kitchen.kitchenId).order('name'),

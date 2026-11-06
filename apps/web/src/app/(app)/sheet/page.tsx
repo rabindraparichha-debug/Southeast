@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL, addDays, formatIstShort, formatServiceDate, istDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot, SlotSummary } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { Badge, Card, DIET_LABEL, PageHeader } from '@/components/ui';
 import { PrintButton } from '@/components/print-button';
@@ -15,7 +16,7 @@ function neighbours(date: string, slot: MealSlot) {
 
 // Production sheet + packing list for one slot. Printable (sidebar hidden in print).
 export default async function SheetPage({ searchParams }: PageProps<'/sheet'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const sp = await searchParams;
   const date = isIsoDate(sp.date) ? sp.date : addDays(istDate(), 1);
   const slot: MealSlot = sp.slot === 'dinner' ? 'dinner' : 'lunch';

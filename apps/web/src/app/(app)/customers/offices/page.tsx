@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import type { Office, OfficeStatement } from '@/lib/p5';
@@ -11,8 +12,8 @@ import { OfficeForm } from './office-form';
 // Office plans (P6): many eaters, one delivery stop, one billing contact who pays for everyone.
 // Staff see the list (contact masked, no billing); the owner edits and gets the monthly statement.
 export default async function OfficesPage({ searchParams }: PageProps<'/customers/offices'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const sp = await searchParams;
   const supabase = await createClient();
   const [{ data, error }, { data: k }] = await Promise.all([

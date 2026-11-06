@@ -9,12 +9,13 @@ import {
   applyMapping,
   guessMapping,
   importErrorMessage,
+  parseBilling,
   validateImportRows,
   type ColumnMapping,
   type ImportField,
   type ImportRow,
 } from '@tiffin/core';
-import type { ImportResult } from '@tiffin/db';
+import type { BillingMode, ImportResult } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Badge, Button, Card, LinkButton, Select } from '@/components/ui';
@@ -41,12 +42,19 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
+/** What a row's Billing cell means: the given mode, or the kitchen default when empty. */
+function billingLabel(value: string | undefined, fallback: BillingMode): string {
+  const b = parseBilling(value);
+  if (b === null) return value ?? '';
+  return b === '' ? `${fallback === 'monthly' ? 'Monthly' : 'Prepaid'} (default)` : b === 'monthly' ? 'Monthly' : 'Prepaid';
+}
+
 /**
  * `initial` hands rows from another source (the notebook-photo import) straight to step 3: they are
  * checked, confirmed and saved through the same import_customers call as an uploaded file.
  */
-export function ImportWizard({ kitchenId, planNames, initial }: {
-  kitchenId: string; planNames: string[]; initial?: { sheet: Sheet; mapping: ColumnMapping };
+export function ImportWizard({ kitchenId, planNames, defaultBilling = 'monthly', initial }: {
+  kitchenId: string; planNames: string[]; defaultBilling?: BillingMode; initial?: { sheet: Sheet; mapping: ColumnMapping };
 }) {
   const [sheet, setSheet] = useState<Sheet | null>(initial?.sheet ?? null);
   const [mapping, setMapping] = useState<ColumnMapping>(initial?.mapping ?? {});
@@ -56,7 +64,9 @@ export function ImportWizard({ kitchenId, planNames, initial }: {
   const [result, setResult] = useState<{ rows: ImportRow[]; res: ImportResult } | null>(null);
 
   const rows = useMemo(() => (sheet ? applyMapping(sheet.rows, mapping) : []), [sheet, mapping]);
-  const issues = useMemo(() => validateImportRows(rows, planNames), [rows, planNames]);
+  // Rows with an empty Billing column take the kitchen's default (D-115); dues need monthly billing.
+  const issues = useMemo(() => validateImportRows(rows, planNames, defaultBilling), [rows, planNames, defaultBilling]);
+  const showMoney = mapping.billing !== undefined || mapping.dues !== undefined || mapping.balance !== undefined;
   const issueByRow = useMemo(() => new Map(issues.map((i) => [i.row, i.errors])), [issues]);
 
   async function onFile(file: File | undefined) {
@@ -138,8 +148,10 @@ export function ImportWizard({ kitchenId, planNames, initial }: {
       {!preset && <Card title="1. Choose file">
         <input type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={(e) => onFile(e.target.files?.[0])} className="text-sm" />
         <p className="mt-2 text-xs text-ink-500">
-          First row must be column names. Row numbers below count the header as row 1 (blank rows are skipped).{' '}
-          <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => downloadCsv('customer-template.csv', [IMPORT_TEMPLATE_HEADERS, ['Asha Das', '9861012345', 'Veg', 'Odia', 'Flat 2A', 'Patia', 'Near KIIT gate', 'Call on arrival', '', planNames[0] ?? '', '02/11/2026', '1']])}>
+          First row must be column names. Row numbers below count the header as row 1 (blank rows are skipped).
+          Billing is Monthly (pay later) or Prepaid; empty means your default ({defaultBilling === 'monthly' ? 'monthly' : 'prepaid'}).
+          Opening dues are rupees still owed by a monthly customer (a minus amount is an advance).{' '}
+          <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => downloadCsv('customer-template.csv', [IMPORT_TEMPLATE_HEADERS, ['Asha Das', '9861012345', 'Veg', 'Odia', 'Flat 2A', 'Patia', 'Near KIIT gate', 'Call on arrival', '', planNames[0] ?? '', '02/11/2026', '1', '', 'Monthly', '1200']])}>
             Download template
           </button>
         </p>
@@ -182,6 +194,8 @@ export function ImportWizard({ kitchenId, planNames, initial }: {
                   <th className="px-2 py-2">Phone</th>
                   <th className="px-2 py-2">Area</th>
                   <th className="px-2 py-2">Plan</th>
+                  {showMoney && <th className="px-2 py-2">Billing</th>}
+                  {showMoney && <th className="px-2 py-2">Dues / balance</th>}
                   <th className="px-2 py-2">Problem</th>
                 </tr>
               </thead>
@@ -195,6 +209,8 @@ export function ImportWizard({ kitchenId, planNames, initial }: {
                       <td className="px-2 py-1.5">{r.phone}</td>
                       <td className="px-2 py-1.5">{r.area}</td>
                       <td className="px-2 py-1.5">{r.plan}</td>
+                      {showMoney && <td className="px-2 py-1.5">{billingLabel(r.billing, defaultBilling)}</td>}
+                      {showMoney && <td className="px-2 py-1.5">{[r.dues ? `₹${r.dues}` : '', r.balance ? `${r.balance} meals` : ''].filter(Boolean).join(' · ')}</td>}
                       <td className="px-2 py-1.5 text-red-700">{errs?.map(importErrorMessage).join('; ')}</td>
                     </tr>
                   );

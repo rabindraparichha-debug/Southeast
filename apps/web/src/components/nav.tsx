@@ -7,10 +7,13 @@ export type NavItem = { href: string; label: string; icon: string };
 
 export function Nav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  // The most specific match wins (/money/bills highlights Bills, not Money too).
+  const matches = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`));
+  const current = items.filter((i) => matches(i.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <nav className="flex gap-1 overflow-x-auto md:flex-col">
       {items.map((item) => {
-        const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+        const active = item.href === current;
         return (
           <Link
             key={item.href}

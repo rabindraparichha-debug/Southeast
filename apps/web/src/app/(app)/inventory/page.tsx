@@ -1,5 +1,6 @@
 import { formatPaise } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, formatQty, formatSignedQty, type InventoryAlert } from '@/lib/inventory';
@@ -12,8 +13,8 @@ import { NewItemForm } from './new-item-form';
 // Stock list with alerts. Values at cost are owner-only (staff: no money), so they are
 // stripped here before anything reaches the browser.
 export default async function InventoryPage() {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const supabase = await createClient();
   const [{ data: levels, error }, { data: alertsRaw }] = await Promise.all([
     supabase.rpc('stock_levels', { p_kitchen: kitchen.kitchenId }),

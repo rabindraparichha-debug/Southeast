@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatPaise } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError, friendlyErrorIn } from '@/lib/errors';
+import { newClientOp } from '@/lib/money';
 import {
   CATEGORIES, CATEGORY_LABEL, UNIT_LABEL, formatQty, parseQty, unitsFor, type ItemCategory, type StockUnit,
 } from '@/lib/inventory';
@@ -165,6 +166,8 @@ function StockMoveForm({ kind, row, onDone }: { kind: 'waste' | 'adjust'; row: S
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Waste is idempotent on this key: a double tap or a retry saves one move.
+  const [clientOp] = useState(newClientOp);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -175,10 +178,10 @@ function StockMoveForm({ kind, row, onDone }: { kind: 'waste' | 'adjust'; row: S
     setBusy(true);
     const s = supabaseBrowser();
     const { error } = kind === 'waste'
-      ? await s.rpc('record_waste', { p_item: row.item_id, p_qty: n, p_reason: reason.trim(), p_unit: unit })
+      ? await s.rpc('record_waste', { p_item: row.item_id, p_qty: n, p_reason: reason.trim(), p_unit: unit, p_client_op: clientOp })
       : await s.rpc('adjust_stock', { p_item: row.item_id, p_qty: n, p_reason: reason.trim(), p_unit: unit });
     setBusy(false);
-    if (error) return setError(friendlyError(error));
+    if (error) return setError(friendlyErrorIn('stock', error));
     onDone(kind === 'waste' ? `Waste of ${qty} ${unit} ${row.name} recorded.` : `${row.name} adjusted by ${qty} ${unit}.`);
     router.refresh();
   }

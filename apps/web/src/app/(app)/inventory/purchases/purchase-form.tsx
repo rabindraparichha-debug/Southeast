@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatPaise, rupeesToPaise } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError, friendlyErrorIn } from '@/lib/errors';
+import { newClientOp } from '@/lib/money';
 import { UNIT_LABEL, normalizePriceJumps, parseQty, unitsFor, type PurchaseResult, type StockUnit } from '@/lib/inventory';
 import { Alert, Button, Card, Field, Input, Select } from '@/components/ui';
 
@@ -32,6 +33,8 @@ export function PurchaseForm({ kitchenId, isOwner, today, items, suppliers }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<PurchaseResult | null>(null);
+  // Idempotency key for this bill: a retry after a lost response returns the first purchase.
+  const [clientOp, setClientOp] = useState(newClientOp);
 
   const byId = new Map(items.map((i) => [i.id, i]));
   const filled = lines.filter((l) => l.item_id || l.qty || l.amount);
@@ -82,14 +85,15 @@ export function PurchaseForm({ kitchenId, isOwner, today, items, suppliers }: {
     }
     const { data, error } = await s.rpc('record_purchase', {
       p_kitchen: kitchenId, p_lines: payload, p_supplier: supplierId, p_bill_date: date, p_bill_no: billNo.trim() || undefined,
-      p_photo_path: path, p_paid_now_paise: paid || undefined, p_notes: notes.trim() || undefined,
+      p_photo_path: path, p_paid_now_paise: paid || undefined, p_notes: notes.trim() || undefined, p_client_op: clientOp,
     });
     setBusy(false);
     if (error) {
       if (path) await s.storage.from('bills').remove([path]);
-      return setError(friendlyError(error));
+      return setError(friendlyErrorIn('stock', error));
     }
     const r = data as unknown as PurchaseResult;
+    setClientOp(newClientOp());
     setResult({ ...r, price_jumps: normalizePriceJumps(r.price_jumps) });
     setLines([blankLine(), blankLine()]);
     setBillNo('');
@@ -175,7 +179,7 @@ export function PurchaseForm({ kitchenId, isOwner, today, items, suppliers }: {
         {error && <Alert>{error}</Alert>}
         {result && (
           <div className="space-y-2" data-testid="purchase-result">
-            <Alert tone="green">Bill saved: {formatPaise(result.total_paise)}. Stock updated.</Alert>
+            <Alert tone="green">{result.duplicate ? 'This bill was already saved' : 'Bill saved'}: {formatPaise(result.total_paise)}. Stock updated.</Alert>
             {result.price_jumps.length > 0 && (
               <Alert tone="amber">
                 <strong>Price jump:</strong>

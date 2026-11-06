@@ -1,21 +1,23 @@
 import { notFound } from 'next/navigation';
 import { formatPaise, formatPhone } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { MONEY_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { PrintButton } from '@/components/print-button';
 import { METHOD_LABEL } from '@/components/payment-badges';
+import { balanceText } from '@/lib/money';
 
 export default async function ReceiptPage({ params }: PageProps<'/print/receipt/[id]'>) {
   const { id } = await params;
-  const { kitchen } = await requireKitchen(['owner']);
+  const { kitchen } = await requireKitchen(MONEY_ROLES);
   const supabase = await createClient();
   const { data: p } = await supabase.from('payments').select('id, customer_id, method, status, amount_paise, meals, paid_at, created_at, razorpay_payment_id')
     .eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle();
   if (!p || p.status !== 'paid') notFound();
   const [{ data: k }, { data: c }, { data: bal }] = await Promise.all([
     supabase.from('kitchens').select('name, address, area, city, fssai_no').eq('id', kitchen.kitchenId).single(),
-    supabase.from('customers_v').select('name, phone').eq('id', p.customer_id).single(),
-    supabase.from('customer_balances').select('meals').eq('customer_id', p.customer_id).maybeSingle(),
+    supabase.from('customers_v').select('name, phone, billing_mode').eq('id', p.customer_id).single(),
+    supabase.from('customer_balances').select('meals, amount_paise').eq('customer_id', p.customer_id).maybeSingle(),
   ]);
   const when = new Date(p.paid_at ?? p.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
 
@@ -36,11 +38,15 @@ export default async function ReceiptPage({ params }: PageProps<'/print/receipt/
         <dt className="text-ink-500">Customer</dt><dd>{c?.name}</dd>
         <dt className="text-ink-500">Phone</dt><dd>{formatPhone(c?.phone)}</dd>
         <dt className="text-ink-500">Paid by</dt><dd>{METHOD_LABEL[p.method] ?? p.method}{p.razorpay_payment_id ? ` (${p.razorpay_payment_id})` : ''}</dd>
-        <dt className="text-ink-500">Meals</dt><dd>{p.meals}</dd>
+        {p.meals > 0 && <><dt className="text-ink-500">Meals</dt><dd>{p.meals}</dd></>}
         <dt className="text-ink-500">Amount</dt><dd className="text-lg font-semibold">{formatPaise(p.amount_paise)}</dd>
-        <dt className="text-ink-500">Balance now</dt><dd>{bal?.meals ?? 0} meals</dd>
+        <dt className="text-ink-500">Balance now</dt><dd>{balanceText(c?.billing_mode ?? 'prepaid', bal?.meals ?? 0, bal?.amount_paise ?? 0)}</dd>
       </dl>
-      <p className="mt-6 text-xs text-ink-500">Unused prepaid meals are refunded at the price paid when a subscription is cancelled. Thank you!</p>
+      <p className="mt-6 text-xs text-ink-500">
+        {c?.billing_mode === 'monthly'
+          ? 'Monthly billing: meals are charged at their own price on the day they are served. Thank you!'
+          : 'Unused prepaid meals are refunded at the price paid when a subscription is cancelled. Thank you!'}
+      </p>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/ui';
 import { SettingsForm } from './settings-form';
 import { ListingForm } from './listing-form';
 import { CareForm } from './care-form';
+import { BillingForm } from './billing-form';
 
 export default async function SettingsPage() {
   const { kitchen } = await requireKitchen(['owner']);
@@ -23,6 +24,7 @@ export default async function SettingsPage() {
           ? `On. Customer payments go straight to your bank through Razorpay (account ${payout.razorpay_linked_account_id}).`
           : `Not yet (${(payout?.kyc_status ?? 'not_started').replace('_', ' ')}). Our team sets up your Razorpay payout account with your PAN and bank details; until then record cash and UPI.`}
       </div>
+      <BillingForm kitchenId={kitchen.kitchenId} initial={s.default_billing_mode} />
       <ListingForm kitchen={k} />
       <SettingsForm kitchen={k} settings={s} />
       <CareForm settings={s} />

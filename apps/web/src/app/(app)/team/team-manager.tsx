@@ -9,6 +9,12 @@ import { friendlyError } from '@/lib/errors';
 import { Alert, Badge, Button, Card, Field, Input, ROLE_LABEL, Select } from '@/components/ui';
 
 type Member = { id: string; user_id: string; role: MemberRole; display_name: string | null };
+// Roles the owner can give (D-117). The owner role itself can't be invited or changed.
+const ROLE_CHOICES: Exclude<MemberRole, 'owner'>[] = ['manager', 'accountant', 'staff', 'rider'];
+const ROLE_HINT: Partial<Record<MemberRole, string>> = {
+  manager: 'Can add customers, record skips and payments, confirm rider cash and approve rider requests. Sees full phone numbers. Cannot change settings or the team.',
+  accountant: 'Reads money only: dues, payments, statements, bills and exports. Sees masked phone numbers. Changes nothing.',
+};
 type Invite = { id: string; phone_e164: string; role: MemberRole; display_name: string | null };
 
 export function TeamManager({ kitchenId, members, invites, currentUserId }: { kitchenId: string; members: Member[]; invites: Invite[]; currentUserId: string }) {
@@ -47,9 +53,8 @@ export function TeamManager({ kitchenId, members, invites, currentUserId }: { ki
                 <Badge tone="blue">Owner</Badge>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Select className="w-28" value={m.role} onChange={(e) => run(supabaseBrowser().rpc('set_member_role', { p_member: m.id, p_role: e.target.value as MemberRole }), 'Role updated.')}>
-                    <option value="staff">Staff</option>
-                    <option value="rider">Rider</option>
+                  <Select className="w-32" aria-label={`Role of ${m.display_name || 'member'}`} value={m.role} onChange={(e) => run(supabaseBrowser().rpc('set_member_role', { p_member: m.id, p_role: e.target.value as MemberRole }), 'Role updated.')}>
+                    {ROLE_CHOICES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </Select>
                   <Button variant="ghost" onClick={() => confirm(`Remove ${m.display_name || 'this member'}?`) && run(supabaseBrowser().rpc('remove_member', { p_member: m.id }), 'Removed.')}>Remove</Button>
                 </div>
@@ -75,7 +80,7 @@ export function TeamManager({ kitchenId, members, invites, currentUserId }: { ki
         )}
       </Card>
 
-      <Card title="Add staff or rider">
+      <Card title="Add a team member">
         <form onSubmit={invite} className="space-y-4">
           <Field label="Name"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Rina" /></Field>
           <Field label="Mobile number" hint="They log in with this number using an OTP. No password."><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} inputMode="tel" required /></Field>
@@ -83,8 +88,11 @@ export function TeamManager({ kitchenId, members, invites, currentUserId }: { ki
             <Select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as MemberRole })}>
               <option value="staff">Staff (kitchen work)</option>
               <option value="rider">Rider (deliveries)</option>
+              <option value="manager">Manager (customers, money, rider cash)</option>
+              <option value="accountant">Accountant (reads money only)</option>
             </Select>
           </Field>
+          {ROLE_HINT[f.role] && <p className="text-xs text-ink-500">{ROLE_HINT[f.role]}</p>}
           <Button type="submit">Add</Button>
         </form>
         <div className="mt-3">{msg && <Alert tone={msg.tone}>{msg.text}</Alert>}</div>

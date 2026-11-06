@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { SLOT_LABEL, formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { LEAD_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatIstDateTime } from '@/lib/delivery';
@@ -19,7 +20,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 // Owner insights (P5/P6): customers who may leave, complaint score, referrals, weather alerts and,
 // only when the platform takes a commission, what it kept.
 export default async function InsightsPage() {
-  const { kitchen } = await requireKitchen(['owner']);
+  const { kitchen } = await requireKitchen(LEAD_ROLES);
   const supabase = await createClient();
   const today = istDate();
   const monthStart = `${today.slice(0, 8)}01`;
@@ -28,7 +29,10 @@ export default async function InsightsPage() {
     supabase.rpc('vendor_complaint_score', { p_kitchen: kitchen.kitchenId, p_days: 30 }),
     supabase.rpc('referrals_list', { p_kitchen: kitchen.kitchenId }),
     supabase.rpc('weather_alerts_list', { p_kitchen: kitchen.kitchenId, p_days: 14 }),
-    supabase.rpc('commission_statement', { p_kitchen: kitchen.kitchenId, p_from: monthStart, p_to: today }),
+    // The commission statement is owner-only (D-119); managers see the rest.
+    kitchen.role === 'owner'
+      ? supabase.rpc('commission_statement', { p_kitchen: kitchen.kitchenId, p_from: monthStart, p_to: today })
+      : Promise.resolve({ data: null }),
   ]);
   const atRisk = risks.data ?? [];
   const s = score.data as unknown as VendorScore | null;
