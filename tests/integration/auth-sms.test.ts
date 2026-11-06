@@ -430,17 +430,17 @@ describe('how Supabase Auth marks a session (amr)', () => {
   const amr = (jwt: string): { method: string }[] =>
     JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64url').toString()).amr ?? [];
 
-  it('a code login carries amr otp; an auto-confirmed phone + password signup carries only amr password', async () => {
+  it('a code login carries amr otp; a phone + password signup gets no session until the number is proven', async () => {
     const { accessToken } = await loginAs('+919000000107');
     expect(amr(accessToken).map((a) => a.method)).toContain('otp');
 
-    // The local stack keeps phone confirmations off, so this signup is "confirmed" without any code:
-    // the audit's stranger-claims-invite case. Its session must not look like a code login.
+    // "Confirm phone" is on locally too (D-139), as it must be when hosted: a phone + password signup
+    // is not confirmed and gets no session, so it can never pick up an invite without a code.
     const phone = `+9198767${String(Date.now()).slice(-5)}`;
     const { data, error } = await anonClient().auth.signUp({ phone, password: `Pw-${crypto.randomUUID()}` });
-    expect(error).toBeNull();
-    expect(data.session?.user.phone_confirmed_at).toBeTruthy();
-    expect(amr(data.session!.access_token).map((a) => a.method)).toEqual(['password']);
+    expect(error?.code === 'sms_send_failed' || error === null).toBe(true);
+    expect(data.session ?? null).toBeNull();
+    expect(data.user?.phone_confirmed_at ?? null).toBeNull();
   });
 });
 
