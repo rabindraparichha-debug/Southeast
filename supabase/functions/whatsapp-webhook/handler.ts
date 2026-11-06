@@ -15,6 +15,8 @@ export type WebhookDeps = {
   /** Creates a Razorpay link for a payment row; returns the short URL. */
   createLink: (record: Json) => Promise<string>;
   complete?: Complete;
+  /** Daily AI caps (D-148); with complete set, every model call first takes a unit through wa_ai_take. */
+  aiCaps?: { conversationCap: number; dayCap: number };
   /** Error reporting (monitoring); optional. Gets only the error code. */
   report?: (e: unknown, code: string) => void;
 };
@@ -150,6 +152,10 @@ function botDeps(conversation: string, deps: WebhookDeps): BotDeps {
     },
     addLocation: (lat, lng, label) => rpc('wa_add_location_address', { p_conversation: conversation, p_lat: lat, p_lng: lng, p_label: label ?? null }),
     complete: deps.complete,
+    aiBudget: deps.complete && deps.aiCaps
+      ? () => rpc<boolean>('wa_ai_take', { p_conversation: conversation, p_conversation_cap: deps.aiCaps!.conversationCap,
+          p_day_cap: deps.aiCaps!.dayCap })
+      : undefined,
   };
 }
 

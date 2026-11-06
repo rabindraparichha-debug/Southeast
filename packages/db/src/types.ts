@@ -374,8 +374,59 @@ export type Database = {
           },
         ];
       };
+      complaint_admin_events: {
+        Row: {
+          action: string;
+          admin_id: string;
+          complaint_id: string;
+          created_at: string;
+          detail: NonNullable<Json>;
+          id: number;
+          kitchen_id: string;
+          note: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          action: string;
+          admin_id: string;
+          complaint_id: string;
+          created_at?: string;
+          detail?: NonNullable<Json>;
+          id?: never;
+          kitchen_id: string;
+          note?: string | null;
+        };
+        Update: {
+          action?: string;
+          admin_id?: string;
+          complaint_id?: string;
+          created_at?: string;
+          detail?: NonNullable<Json>;
+          id?: never;
+          kitchen_id?: string;
+          note?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'complaint_admin_events_complaint_id_fkey';
+            columns: ['complaint_id'];
+            isOneToOne: false;
+            referencedRelation: 'complaints';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'complaint_admin_events_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       complaints: {
         Row: {
+          assigned_admin_id: string | null;
+          assigned_at: string | null;
           auto_credit_entry_id: string | null;
           category: string;
           channel: string;
@@ -392,6 +443,7 @@ export type Database = {
           refund_entry_id: string | null;
           resolution_note: string | null;
           resolved_at: string | null;
+          resolved_by: string | null;
           responded_at: string | null;
           status: string;
           subscription_id: string | null;
@@ -399,6 +451,8 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          assigned_admin_id?: string | null;
+          assigned_at?: string | null;
           auto_credit_entry_id?: string | null;
           category: string;
           channel: string;
@@ -415,12 +469,15 @@ export type Database = {
           refund_entry_id?: string | null;
           resolution_note?: string | null;
           resolved_at?: string | null;
+          resolved_by?: string | null;
           responded_at?: string | null;
           status?: string;
           subscription_id?: string | null;
           updated_at?: string;
         };
         Update: {
+          assigned_admin_id?: string | null;
+          assigned_at?: string | null;
           auto_credit_entry_id?: string | null;
           category?: string;
           channel?: string;
@@ -437,6 +494,7 @@ export type Database = {
           refund_entry_id?: string | null;
           resolution_note?: string | null;
           resolved_at?: string | null;
+          resolved_by?: string | null;
           responded_at?: string | null;
           status?: string;
           subscription_id?: string | null;
@@ -1006,6 +1064,7 @@ export type Database = {
           offline: boolean;
           otp: string | null;
           otp_attempts: number;
+          otp_last_op: string | null;
           otp_ok: boolean | null;
           photo_path: string | null;
           proof_type: Database['public']['Enums']['proof_type'] | null;
@@ -1044,6 +1103,7 @@ export type Database = {
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
+          otp_last_op?: string | null;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
@@ -1081,6 +1141,7 @@ export type Database = {
           offline?: boolean;
           otp?: string | null;
           otp_attempts?: number;
+          otp_last_op?: string | null;
           otp_ok?: boolean | null;
           photo_path?: string | null;
           proof_type?: Database['public']['Enums']['proof_type'] | null;
@@ -3217,6 +3278,50 @@ export type Database = {
           },
         ];
       };
+      referral_join_attempts: {
+        Row: {
+          created_at: string;
+          id: number;
+          kitchen_id: string;
+          referrer_customer_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: never;
+          kitchen_id: string;
+          referrer_customer_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: never;
+          kitchen_id?: string;
+          referrer_customer_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'referral_join_attempts_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'referral_join_attempts_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'referral_join_attempts_referrer_customer_id_kitchen_id_fkey';
+            columns: ['referrer_customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       referrals: {
         Row: {
           code: string;
@@ -4357,6 +4462,7 @@ export type Database = {
       };
       admin_close_requests: { Args: { p_status?: string }; Returns: Json };
       admin_commission_report: { Args: { p_from: string; p_to: string }; Returns: Json };
+      admin_complaint_detail: { Args: { p_complaint: string }; Returns: Json };
       admin_complaint_scores: { Args: { p_days?: number }; Returns: Json };
       admin_create_lead: {
         Args: {
@@ -4379,6 +4485,7 @@ export type Database = {
         Returns: Json;
       };
       admin_delete_calendar_entry: { Args: { p_id: string }; Returns: undefined };
+      admin_escalations: { Args: { p_limit?: number; p_status?: string }; Returns: Json };
       admin_hide_review: { Args: { p_hidden: boolean; p_review: string }; Returns: undefined };
       admin_import_leads: {
         Args: { p_rows: Json; p_source: Database['public']['Enums']['lead_source'] };
@@ -4464,7 +4571,7 @@ export type Database = {
       };
       admin_vendor_phones: { Args: Record<PropertyKey, never>; Returns: Json };
       ads_claim_conversions: {
-        Args: { p_limit?: number };
+        Args: { p_include_mock?: boolean; p_limit?: number };
         Returns: {
           attempts: number;
           gclid: string;
@@ -4475,7 +4582,7 @@ export type Database = {
         }[];
       };
       ads_complete_conversion: {
-        Args: { p_error?: string; p_id: string; p_ok: boolean; p_skip?: boolean };
+        Args: { p_error?: string; p_id: string; p_mock?: boolean; p_ok: boolean; p_skip?: boolean };
         Returns: undefined;
       };
       apply_referral_code: { Args: { p_code: string; p_customer: string }; Returns: string };
@@ -4937,6 +5044,23 @@ export type Database = {
         };
         Returns: undefined;
       };
+      referral_invite: { Args: { p_code: string; p_slug: string }; Returns: Json };
+      referral_join: {
+        Args: {
+          p_address: string;
+          p_area?: string;
+          p_code: string;
+          p_consent?: boolean;
+          p_landmark?: string;
+          p_name: string;
+          p_phone: string;
+          p_plan: string;
+          p_slug: string;
+          p_start_date?: string;
+          p_whatsapp_opt_in?: boolean;
+        };
+        Returns: Json;
+      };
       referrals_list: { Args: { p_kitchen: string }; Returns: Json };
       refund_for_gateway: { Args: { p_refund: string }; Returns: Json };
       refund_unused_meals: {
@@ -5307,6 +5431,10 @@ export type Database = {
       wa_add_location_address: {
         Args: { p_conversation: string; p_label?: string; p_lat: number; p_lng: number };
         Returns: string;
+      };
+      wa_ai_take: {
+        Args: { p_conversation: string; p_conversation_cap: number; p_day_cap: number };
+        Returns: boolean;
       };
       wa_apply_change: {
         Args: {

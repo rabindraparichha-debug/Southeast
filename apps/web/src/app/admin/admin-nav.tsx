@@ -10,6 +10,7 @@ const ITEMS = [
   { href: '/admin/funnel', label: 'Funnel & gaps' },
   { href: '/admin/vendors', label: 'Vendor applications' },
   { href: '/admin/access', label: 'Access' },
+  { href: '/admin/complaints', label: 'Complaints' },
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/quality', label: 'Complaint scores' },
   { href: '/admin/calendar', label: 'Food calendar' },

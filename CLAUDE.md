@@ -74,6 +74,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00180 – 90000 00189 | Spare for the held-back apps track (`held-apps.test.ts` uses 00180 – 00182) |
 | 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
 | 90000 00149 | Spare (wave 4: phone + password sign-up test; never logs in with a code) |
+| 90000 00160 – 90000 00169 | Spare for the Phase 2 hardening tests (00160: `tests/integration/phase2.test.ts`) |
 
 ## Conventions (follow these in every change)
 
@@ -203,6 +204,15 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Prices: a meal is charged the plan price in force on its service date (`plan_prices`, read by `private.charge_orders`; `private.plan_price_on()` elsewhere). Change prices with `set_plan_price(plan, price, from)`; `plans.price_per_meal_paise` is "today's price", moved by `tiffin-plan-prices`.
 - Phoned-in complaints: `log_complaint` (channel `vendor`, starts `responded`). Exports: `export_kitchen` (owner, paged; customer pages are logged); CSV/ZIP helpers in `@tiffin/core` (`toCsvText`, `zipFiles`). Closing a kitchen is a request (`kitchen_close_requests`), never a delete.
 - Support contact: `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` via `SupportLink` (web falls back to `NEXT_PUBLIC_GRIEVANCE_CONTACT`; mobile onboarding shows a hint).
+**Phase 2 hardening (D-146 – D-155)**
+- **Delivery codes:** never raise after counting a code attempt (the raise rolls the counter back): answer `status 'pending'`, `otp_ok false`. A wrong code is counted once per `p_client_op` (`delivery_stops.otp_last_op`). `otp` is a redacted audit column (`private.audit_redacted_columns`); outbox payloads lose `otp` once not pending/sending; never copy a code anywhere else.
+- **Referrals:** the share link is `/k/<slug>/join?ref=<CODE>` (`referral_invite`, `referral_join`, flag `customer_portal`). A join creates the kitchen's own customer (`source 'web'`, never platform-sourced) and records the referral; codes from another kitchen raise `referral_other_kitchen`. Count the attempt (`referral_join_attempts`) before looking at the number, give an existing number the same answer (the owner gets `referral_existing`), and never record WhatsApp opt-in from a public form that cannot prove who holds the phone.
+- **AI fallback:** every model call takes a unit of the budget first (`BotDeps.aiBudget` → `wa_ai_take`; caps `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`). Build the Claude call only with `makeClaudeComplete` (`_shared/ai-claude.ts`); the model comes from `ANTHROPIC_CHAT_MODEL` / `ANTHROPIC_MODEL`.
+- **Payment links:** wrap every Razorpay link creation in `createLinkOrCancel` (`_shared/payment-link.ts`, steps `create` / `attach` / `cancelGateway`): a failed create cancels the `created` row (`cancel_payment_link_record`); a failed attach is retried, then the link is cancelled at Razorpay (`cancelPaymentLink`) before the row.
+- **Lead-intake keys:** header `X-Lead-Key` or Basic auth only, checked by `checkLeadKey` / `checkGoogleKey` (`_shared/leads.ts`); the only URL key is `JUSTDIAL_LEAD_KEY` on `?source=justdial`.
+- **Google Ads:** mock mode stores every conversion as `mock` (never `sent` or `skipped`); only live mode skips a stage without an action id.
+- **Escalated complaints:** the platform team works through the `admin_*complaint*` RPCs (reveals logged, team log `complaint_admin_events`, append-only except the erasure scrub of `note`); the team never credits meals.
+- **Templates:** a new template goes in `_shared/templates.ts`, `TEMPLATE_SAMPLES` (`_shared/template-pack.ts`) and `docs/WHATSAPP_TEMPLATES.md`; regenerate `docs/whatsapp-templates.csv` (`UPDATE_TEMPLATE_PACK=1`, see the doc).
 
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
@@ -254,6 +264,7 @@ WhatsApp and AI Edge Function secrets (same file):
 | `WHATSAPP_VERIFY_TOKEN` | Webhook subscription handshake |
 | `PUBLIC_WEB_URL` | Base URL for customer page links |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
+| `ANTHROPIC_CHAT_MODEL`, `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`, `AI_TIMEOUT_MS` | Chat model override and caps (D-148) |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites), `NEXT_PUBLIC_GRIEVANCE_CONTACT` and `NEXT_PUBLIC_SUPPORT_WHATSAPP` (vendor support link; mobile: `EXPO_PUBLIC_SUPPORT_WHATSAPP`).
 
@@ -273,7 +284,7 @@ Login code Edge Function secrets (`auth-send-sms`, same file; only when the Send
 
 Local config only (`config.toml` `env()`, unset locally): `SUPABASE_AUTH_SMS_TWILIO_ACCOUNT_SID`, `SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN`, `SUPABASE_AUTH_SMS_TWILIO_MESSAGE_SERVICE_SID`, `SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID` (accepted for `config push`; CLI 2.122.0 does not pass it to the local Auth container), and `SEND_SMS_HOOK_SECRETS` in `supabase/.env` for the hook's local check (`SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED=true pnpm db:start`).
 
-Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
+Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (generic JSON and `lead-email`, header `X-Lead-Key` or Basic auth), `JUSTDIAL_LEAD_KEY` (Justdial push, the only key allowed in a URL) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Hosted projects refuse the `local-dev-*` examples and keys under 24 characters (D-150). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 
 Vault also needs `public_web_url` (links in messages, e.g. `https://app.example.in`).
 

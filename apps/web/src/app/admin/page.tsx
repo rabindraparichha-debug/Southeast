@@ -35,7 +35,8 @@ export default async function AdminDashboard() {
       {m && <Metrics m={m} />}
 
       <div id="escalated" className="scroll-mt-20" />
-      <Card title={`Escalated complaints (${escalated?.length ?? 0})`} className="mt-6">
+      <Card title={`Escalated complaints (${escalated?.length ?? 0})`} className="mt-6"
+        actions={<Link href="/admin/complaints" className="text-sm text-brand-700 hover:underline">Open the queue</Link>}>
         {escalated?.length ? (
           <ul className="divide-y divide-ink-100 text-sm">
             {escalated.map((c) => (

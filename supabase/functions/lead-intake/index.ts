@@ -1,17 +1,24 @@
-// Lead intake from ad forms and directories. Public URL, authenticated by shared keys:
+// Lead intake from ad forms and directories. Public URL, authenticated by shared keys (D-150):
 //   POST ?source=google_ads           Google Ads lead form webhook; body.google_key must equal GOOGLE_ADS_LEAD_KEY
-//   GET|POST ?source=justdial&key=…   Justdial lead push; key must equal LEAD_INTAKE_KEY
-//   POST ?source=sulekha|instagram|website|referral|other&key=…   generic JSON (a Sulekha partner push, Zapier/Make from Meta lead ads, partners)
+//   GET|POST ?source=justdial&key=…   Justdial lead push (it can only call a URL); key must equal JUSTDIAL_LEAD_KEY
+//   POST ?source=sulekha|instagram|website|referral|other   generic JSON (a Sulekha partner push, Zapier/Make from
+//        Meta lead ads, partners) with the header X-Lead-Key: LEAD_INTAKE_KEY (or Basic auth with it as password).
+//        Justdial may also use the header. Any other ?key= is refused (key_in_url): URLs land in access logs.
+// Outside a local stack, keys left at their .env.example values (or shorter than 24 characters) are refused.
 // Leads are idempotent on (source, external_id), matched to kitchens at once, and welcomed on
 // WhatsApp only when the person opted in.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
-import { parseGenericLead, parseGoogleAdsLead, parseJustdialLead, safeEqual, type ParsedLead } from '../_shared/leads.ts';
+import { checkGoogleKey, checkLeadKey, parseGenericLead, parseGoogleAdsLead, parseJustdialLead, presentedKey,
+  type ParsedLead } from '../_shared/leads.ts';
+import { mockAllowed } from '../_shared/platform.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LEAD_INTAKE_KEY = Deno.env.get('LEAD_INTAKE_KEY') ?? '';
 const GOOGLE_ADS_LEAD_KEY = Deno.env.get('GOOGLE_ADS_LEAD_KEY') ?? '';
+const JUSTDIAL_LEAD_KEY = Deno.env.get('JUSTDIAL_LEAD_KEY') ?? '';
+const LOCAL = mockAllowed((k) => Deno.env.get(k));
 const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
 const GENERIC = new Set(['sulekha', 'instagram', 'website', 'referral', 'other']);
@@ -24,13 +31,15 @@ Deno.serve(async (req) => {
   try {
     if (source === 'google_ads') {
       const body = await req.json();
-      if (!safeEqual(String(body.google_key ?? ''), GOOGLE_ADS_LEAD_KEY)) return json({ error: 'forbidden' }, 403);
+      const check = checkGoogleKey(body.google_key, GOOGLE_ADS_LEAD_KEY, LOCAL);
+      if (!check.ok) return json({ error: check.error }, check.status);
       lead = parseGoogleAdsLead(body);
     } else {
-      const key = url.searchParams.get('key') ?? req.headers.get('x-lead-key') ?? '';
-      if (!safeEqual(key, LEAD_INTAKE_KEY)) return json({ error: 'forbidden' }, 403);
+      const check = checkLeadKey(source, presentedKey(url, req.headers), { intake: LEAD_INTAKE_KEY, justdial: JUSTDIAL_LEAD_KEY }, LOCAL);
+      if (!check.ok) return json({ error: check.error }, check.status);
       if (source === 'justdial') {
         const fields: Record<string, string> = Object.fromEntries(url.searchParams);
+        delete fields.key;
         if (req.method === 'POST') {
           const ct = req.headers.get('content-type') ?? '';
           if (ct.includes('json')) Object.assign(fields, await req.json());

@@ -28,7 +28,7 @@ export type Portal = {
   payer?: { name: string } | null;
   dependents?: Dependent[];
   food_prefs?: FoodPrefs;
-  referral?: ReferralInfo;
+  referral?: ReferralInfo | null;
   specials?: PortalSpecial[];
   festivals?: PortalFestival[];
   health_tags?: string[];

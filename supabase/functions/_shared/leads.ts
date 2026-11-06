@@ -100,6 +100,76 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Shared intake keys (D-150). Keys travel in a header, never in the URL (URLs end up in access
+// logs): X-Lead-Key, or the password of HTTP Basic auth (https://leads:<KEY>@host/... for inbound
+// email services that cannot set headers). The only URL key is JUSTDIAL_LEAD_KEY on
+// ?source=justdial, because Justdial's push API can only call a URL; it is a separate key, so a
+// leaked log line can post Justdial leads and nothing else. Outside a local stack the example
+// values from supabase/functions/.env.example (and keys shorter than 24 characters) are refused.
+// ---------------------------------------------------------------------------
+
+/** The placeholder values in supabase/functions/.env.example. */
+export const EXAMPLE_INTAKE_KEYS = ['local-dev-lead-key', 'local-dev-google-key', 'local-dev-justdial-key'];
+export const MIN_INTAKE_KEY_LENGTH = 24;
+
+/** Why a configured key cannot be used ('missing', 'example', 'weak'), or null when it can. */
+export function intakeKeyProblem(key: string | null | undefined, local: boolean): 'missing' | 'example' | 'weak' | null {
+  const k = (key ?? '').trim();
+  if (!k) return 'missing';
+  if (local) return null;
+  if (EXAMPLE_INTAKE_KEYS.includes(k) || k.startsWith('local-dev-')) return 'example';
+  if (k.length < MIN_INTAKE_KEY_LENGTH) return 'weak';
+  return null;
+}
+
+export type PresentedKey = { header: string | null; basic: string | null; query: string | null };
+
+/** Where the caller put a key: X-Lead-Key, Basic auth password, or ?key= in the URL. */
+export function presentedKey(url: URL, headers: { get(name: string): string | null }): PresentedKey {
+  let basic: string | null = null;
+  const auth = headers.get('authorization') ?? '';
+  const m = /^Basic\s+([A-Za-z0-9+/=]+)\s*$/i.exec(auth);
+  if (m) {
+    try {
+      const decoded = atob(m[1]!);
+      const i = decoded.indexOf(':');
+      basic = i >= 0 ? decoded.slice(i + 1) : null;
+    } catch {
+      basic = null;
+    }
+  }
+  return {
+    header: headers.get('x-lead-key') || null,
+    basic: basic || null,
+    query: url.searchParams.has('key') ? url.searchParams.get('key') ?? '' : null,
+  };
+}
+
+export type KeyCheck = { ok: true; via: 'header' | 'basic' | 'url' } | { ok: false; status: 401 | 403 | 503; error: string };
+
+/**
+ * Checks the shared key of lead-intake (generic sources, Justdial) and lead-email.
+ * keys.intake = LEAD_INTAKE_KEY, keys.justdial = JUSTDIAL_LEAD_KEY.
+ */
+export function checkLeadKey(source: string, p: PresentedKey, keys: { intake: string; justdial: string }, local: boolean): KeyCheck {
+  if (p.query !== null) {
+    if (source !== 'justdial') return { ok: false, status: 403, error: 'key_in_url' };
+    if (intakeKeyProblem(keys.justdial, local)) return { ok: false, status: 503, error: 'intake_not_configured' };
+    return safeEqual(p.query, keys.justdial.trim()) ? { ok: true, via: 'url' } : { ok: false, status: 403, error: 'forbidden' };
+  }
+  if (intakeKeyProblem(keys.intake, local)) return { ok: false, status: 503, error: 'intake_not_configured' };
+  const given = p.header ?? p.basic;
+  if (!given) return { ok: false, status: 401, error: 'key_required' };
+  return safeEqual(given, keys.intake.trim()) ? { ok: true, via: p.header ? 'header' : 'basic' } : { ok: false, status: 403, error: 'forbidden' };
+}
+
+/** Google Ads lead forms send their key in the body (google_key); same configuration rules. */
+export function checkGoogleKey(given: unknown, expected: string, local: boolean): KeyCheck {
+  if (intakeKeyProblem(expected, local)) return { ok: false, status: 503, error: 'intake_not_configured' };
+  return safeEqual(String(given ?? ''), expected.trim()) ? { ok: true, via: 'header' } : { ok: false, status: 403, error: 'forbidden' };
+}
+
+// ---------------------------------------------------------------------------
 // Lead emails (Sulekha has no public lead API; Justdial and others also email every enquiry).
 // The inbound email service (Cloudflare Email Routing worker, Postmark, SendGrid or Mailgun)
 // forwards {from, subject, text, messageId}; we read "Label: value" lines.
