@@ -1,13 +1,15 @@
 // Login codes: unit tests for the Send SMS hook logic (no network), plus a check of the deployed
 // auth-send-sms function on the local stack (signature accepted / refused, mock send).
-// docs/LOGIN.md, D-126.
+// docs/LOGIN.md, D-134.
 import { describe, expect, it } from 'vitest';
 import {
-  AuthSmsConfigError, LOCAL_PLACEHOLDER_HOOK_SECRET, authSmsRunsLocally, buildTelnyxRequest, buildTwilioRequest,
+  AuthSmsConfigError, LOCAL_PLACEHOLDER_HOOK_SECRET, ReplayGuard, buildTelnyxRequest, buildTwilioRequest,
   countryAllowed, handleSendSmsHook, interpretTelnyx, interpretTwilio, loadAuthSmsConfig, maskPhone, orderRoutes,
-  parseHookSecrets, parsePayload, parseRoutes, sendCode, signWebhook, verifyWebhook, type AuthSmsConfig, type HookDeps,
+  parseHookSecrets, parsePayload, parseRoutes, reportOncePerCode, sendCode, signWebhook, verifyWebhook,
+  type AuthSmsConfig, type HookDeps,
 } from '../../supabase/functions/_shared/auth-sms.ts';
-import { anonClient, env as stackEnv } from './helpers.ts';
+import { mockAllowed } from '../../supabase/functions/_shared/platform.ts';
+import { anonClient, env as stackEnv, loginAs } from './helpers.ts';
 
 const SECRET = LOCAL_PLACEHOLDER_HOOK_SECRET;
 const OTHER = `v1,whsec_${Buffer.from('another-secret-for-rotation-0001').toString('base64')}`;
@@ -17,10 +19,13 @@ const LOCAL = { SUPABASE_URL: 'http://kong:8000' };
 
 const envOf = (vars: Record<string, string | undefined>) => (k: string) => vars[k];
 
-function payload(over: { phone?: string; otp?: string; sentAt?: string | null } = {}) {
+// Shaped like Auth's SendSMSInput: models.User JSON (phone without "+", new_phone for a phone change,
+// *_sent_at, last_sign_in_at) and v0hooks.SMS.
+function payload(over: { phone?: string; otp?: string; sentAt?: string | null; lastSignInAt?: string | null } = {}) {
+  const phone = (over.phone ?? '+919000000042').replace('+', '');
   return JSON.stringify({
-    user: { id: 'u1', phone: (over.phone ?? '+919000000042').replace('+', ''), confirmation_sent_at: over.sentAt ?? null },
-    sms: { otp: over.otp ?? '482913' },
+    user: { id: 'u1', phone, confirmation_sent_at: over.sentAt ?? null, last_sign_in_at: over.lastSignInAt ?? null },
+    sms: { otp: over.otp ?? '482913', phone },
   });
 }
 
@@ -113,12 +118,27 @@ describe('payload, masking and routing', () => {
     expect(maskPhone('123')).toBe('+***');
   });
 
-  it('reads the destination and code (sms.phone wins, e.g. a phone change)', () => {
-    expect(parsePayload(JSON.parse(payload()))).toEqual({ to: '+919000000042', code: '482913', previousSentAt: null });
-    expect(parsePayload({ user: { phone: '919000000042', phone_change: '919000000043', phone_change_sent_at: '2026-11-06T09:59:00Z' }, sms: { otp: '1234', phone: '919000000043' } }))
-      .toEqual({ to: '+919000000043', code: '1234', previousSentAt: '2026-11-06T09:59:00Z' });
+  it('reads the destination and code (sms.phone wins, e.g. a phone change to user.new_phone)', () => {
+    expect(parsePayload(JSON.parse(payload()))).toEqual({ to: '+919000000042', code: '482913', kind: 'login', previousSentAt: null });
+    // Auth serialises the pending number as new_phone (models.User PhoneChange `json:"new_phone"`).
+    expect(parsePayload({
+      user: { phone: '919000000042', new_phone: '919000000043', confirmation_sent_at: '2026-11-06T09:00:00Z', phone_change_sent_at: '2026-11-06T09:59:00Z' },
+      sms: { otp: '1234', phone: '919000000043' },
+    })).toEqual({ to: '+919000000043', code: '1234', kind: 'phone_change', previousSentAt: '2026-11-06T09:59:00Z' });
+    // A key Auth never sends is not read as a phone change.
+    const legacy = { phone: '919000000042', phone_change: '919000000043', phone_change_sent_at: '2026-11-06T09:59:00Z' };
+    expect(parsePayload({ user: legacy, sms: { otp: '1234', phone: '919000000043' } })).toMatchObject({ kind: 'login', previousSentAt: null });
     expect(parsePayload({ user: { phone: '' }, sms: { otp: '123456' } })).toBeNull();
     expect(parsePayload({ user: { phone: '919000000042' }, sms: { otp: 'abc' } })).toBeNull();
+  });
+
+  it('a previous login code counts as unused only until the person signs in with it', () => {
+    const sent = '2026-11-06T09:59:00Z';
+    // Unused (never signed in, or the last sign-in was before the code went out): a resend.
+    expect(parsePayload(JSON.parse(payload({ sentAt: sent })))!.previousSentAt).toBe(sent);
+    expect(parsePayload(JSON.parse(payload({ sentAt: sent, lastSignInAt: '2026-11-05T08:00:00Z' })))!.previousSentAt).toBe(sent);
+    // Used: Auth keeps confirmation_sent_at after verifyOtp but moves last_sign_in_at past it.
+    expect(parsePayload(JSON.parse(payload({ sentAt: sent, lastSignInAt: '2026-11-06T09:59:20Z' })))!.previousSentAt).toBeNull();
   });
 
   it('only sends to allowed country codes', () => {
@@ -150,8 +170,9 @@ describe('configuration (fails closed)', () => {
     expect(() => loadAuthSmsConfig(envOf({ SUPABASE_URL: 'https://abc.supabase.co' }))).toThrow(/sms_not_configured/);
     expect(() => loadAuthSmsConfig(envOf({ SUPABASE_URL: 'https://abc.supabase.co', PLATFORM_ENV: 'local', AUTH_SMS_MODE: 'mock' }))).toThrow(/local stack/);
     expect(() => loadAuthSmsConfig(envOf({ ...LOCAL, PLATFORM_ENV: 'production', AUTH_SMS_MODE: 'mock' }))).toThrow(/local stack/);
-    expect(authSmsRunsLocally(envOf({ SUPABASE_URL: 'http://127.0.0.1:54321' }))).toBe(true);
-    expect(authSmsRunsLocally(envOf({ SUPABASE_URL: 'https://abc.supabase.co' }))).toBe(false);
+    // The same rule as every other mock (_shared/platform.ts).
+    expect(mockAllowed(envOf({ SUPABASE_URL: 'http://127.0.0.1:54321' }))).toBe(true);
+    expect(mockAllowed(envOf({ SUPABASE_URL: 'https://abc.supabase.co' }))).toBe(false);
   });
 
   it('live mode needs the secrets of every route', () => {
@@ -289,6 +310,29 @@ describe('handleSendSmsHook', () => {
     expect(logs.map((l) => l.channel)).toEqual(['whatsapp', 'sms']);
   });
 
+  it('live: a new code after the previous one was used to log in starts at WhatsApp again', async () => {
+    // Logged in on the web at 09:59 with a WhatsApp code, then opens the app at 10:00.
+    const { d, calls } = deps({ ...TWILIO_LIVE });
+    const body = payload({ sentAt: '2026-11-06T09:59:00Z', lastSignInAt: '2026-11-06T09:59:30Z' });
+    expect((await handleSendSmsHook(req(body, await signed(body, OTHER)), d)).status).toBe(200);
+    expect(calls.map((c) => new URLSearchParams(String(c.init.body)).get('To'))).toEqual(['whatsapp:+919000000042']);
+  });
+
+  it('refuses a replayed delivery (same webhook-id) and sends the code once', async () => {
+    const { d, calls, logs } = deps({ ...TWILIO_LIVE });
+    d.replay = new ReplayGuard();
+    const body = payload();
+    const h = await signed(body, OTHER, NOW_S, 'msg_replay');
+    expect((await handleSendSmsHook(req(body, h), d)).status).toBe(200);
+    expect(await handleSendSmsHook(req(body, h), d)).toEqual({ status: 409, body: { error: 'replayed' } });
+    expect(calls).toHaveLength(1);
+    expect(logs.at(-1)).toEqual({ event: 'refused', reason: 'replayed' });
+    // A new delivery (Auth signs every attempt with a new id) still goes out.
+    const next = await signed(body, OTHER, NOW_S, 'msg_next');
+    expect((await handleSendSmsHook(req(body, next), d)).status).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
   it('answers Auth with an error object when every provider fails', async () => {
     const failing = (async () => new Response(JSON.stringify({ code: 20003 }), { status: 401 })) as unknown as typeof fetch;
     const { d, reports } = deps({ ...TWILIO_LIVE }, failing);
@@ -310,11 +354,49 @@ describe('handleSendSmsHook', () => {
       .toEqual({ error: { http_code: 500, message: 'sms_not_configured' } });
 
     const published = deps({ SUPABASE_URL: 'https://abc.supabase.co', SEND_SMS_HOOK_SECRETS: SECRET, ...{ AUTH_SMS_MODE: 'live', TWILIO_ACCOUNT_SID: 'AC1', TWILIO_AUTH_TOKEN: 't', TWILIO_MESSAGING_SERVICE_SID: 'MG1', TWILIO_WHATSAPP_CONTENT_SID: 'HX1' } });
-    expect((await handleSendSmsHook(req(body, await signed(body)), published.d)).status).toBe(500);
+    expect(await handleSendSmsHook(req(body, await signed(body)), published.d)).toEqual({ status: 401, body: { error: 'invalid_signature' } });
     expect(published.calls).toHaveLength(0);
+  });
 
-    const missing = deps({ ...LOCAL });
-    expect((await handleSendSmsHook(req(body, await signed(body)), missing.d))).toEqual({ status: 500, body: { error: 'hook_not_configured' } });
+  it('a deployed hook without secrets answers like a bad signature and reports once per isolate', async () => {
+    const body = payload();
+    const sentry: string[] = [];
+    const { d, logs, calls } = deps({ SUPABASE_URL: 'https://abc.supabase.co' });
+    d.report = reportOncePerCode((error, tags) => sentry.push(`${tags.code}:${error.message}`));
+    const unsigned = await handleSendSmsHook(req(body, {}), d);
+    const signedByAnyone = await handleSendSmsHook(req(body, await signed(body)), d);
+    // Same answer as a wrong signature: the caller cannot tell that the hook is unconfigured.
+    expect(unsigned).toEqual({ status: 401, body: { error: 'invalid_signature' } });
+    expect(signedByAnyone).toEqual(unsigned);
+    expect(sentry).toEqual(['hook_secret:sms_not_configured: SEND_SMS_HOOK_SECRETS is not set']);
+    expect(logs).toEqual([
+      { event: 'refused', reason: 'hook_secret_not_configured' },
+      { event: 'refused', reason: 'hook_secret_not_configured' },
+    ]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('reportOncePerCode passes ordinary reports through every time', () => {
+    const seen: string[] = [];
+    const report = reportOncePerCode((_e, tags) => seen.push(tags.code!));
+    for (let i = 0; i < 3; i++) {
+      report(new Error('x'), { code: 'hook_secret', once: 'true' });
+      report(new Error('y'), { code: 'sms_send_failed' });
+    }
+    expect(seen).toEqual(['hook_secret', 'sms_send_failed', 'sms_send_failed', 'sms_send_failed']);
+  });
+});
+
+describe('ReplayGuard', () => {
+  it('remembers an id until its signature expires, within a size bound', () => {
+    const g = new ReplayGuard(2);
+    expect(g.firstSeen('a', 1_000, 0)).toBe(true);
+    expect(g.firstSeen('a', 1_000, 500)).toBe(false);
+    expect(g.firstSeen('a', 2_000, 1_000)).toBe(true); // expired, so it counts as new again
+    expect(g.firstSeen('b', 5_000, 1_000)).toBe(true);
+    expect(g.firstSeen('c', 5_000, 1_000)).toBe(true); // over the bound: the oldest entry goes
+    expect(g.firstSeen('b', 5_000, 1_000)).toBe(false);
+    expect(g.firstSeen('a', 5_000, 1_000)).toBe(true);
   });
 });
 
@@ -323,16 +405,42 @@ describe('auth-send-sms on the local stack', () => {
   const fn = () => `${stackEnv().url}/functions/v1/auth-send-sms`;
   const secret = process.env.SEND_SMS_HOOK_SECRETS ?? SECRET;
 
-  it('accepts a correctly signed request and refuses a tampered one', async () => {
+  it('accepts a correctly signed request once and refuses a replay or a tampered one', async () => {
     const body = payload({ phone: '+919000000199' });
     const ts = Math.floor(Date.now() / 1000);
-    const headers = { 'Content-Type': 'application/json', 'webhook-id': 'msg_local', 'webhook-timestamp': String(ts), 'webhook-signature': await signWebhook(secret, 'msg_local', ts, body) };
+    const id = `msg_local_${crypto.randomUUID()}`; // a webhook-id is used once (replays are refused)
+    const headers = { 'Content-Type': 'application/json', 'webhook-id': id, 'webhook-timestamp': String(ts), 'webhook-signature': await signWebhook(secret, id, ts, body) };
     const ok = await fetch(fn(), { method: 'POST', headers, body });
     expect(ok.status).toBe(200);
     expect(ok.headers.get('content-type')).toContain('application/json');
     expect(await ok.json()).toEqual({});
+    // The same delivery again is a replay (index.ts keeps one guard per instance).
+    const again = await fetch(fn(), { method: 'POST', headers, body });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toEqual({ error: 'replayed' });
     const bad = await fetch(fn(), { method: 'POST', headers, body: body.replace('482913', '000000') });
     expect(bad.status).toBe(401);
+  });
+});
+
+// The invite guard (claim_invites accepts only a session signed in with a one-time code, wave 2
+// database work) reads the JWT's amr claim. This pins what Supabase Auth really puts there, so the
+// pgTAP tests' hand-written claims stay true to life.
+describe('how Supabase Auth marks a session (amr)', () => {
+  const amr = (jwt: string): { method: string }[] =>
+    JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64url').toString()).amr ?? [];
+
+  it('a code login carries amr otp; an auto-confirmed phone + password signup carries only amr password', async () => {
+    const { accessToken } = await loginAs('+919000000140');
+    expect(amr(accessToken).map((a) => a.method)).toContain('otp');
+
+    // The local stack keeps phone confirmations off, so this signup is "confirmed" without any code:
+    // the audit's stranger-claims-invite case. Its session must not look like a code login.
+    const phone = `+9198767${String(Date.now()).slice(-5)}`;
+    const { data, error } = await anonClient().auth.signUp({ phone, password: `Pw-${crypto.randomUUID()}` });
+    expect(error).toBeNull();
+    expect(data.session?.user.phone_confirmed_at).toBeTruthy();
+    expect(amr(data.session!.access_token).map((a) => a.method)).toEqual(['password']);
   });
 });
 

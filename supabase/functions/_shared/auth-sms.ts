@@ -1,4 +1,4 @@
-// Login codes for Supabase Auth's Send SMS hook (docs/LOGIN.md, D-126).
+// Login codes for Supabase Auth's Send SMS hook (docs/LOGIN.md, D-134).
 // No external imports (WebCrypto + fetch only), so the same file runs in Deno and in the Node tests
 // (tests/integration/auth-sms.test.ts).
 //
@@ -6,11 +6,13 @@
 // Webhooks-signed POST whose JSON body is { user, sms: { otp, phone } }. It does NOT say which
 // channel the app asked for (options.channel is only used by the built-in providers), so the order
 // of channels is ours: AUTH_SMS_ROUTES (default "whatsapp,sms"). A code asked for again within
-// AUTH_SMS_ESCALATE_SECONDS of the previous one (user.confirmation_sent_at, which Auth has not yet
-// updated when it calls the hook) starts at the next route, so "Send code by SMS instead" in the
-// apps really moves to SMS.
+// AUTH_SMS_ESCALATE_SECONDS of a previous code that was not used (user.confirmation_sent_at, which
+// Auth has not yet updated when it calls the hook, later than user.last_sign_in_at) starts at the
+// next route. Because the apps cannot know which route was used, they run channel-neutral in hook
+// mode (LOGIN_DELIVERY=hook, packages/core/src/login.ts).
 //
 // Privacy: never log the code or a full phone number. Use maskPhone() and error codes only.
+import { mockAllowed } from './platform.ts';
 
 export type Channel = 'whatsapp' | 'sms';
 export type Provider = 'twilio' | 'telnyx';
@@ -77,34 +79,9 @@ type Env = (name: string) => string | undefined;
 
 /**
  * The secret published in supabase/functions/.env.example (base64 of "local-dev-send-sms-hook-secret!!").
- * It is refused unless the function runs on a local stack.
+ * It is refused unless the function runs on a local stack (mockAllowed, _shared/platform.ts).
  */
 export const LOCAL_PLACEHOLDER_HOOK_SECRET = 'v1,whsec_bG9jYWwtZGV2LXNlbmQtc21zLWhvb2stc2VjcmV0ISE=';
-
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]', 'kong', 'host.docker.internal']);
-
-/** True for the URLs a local Supabase stack uses (http://kong:8000 inside the Edge runtime). */
-export function isLocalStackUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  let host: string;
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return LOCAL_HOSTS.has(host) || host.startsWith('127.') || host.startsWith('supabase_kong_');
-}
-
-/**
- * Same rule as PLATFORM_ENV elsewhere (audit item 10): mocks run only locally. PLATFORM_ENV=local is
- * trusted only together with a local SUPABASE_URL; unset counts as local only on a local stack.
- */
-export function authSmsRunsLocally(env: Env): boolean {
-  const declared = (env('PLATFORM_ENV') ?? '').trim().toLowerCase();
-  const localUrl = isLocalStackUrl(env('SUPABASE_URL'));
-  if (!declared) return localUrl;
-  return declared === 'local' && localUrl;
-}
 
 function int(env: Env, name: string, fallback: number, min: number, max: number): number {
   const raw = env(name);
@@ -155,7 +132,7 @@ export function loadAuthSmsConfig(env: Env): AuthSmsConfig {
   const declared = (env('AUTH_SMS_MODE') || '').trim().toLowerCase();
   const mode = (declared || (twilio || telnyx ? 'live' : 'mock')) as Mode;
   if (mode !== 'mock' && mode !== 'live') throw new AuthSmsConfigError('sms_not_configured', `unknown AUTH_SMS_MODE "${mode}"`);
-  if (mode === 'mock' && !authSmsRunsLocally(env)) {
+  if (mode === 'mock' && !mockAllowed(env)) {
     throw new AuthSmsConfigError('sms_not_configured', 'mock login codes run only on a local stack (PLATFORM_ENV=local); set the provider secrets');
   }
 
@@ -280,15 +257,39 @@ export async function verifyWebhook(h: WebhookHeaders, body: string, keys: Uint8
   return { ok: false, reason: 'bad_signature' };
 }
 
+/**
+ * Remembers the webhook-id of every signed request until its signature expires, so a captured
+ * delivery cannot be replayed to send the same code again (Standard Webhooks: idempotency on the id).
+ * Auth signs each attempt, retries included, with a new id. One guard per isolate (index.ts): it stops
+ * replays that reach the same isolate, which is where repeated requests normally land; a replay that
+ * reaches a fresh isolate gets at most one more send there.
+ */
+export class ReplayGuard {
+  private seen = new Map<string, number>();
+  constructor(private readonly max = 5000) {}
+
+  /** True the first time an id is seen while it is still valid; false for a replay. */
+  firstSeen(id: string, validUntilMs: number, nowMs: number): boolean {
+    for (const [k, until] of this.seen) if (until <= nowMs) this.seen.delete(k);
+    if (this.seen.has(id)) return false;
+    if (this.seen.size >= this.max) this.seen.delete(this.seen.keys().next().value!);
+    this.seen.set(id, validUntilMs);
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Payload, masking, routing
 // ---------------------------------------------------------------------------
+/** The parts of Auth's SendSMSInput we read (models.User JSON + v0hooks.SMS). */
 export type HookPayload = {
   user?: {
     phone?: string;
-    phone_change?: string;
+    /** The number a phone change is going to (models.User PhoneChange is serialised as new_phone). */
+    new_phone?: string;
     confirmation_sent_at?: string | null;
     phone_change_sent_at?: string | null;
+    last_sign_in_at?: string | null;
   } | null;
   sms?: { otp?: string; phone?: string } | null;
 };
@@ -302,16 +303,34 @@ export function maskPhone(phone: string): string {
   return `+${cc}${'*'.repeat(Math.max(rest.length - 4, 0))}${rest.slice(-4)}`;
 }
 
-export type Parsed = { to: string; code: string; previousSentAt: string | null };
+export type Parsed = {
+  to: string;
+  code: string;
+  kind: 'login' | 'phone_change';
+  /** When the previous code of this kind went out, if it is still unused (null: start at the first route). */
+  previousSentAt: string | null;
+};
 
-/** Destination (+E.164) and code from the hook body. sms.phone is the number being verified. */
+const ms = (iso: string | null | undefined): number => (iso ? Date.parse(iso) : NaN);
+
+/**
+ * Destination (+E.164) and code from the hook body. sms.phone is the number being verified.
+ * A login code counts as a resend only while the previous code is unused: Auth never clears
+ * confirmation_sent_at when a code is verified, but it moves last_sign_in_at, so a person who logged
+ * in on the web at 10:00 and opens the app at 10:04 starts at the first route again. (Reauthentication
+ * codes cannot be told apart from login codes here; the apps never ask for one.)
+ */
 export function parsePayload(p: HookPayload): Parsed | null {
   const digits = String(p.sms?.phone || p.user?.phone || '').replace(/\D/g, '');
   const code = String(p.sms?.otp ?? '');
   if (!/^[1-9]\d{7,14}$/.test(digits) || !/^\d{4,10}$/.test(code)) return null;
-  const isPhoneChange = !!p.user?.phone_change && p.user.phone_change.replace(/\D/g, '') === digits;
-  const previousSentAt = (isPhoneChange ? p.user?.phone_change_sent_at : p.user?.confirmation_sent_at) ?? null;
-  return { to: `+${digits}`, code, previousSentAt };
+  const newPhone = String(p.user?.new_phone ?? '').replace(/\D/g, '');
+  if (newPhone && newPhone === digits) {
+    return { to: `+${digits}`, code, kind: 'phone_change', previousSentAt: p.user?.phone_change_sent_at ?? null };
+  }
+  const sentAt = p.user?.confirmation_sent_at ?? null;
+  const used = ms(p.user?.last_sign_in_at) >= ms(sentAt);
+  return { to: `+${digits}`, code, kind: 'login', previousSentAt: used ? null : sentAt };
 }
 
 export function countryAllowed(to: string, allowed: string[]): boolean {
@@ -478,8 +497,10 @@ export type HookDeps = SendDeps & {
   now: () => Date;
   /** One line per request, already masked. */
   log: (entry: Record<string, unknown>) => void;
-  /** Error reporting (codes only). */
+  /** Error reporting (codes only). Tags with once: 'true' are sent once per isolate (reportOncePerCode). */
   report: (error: Error, tags: Record<string, string>) => void;
+  /** Webhook ids already handled (one per isolate). Without it, replays are not checked. */
+  replay?: ReplayGuard;
 };
 
 const MAX_BODY = 64 * 1024;
@@ -489,6 +510,24 @@ function hookError(code: HookErrorCode, httpCode: number): HookResponse {
   return { status: 200, body: { error: { http_code: httpCode, message: code } } };
 }
 
+const UNAUTHORIZED: HookResponse = { status: 401, body: { error: 'invalid_signature' } };
+
+/**
+ * Wraps a reporter so that reports tagged once: 'true' go out once per code for the life of the
+ * isolate. Unsigned requests to a deployed but unconfigured hook then cannot flood Sentry.
+ */
+export function reportOncePerCode(report: HookDeps['report']): HookDeps['report'] {
+  const sent = new Set<string>();
+  return (error, tags) => {
+    if (tags.once === 'true') {
+      const key = tags.code ?? '';
+      if (sent.has(key)) return;
+      sent.add(key);
+    }
+    report(error, tags);
+  };
+}
+
 export async function handleSendSmsHook(
   req: { method: string; headers: (name: string) => string | null; body: string },
   deps: HookDeps,
@@ -496,28 +535,35 @@ export async function handleSendSmsHook(
   if (req.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
   if (req.body.length > MAX_BODY) return { status: 413, body: { error: 'payload_too_large' } };
 
-  // Secrets first: an unsigned request learns nothing about our configuration.
+  // Secrets first. Missing or refused secrets answer exactly like a bad signature, so an unsigned
+  // request learns nothing about our configuration; the misconfiguration is logged and reported once.
   let keys: Uint8Array[];
   let cfg: AuthSmsConfig;
   try {
     const rawSecrets = deps.env('SEND_SMS_HOOK_SECRETS');
     keys = parseHookSecrets(rawSecrets);
-    if (!authSmsRunsLocally(deps.env) && (rawSecrets ?? '').split('|').some((s) => s.trim() === LOCAL_PLACEHOLDER_HOOK_SECRET)) {
+    if (!mockAllowed(deps.env) && (rawSecrets ?? '').split('|').some((s) => s.trim() === LOCAL_PLACEHOLDER_HOOK_SECRET)) {
       throw new AuthSmsConfigError('sms_not_configured', 'the published local hook secret is refused outside a local stack');
     }
   } catch (e) {
-    deps.report(e as Error, { code: 'hook_secret' });
+    deps.report(e as Error, { code: 'hook_secret', once: 'true' });
     deps.log({ event: 'refused', reason: 'hook_secret_not_configured' });
-    return { status: 500, body: { error: 'hook_not_configured' } };
+    return UNAUTHORIZED;
   }
 
-  const verdict = await verifyWebhook(
-    { id: req.headers('webhook-id'), timestamp: req.headers('webhook-timestamp'), signature: req.headers('webhook-signature') },
-    req.body, keys, Math.floor(deps.now().getTime() / 1000),
-  );
+  const now = deps.now();
+  const id = req.headers('webhook-id');
+  const timestamp = req.headers('webhook-timestamp');
+  const verdict = await verifyWebhook({ id, timestamp, signature: req.headers('webhook-signature') },
+    req.body, keys, Math.floor(now.getTime() / 1000));
   if (!verdict.ok) {
     deps.log({ event: 'refused', reason: verdict.reason });
-    return { status: 401, body: { error: 'invalid_signature' } };
+    return UNAUTHORIZED;
+  }
+  // A valid signature stays valid until timestamp + tolerance: remember the id that long.
+  if (deps.replay && !deps.replay.firstSeen(id!, (Number(timestamp) + WEBHOOK_TOLERANCE_SECONDS + 1) * 1000, now.getTime())) {
+    deps.log({ event: 'refused', reason: 'replayed' });
+    return { status: 409, body: { error: 'replayed' } };
   }
 
   try {
@@ -545,11 +591,11 @@ export async function handleSendSmsHook(
     return hookError('phone_not_allowed', 400);
   }
 
-  const routes = orderRoutes(cfg.routes, parsed.previousSentAt, deps.now(), cfg.escalateSeconds);
+  const routes = orderRoutes(cfg.routes, parsed.previousSentAt, now, cfg.escalateSeconds);
   const outcome = await sendCode(cfg, routes, parsed.to, parsed.code, deps);
   const attempts = outcome.attempts.map((a) => `${a.channel}:${a.provider}:${a.ok ? 'ok' : a.error}`);
   if (outcome.ok) {
-    deps.log({ event: 'sent', mode: cfg.mode, channel: outcome.route.channel, provider: outcome.route.provider, to: masked, resend: routes[0] !== cfg.routes[0], attempts });
+    deps.log({ event: 'sent', mode: cfg.mode, kind: parsed.kind, channel: outcome.route.channel, provider: outcome.route.provider, to: masked, resend: routes[0] !== cfg.routes[0], attempts });
     return { status: 200, body: {} };
   }
   deps.log({ event: 'failed', reason: 'sms_send_failed', mode: cfg.mode, to: masked, attempts });

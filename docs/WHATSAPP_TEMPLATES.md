@@ -67,7 +67,7 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 
 | Name | Category | Purpose |
 |---|---|---|
-| `otp_v1` | Authentication | Not needed on this number: login codes go through a Twilio WhatsApp sender and a Twilio-hosted authentication template (`tiffin_login_code`, Content SID `HX…`), set up per docs/LOGIN.md (D-126). |
+| `otp_v1` | Authentication | Not needed on this number: login codes go through a Twilio WhatsApp sender and a Twilio-hosted authentication template (`tiffin_login_code`, Content SID `HX…`), set up per docs/LOGIN.md (D-134). |
 
 ## P5 routing to payers
 

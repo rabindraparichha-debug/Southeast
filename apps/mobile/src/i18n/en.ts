@@ -11,7 +11,7 @@ export const en = {
   'login.checking': 'Checking…',
   'login.changeNumber': 'Use a different number',
   'login.devHint': 'Local dev: seed numbers 90000 00001 … use OTP 123456',
-  // Login by phone code (docs/LOGIN.md, D-126); keep in step with loginErrorText in apps/web/src/lib/errors.ts.
+  // Login by phone code (docs/LOGIN.md, D-134); keep in step with loginErrorText in apps/web/src/lib/errors.ts.
   'login.send.whatsapp': 'Get code on WhatsApp',
   'login.send.sms': 'Send code by SMS',
   'login.instead.whatsapp': 'Get code on WhatsApp instead',
@@ -22,6 +22,12 @@ export const en = {
   'login.sent.sms': 'Enter the 6-digit code sent by SMS to {phone}',
   'login.resent.whatsapp': 'New code sent on WhatsApp.',
   'login.resent.sms': 'New code sent by SMS.',
+  // Channel-neutral texts (EXPO_PUBLIC_LOGIN_DELIVERY=hook with two channels: the server picks).
+  'login.send.any': 'Get code',
+  'login.sendHint.any': 'We send it on WhatsApp or by SMS.',
+  'login.sent.any': 'Enter the 6-digit code sent on WhatsApp or by SMS to {phone}',
+  'login.resend.any': 'Send a new code',
+  'login.resent.any': 'New code sent on WhatsApp or by SMS.',
   'login.smsLater': 'No WhatsApp on this number? You can ask for an SMS on the next screen.',
   'login.waitResend': 'Didn’t get it? You can ask again in {seconds}s',
   'login.tryAgainIn': 'Try again in {seconds}s',

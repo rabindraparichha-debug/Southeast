@@ -7,7 +7,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-001 | Greenfield build | Assumed | — |
 | D-002 | Billing model: prepaid meal balance | ⏳ PENDING | M2, M3 |
 | D-003 | Razorpay Route, confirm merchant-of-record | ⏳ PENDING | M3 |
-| D-004 | OTP delivery channel | Resolved by D-126 (owner, 2026-11-06) | Pilot |
+| D-004 | OTP delivery channel | Resolved by D-134 (owner, 2026-11-06) | Pilot |
 | D-005 | FSSAI gates public listing, not OS use | ⏳ PENDING | M1, M7 |
 | D-006 | Vendor app languages | ⏳ PENDING | M1+ |
 | D-007 | Slots: lunch and dinner only | ⏳ PENDING | M2 |
@@ -46,7 +46,8 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-106 | Kitchen switching: platform customers only, admin approves, flag off | ⏳ PENDING | P6 |
 | D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
 | D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
-| D-126 | Login codes: WhatsApp through Twilio first, SMS after DLT; Telnyx via the Send SMS hook | Decided (owner) | Wave 2 |
+| D-134 | Login codes: WhatsApp through Twilio first, SMS after DLT; Telnyx via the Send SMS hook | Decided (owner: providers) | Wave 2 |
+| D-135 | Who may create a login (signup policy): open today; invited/approved numbers or CAPTCHA proposed | ⏳ PENDING | Before the first hosted login |
 
 ---
 
@@ -69,7 +70,7 @@ The folder and repo were empty at audit time (see `docs/AUDIT.md`). You said "st
 - Before M3, get written confirmation from Razorpay on two points: who is merchant of record, and whether Subscriptions (UPI Autopay) work with Route transfers.
 - `kitchen_payout_accounts` holds one linked account per kitchen. Only platform/service code can write to it.
 
-### D-004 OTP delivery (resolved by D-126)
+### D-004 OTP delivery (resolved by D-134)
 - **Local development:** fixed test OTP `123456` for seed numbers (`supabase/config.toml [auth.sms.test_otp]`). No SMS is sent.
 - **Production proposal:**
   - WhatsApp OTP through Supabase's Send SMS hook (needs a Meta authentication template).
@@ -732,22 +733,34 @@ Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14�
 
 ## Login codes (wave 2, 2026-11-06)
 
-### D-126 Login codes: WhatsApp through Twilio first, SMS after DLT (owner, 2026-11-06; resolves D-004)
-- **Owner:** "sms login we can go with twilio, whatsapp as well … also telnyx". Twilio sends WhatsApp codes now, because a WhatsApp authentication template needs no TRAI DLT. SMS (Twilio, or Telnyx) is the fallback once DLT is approved.
+### D-134 Login codes: WhatsApp through Twilio first, SMS after DLT (owner, 2026-11-06; resolves D-004)
+Numbered D-134 because D-119 (wave 1) and D-126 – D-133 (wave 3) were taken while this was built.
+- **Owner (providers only):** "sms login we can go with twilio, whatsapp as well … also telnyx". Twilio sends WhatsApp codes now, because a WhatsApp authentication template needs no TRAI DLT. SMS (Twilio, or Telnyx) is the fallback once DLT is approved.
+
+The rest of this entry is how I built that; the signup policy is a separate, open question (D-135).
 - **Default path: Supabase's built-in Twilio provider.** No code runs in the login path.
-  - The apps send `options.channel` `whatsapp` or `sms`.
-  - Twilio sends WhatsApp with the approved authentication template (dashboard "Twilio Content SID") and SMS from the same Messaging Service.
+  - The apps send `options.channel` `whatsapp` or `sms`, and the provider honours it exactly.
+  - Twilio sends WhatsApp with the approved authentication template (dashboard "Twilio Content SID") and SMS from the same Messaging Service. Twilio is configured with the Account SID and the Auth Token (an API key secret does not work with the built-in provider).
   - Until DLT is approved the apps offer WhatsApp only.
 - **Alternative: the Send SMS hook → `auth-send-sms`** (built, off by default). Use it for Telnyx SMS, for automatic fallback across providers within Supabase's 5 s hook budget, or for a server-side +91-only rule.
-  - Supabase does not pass the requested channel to hooks. The function therefore follows `AUTH_SMS_ROUTES` (default `whatsapp,sms`), and a code asked for again within 10 minutes starts at the next route.
-  - Mock mode runs only on a local stack (the `PLATFORM_ENV` rule), and the published local hook secret is refused elsewhere.
+  - Supabase does not pass the requested channel to hooks. The function therefore follows `AUTH_SMS_ROUTES` (default `whatsapp,sms`; `whatsapp` alone until DLT), and a code asked for again within 10 minutes, while the previous one is still unused, starts at the next route.
+  - Because the screen cannot know the channel, the apps run channel-neutral in hook mode (`LOGIN_DELIVERY=hook`: one "Get code" / "Send a new code", both channels named).
+  - Mock mode runs only on a local stack (`_shared/platform.ts`), and the published local hook secret is refused elsewhere. Missing secrets answer like a bad signature and are reported once per instance; a replayed delivery (same `webhook-id`) is refused.
   - It never logs the code or a full number.
 - **Apps:**
-  - `NEXT_PUBLIC_LOGIN_CHANNELS` / `EXPO_PUBLIC_LOGIN_CHANNELS` (default `sms`) decide which channels are offered.
+  - `NEXT_PUBLIC_LOGIN_CHANNELS` / `EXPO_PUBLIC_LOGIN_CHANNELS` (default `sms`) decide which channels are offered; `…_LOGIN_DELIVERY` (`channel` or `hook`) says who picks.
   - "Get code on WhatsApp" is the default, with "Send code by SMS instead" after a 30 s countdown (or at once if sending failed).
   - Both channels verify as type `sms`.
-- **Hosted auth settings:** "Confirm phone" on (with it off, a phone + password signup is confirmed without a code, and the SMS rate limit is skipped).
-  - Signups stay open, so invited staff and riders can create their accounts; a `before_user_created` allowlist is a follow-up.
+- **Hosted auth settings:** "Confirm phone" on. With it off, a phone + password signup is confirmed without a code and the SMS rate limit is skipped. The code-side guard (`claim_invites` accepts only a session signed in with a code, JWT `amr` `otp`) comes with the wave 2 database work; `invite_member`'s direct add of an existing account still relies on this setting.
   - Geo permissions are set to India only.
   - Test numbers are removed at launch, except D-114's.
 - Setup steps for Twilio WhatsApp, Twilio SMS + DLT and Telnyx are in docs/LOGIN.md.
+
+### D-135 Who may create a login (signup policy) ⏳ PENDING (before the first hosted login)
+Today signups are open: any number that receives a code gets an account, so invited staff and riders can join at their first login.
+- **Why it needs your call:** Supabase's "SMS sent per hour" limit is one bucket for the whole project. A script asking for codes for random +91 numbers can use it up; for the rest of the hour nobody (owners, staff, riders) can get a login code. Each request also costs a message and creates an empty account. A throttle in our hook cannot prevent this, because Supabase counts the code before calling the hook.
+- **Options:**
+  1. *Invited and approved numbers only* (the audit's Phase 1 recommendation, my proposal for the closed pilot): a `before_user_created` hook allowing a number only with a pending staff/rider invite, an approved vendor application or a platform allowlist entry. Not built; it needs a migration and pgTAP, and should reuse the approval data from the wave 4 vendor gate.
+  2. *CAPTCHA on login* (Turnstile or hCaptcha through Supabase, a `captchaToken` from both login screens; the mobile app needs a WebView widget). Not built. Best once signups open to the public.
+  3. *Open* (today): rate limits plus India-only rules, and watch the auth logs.
+- Until you decide, the default stays open, with the hourly SMS limit set above the real login peak (docs/LOGIN.md, "Signup policy").

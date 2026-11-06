@@ -1,4 +1,4 @@
-// Phone-code login helpers shared by the web and mobile login screens (docs/LOGIN.md, D-126).
+// Phone-code login helpers shared by the web and mobile login screens (docs/LOGIN.md, D-134).
 
 export type LoginChannel = 'whatsapp' | 'sms';
 
@@ -22,6 +22,28 @@ export function parseLoginChannels(raw: string | null | undefined): LoginChannel
 /** The channel to offer as "instead", if any. */
 export function alternateChannel(channels: LoginChannel[], current: LoginChannel): LoginChannel | null {
   return channels.find((c) => c !== current) ?? null;
+}
+
+/**
+ * NEXT_PUBLIC_LOGIN_DELIVERY / EXPO_PUBLIC_LOGIN_DELIVERY: who picks the channel.
+ * - 'channel' (default): Supabase's built-in Twilio provider sends on the channel the person picked
+ *   (options.channel), so every button is honoured exactly.
+ * - 'hook': the Send SMS hook (auth-send-sms) sends. Supabase does not pass the picked channel to it;
+ *   the hook follows AUTH_SMS_ROUTES, falls back within one request and moves a resend to the next route.
+ */
+export type LoginDelivery = 'channel' | 'hook';
+
+export function parseLoginDelivery(raw: string | null | undefined): LoginDelivery {
+  return String(raw ?? '').trim().toLowerCase() === 'hook' ? 'hook' : 'channel';
+}
+
+/**
+ * True when the screen cannot know which channel a code went on: the hook sends and more than one
+ * channel is in play. The screen then offers one "Get code" / "Send a new code" and names both
+ * channels, instead of per-channel buttons it could not honour.
+ */
+export function channelNeutral(channels: LoginChannel[], delivery: LoginDelivery): boolean {
+  return delivery === 'hook' && channels.length > 1;
 }
 
 /** Auth's "For security purposes, you can only request this after 37 seconds." → 37. */

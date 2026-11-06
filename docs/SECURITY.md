@@ -37,8 +37,10 @@ Reviewed on 2026-10-30, at the end of M7. Scope: database, API, Edge Functions, 
 ## Before going live (checklist)
 
 - [ ] Create the Vault secrets in the hosted project (`phone_encryption_key`, `phone_hash_key`, `functions_base_url`, `service_role_key`, `public_web_url`) from a password manager; keep the two phone keys backed up offline.
-- [ ] Remove all `test_otp` entries; configure the production OTP channel (docs/LOGIN.md, D-126). Only exception: one app-store reviewer number with a random code and a short expiry during a review, removed afterwards (D-114).
-- [ ] Auth settings per docs/LOGIN.md "Hosted auth settings": **Confirm phone ON** (with it off, a phone + password signup is confirmed without a code), signups open only as described there, SMS rate limit and resend interval set, Twilio Geo Permissions / Telnyx destinations India only.
+- [ ] Remove all `test_otp` entries; configure the production OTP channel (docs/LOGIN.md, D-134). Only exception: one app-store reviewer number with a random code and a short expiry during a review, removed afterwards (D-114).
+- [ ] Auth settings per docs/LOGIN.md "Hosted auth settings": **Confirm phone ON** (with it off, a phone + password signup is confirmed without a code), SMS rate limit and resend interval set, Twilio Geo Permissions / Telnyx destinations India only.
+- [ ] Signup policy decided (D-135, pending): with open signups a script can use up the project-wide hourly SMS limit and block every login for the rest of the hour. Invited/approved numbers only (`before_user_created`) or login CAPTCHA, neither built yet.
+- [ ] If the Send SMS hook is on: `LOGIN_DELIVERY=hook` in both apps, `AUTH_SMS_ROUTES=whatsapp` until DLT is approved, and the hook secret only in the dashboard and `supabase secrets set`.
 - [ ] Set Edge Function secrets with `supabase secrets set` (never in code); keep `RAZORPAY_ALLOW_LIVE` unset until the owner approves live keys.
 - [ ] Restrict the Supabase dashboard to named team members with 2FA; use separate projects for staging and production.
 - [ ] Enable Supabase PITR or daily backups and run `pnpm db:restore-drill` against a copy monthly (docs/OPERATIONS.md).

@@ -3,7 +3,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  RESEND_SECONDS, alternateChannel, formatPhone, loginErrorKey, normalizePhone, retryAfterSeconds, type LoginChannel,
+  RESEND_SECONDS, alternateChannel, channelNeutral, formatPhone, loginErrorKey, normalizePhone, retryAfterSeconds,
+  type LoginChannel, type LoginDelivery,
 } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { loginErrorText } from '@/lib/errors';
@@ -11,14 +12,18 @@ import { Alert, Button, Field, Input } from '@/components/ui';
 
 // Login by phone code (docs/LOGIN.md). `channels` comes from NEXT_PUBLIC_LOGIN_CHANNELS: the first is
 // the default, the other is offered as "instead" once a code was asked for (or sending failed).
+// `delivery` (NEXT_PUBLIC_LOGIN_DELIVERY): with the Send SMS hook Supabase does not pass the picked
+// channel on, so with two channels the screen is channel-neutral (one "Get code", both channels named).
 const SEND_LABEL: Record<LoginChannel, string> = { whatsapp: 'Get code on WhatsApp', sms: 'Send code by SMS' };
 const INSTEAD_LABEL: Record<LoginChannel, string> = { whatsapp: 'Get code on WhatsApp instead', sms: 'Send code by SMS instead' };
 const RESEND_LABEL: Record<LoginChannel, string> = { whatsapp: 'Resend on WhatsApp', sms: 'Resend SMS' };
 const SENT_BY: Record<LoginChannel, string> = { whatsapp: 'on WhatsApp', sms: 'by SMS' };
+const ANY_CHANNEL = 'on WhatsApp or by SMS';
 
-export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; channels: LoginChannel[] }) {
+export function LoginForm({ showDevHint, channels, delivery }: { showDevHint: boolean; channels: LoginChannel[]; delivery: LoginDelivery }) {
   const router = useRouter();
   const primary = channels[0] ?? 'sms';
+  const neutral = channelNeutral(channels, delivery);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneInput, setPhoneInput] = useState('');
   const [phone, setPhone] = useState('');
@@ -64,7 +69,7 @@ export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; cha
   }
 
   async function resend(via: LoginChannel) {
-    if (await sendCode(via, phone)) setNotice(`New code sent ${SENT_BY[via]}.`);
+    if (await sendCode(via, phone)) setNotice(`New code sent ${neutral ? ANY_CHANNEL : SENT_BY[via]}.`);
   }
 
   async function verify(e: FormEvent) {
@@ -85,7 +90,8 @@ export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; cha
     router.refresh();
   }
 
-  const other = alternateChannel(channels, step === 'phone' ? primary : channel);
+  // Channel-neutral: no "instead" button (the hook already falls back and moves a resend on by itself).
+  const other = neutral ? null : alternateChannel(channels, step === 'phone' ? primary : channel);
 
   if (step === 'phone') {
     return (
@@ -107,8 +113,9 @@ export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; cha
         </Field>
         <Alert>{error}</Alert>
         <Button type="submit" className="w-full" disabled={busy || wait > 0}>
-          {busy ? 'Sending…' : wait > 0 ? `Try again in ${wait}s` : SEND_LABEL[primary]}
+          {busy ? 'Sending…' : wait > 0 ? `Try again in ${wait}s` : neutral ? 'Get code' : SEND_LABEL[primary]}
         </Button>
+        {neutral && <p className="text-center text-xs text-ink-500">We send it {ANY_CHANNEL}.</p>}
         {other && sendFailed && (
           <button type="button" className="w-full text-sm text-ink-600 hover:text-ink-900" disabled={busy}
             onClick={() => void start(other)}>
@@ -128,7 +135,7 @@ export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; cha
   return (
     <form onSubmit={verify} className="space-y-4">
       <p className="text-sm text-ink-600">
-        Enter the 6-digit code sent {SENT_BY[channel]} to <strong>{formatPhone(phone)}</strong>
+        Enter the 6-digit code sent {neutral ? ANY_CHANNEL : SENT_BY[channel]} to <strong>{formatPhone(phone)}</strong>
       </p>
       <Field label="Code">
         <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} autoFocus required />
@@ -149,7 +156,7 @@ export function LoginForm({ showDevHint, channels }: { showDevHint: boolean; cha
               </button>
             )}
             <button type="button" className="block w-full text-ink-600 hover:text-ink-900" disabled={busy} onClick={() => void resend(channel)}>
-              {RESEND_LABEL[channel]}
+              {neutral ? 'Send a new code' : RESEND_LABEL[channel]}
             </button>
           </>
         )}

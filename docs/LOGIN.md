@@ -1,6 +1,6 @@
 # Login codes (WhatsApp and SMS)
 
-Owners, staff and riders log in with their mobile number and a 6-digit code. This page is the setup guide for a hosted Supabase project: which provider sends the code, how to set each one up, and the auth settings that keep login safe. The decision is D-126 (it resolves D-004).
+Owners, staff and riders log in with their mobile number and a 6-digit code. This page is the setup guide for a hosted Supabase project: which provider sends the code, how to set each one up, and the auth settings that keep login safe. The decision is D-134 (it resolves D-004).
 
 **Contents**
 - [Summary and recommendation](#summary-and-recommendation)
@@ -26,18 +26,19 @@ Owners, staff and riders log in with their mobile number and a 6-digit code. Thi
    - you want automatic fallback across providers (WhatsApp through Twilio fails, so SMS through Telnyx is tried in the same request);
    - you want the server to refuse non-Indian numbers.
 
-   Everything is built and tested; switching to the hook is a dashboard setting plus secrets.
+   Everything is built and tested; switching to the hook is a dashboard setting plus secrets, and `LOGIN_DELIVERY=hook` in both apps (the hook cannot honour a per-channel button, so the screens stop naming one channel).
 
 | | Built-in Twilio (a, b) | Send SMS hook → `auth-send-sms` (c) |
 |---|---|---|
 | Code in the login path | None (Supabase sends) | Ours (Edge Function, 5 s budget) |
-| Channel the person picks | Honoured exactly (`options.channel`) | Not passed to hooks by Supabase. The hook uses its route order, and a code asked for again within 10 minutes moves to the next route |
+| Channel the person picks | Honoured exactly (`options.channel`) | Not passed to hooks by Supabase. The hook uses its route order, and a code asked for again within 10 minutes, while the previous one is unused, moves to the next route |
+| Login screen (`LOGIN_DELIVERY`) | `channel` (default): "Get code on WhatsApp", "Send code by SMS instead" | `hook`: with two channels, one "Get code" / "Send a new code", and the text names both channels (the screen cannot know which one was used) |
 | WhatsApp | Twilio, authentication template (Content SID) | Twilio, same template |
 | SMS | Twilio Messaging Service | Twilio or Telnyx |
 | Automatic fallback in one request | No (the person taps "SMS instead") | Yes, within the 5 s budget |
 | Non-Indian numbers | Block with Twilio Geo Permissions | Refused by the function (`AUTH_SMS_ALLOWED_COUNTRY_CODES=91`), plus provider settings |
 
-Whichever path you use, the apps behave the same. Codes are always verified with `verifyOtp({ phone, token, type: 'sms' })`, also for WhatsApp, because Supabase has only `sms` and `phone_change` as phone types.
+The two paths differ on the login screen: only the built-in provider honours the person's pick, so set `LOGIN_DELIVERY=hook` in both apps when the hook is on (section c, step 8). Codes are always verified with `verifyOtp({ phone, token, type: 'sms' })`, also for WhatsApp, because Supabase has only `sms` and `phone_change` as phone types.
 
 ## How it works
 
@@ -50,7 +51,9 @@ Whichever path you use, the apps behave the same. Codes are always verified with
 - **Send SMS hook:**
   - When it is on, Supabase calls our HTTPS function instead of any provider.
   - The body is `{ user, sms: { otp, phone } }`, signed with Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256 of "id.timestamp.body">`).
-  - **The body does not include the channel the app asked for.** So `auth-send-sms` works from `AUTH_SMS_ROUTES` (default `whatsapp,sms`) and moves to the next route when the previous code is less than `AUTH_SMS_ESCALATE_SECONDS` old (`user.confirmation_sent_at`, which Auth sends before updating it). The apps' "Send code by SMS instead" is that resend.
+  - **The body does not include the channel the app asked for.** So `auth-send-sms` works from `AUTH_SMS_ROUTES` (default `whatsapp,sms`) and moves to the next route when the previous code is less than `AUTH_SMS_ESCALATE_SECONDS` old and still unused (`user.confirmation_sent_at`, which Auth sends before updating it, later than `user.last_sign_in_at`). Auth never clears `confirmation_sent_at` when a code is used, so without the `last_sign_in_at` check someone who logged in on the web at 10:00 and opens the app at 10:04 would be moved to SMS.
+  - For a phone change the hook reads `user.new_phone` and `phone_change_sent_at` (Auth's JSON names). Reauthentication codes look like login codes to the hook; the apps never ask for one.
+  - Because the apps cannot know which route a code went on, they run channel-neutral in hook mode (`LOGIN_DELIVERY=hook`, see [Apps](#apps)).
 - **Test numbers** (`[auth.sms.test_otp]`) never reach a provider or the hook: Supabase answers them before sending.
 - **Codes** are 6 digits. A new code needs the minimum interval (`max_frequency`) to have passed. Wrong or expired codes return `otp_expired` ("Token has expired or is invalid").
 
@@ -79,13 +82,13 @@ Use a different number from the Phase 2 customer WhatsApp number (M4 runs on Met
    - **Enable Phone provider:** on.
    - **SMS provider:** Twilio.
    - **Twilio Account SID:** `AC…`.
-   - **Twilio Auth Token:** the token (or an API key secret you rotate).
+   - **Twilio Auth Token:** the account's primary Auth Token. An API key secret does **not** work: Supabase signs in to Twilio as `Account SID : Auth Token`, while an API key must sign in as `SK… : secret`, so every code would fail with `sms_send_failed` (Twilio error 20003). To rotate, create the secondary Auth Token in the Twilio Console, put it here, then promote it to primary.
    - **Twilio Message Service SID:** the `MG…` SID. While you use WhatsApp only, the WhatsApp sender's number (`+91…`) also works here.
    - **Twilio Content SID:** the `HX…` SID. Without it, WhatsApp falls back to a free-form body, which Meta refuses outside a 24-hour chat.
    - **Enable phone confirmations:** **on** (see [security](#hosted-auth-settings-security)).
    - **SMS OTP expiry:** 600 s. **SMS OTP length:** 6.
    - **SMS message:** `{{ .Code }} is your Tiffin OS login code. Do not share it with anyone.` (WhatsApp uses the template instead; this text is for SMS and must match DLT.)
-   - The CLI's `config.toml` has no key for the Content SID, so set it in the dashboard (or with the Management API field `sms_twilio_content_sid`).
+   - In `config.toml` the same value is `[auth.sms.twilio] content_sid` (this repo reads it from `SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID`, unset locally); the Management API field is `sms_twilio_content_sid`. CLI 2.122.0 accepts the key for `config push` but does not pass it to the local Auth container (checked: the container gets account SID, auth token and message service SID only), so a local stack cannot send the WhatsApp template.
 6. **Apps:** set `NEXT_PUBLIC_LOGIN_CHANNELS=whatsapp` (web host) and `EXPO_PUBLIC_LOGIN_CHANNELS=whatsapp` (EAS `production` and `preview` environments, then rebuild).
 7. **Try it:** log in with your own number. Twilio Console → Monitor → Messaging logs should show a WhatsApp message *delivered*.
 
@@ -113,10 +116,12 @@ Every commercial SMS to an Indian number, OTPs included, must come from a DLT-re
 ## (c) Telnyx (or automatic fallback) through the Send SMS hook
 
 `supabase/functions/auth-send-sms` (logic in `supabase/functions/_shared/auth-sms.ts`, tests in `tests/integration/auth-sms.test.ts`) does the following:
-1. checks the Standard Webhooks signature with `SEND_SMS_HOOK_SECRETS`;
+1. checks the Standard Webhooks signature with `SEND_SMS_HOOK_SECRETS`, and refuses a delivery whose `webhook-id` it has already handled (a replay) until that signature expires;
 2. refuses numbers outside `AUTH_SMS_ALLOWED_COUNTRY_CODES` (default `91`);
 3. sends the code on each route of `AUTH_SMS_ROUTES` until a provider accepts it (2 s per call, 4.3 s in total, because Supabase gives a hook about 5 s);
 4. logs only the channel, provider, masked number (`+91******0042`) and error codes, never the code. Failures go to Sentry through `_shared/monitor.ts`.
+
+**Before DLT is approved, set `AUTH_SMS_ROUTES=whatsapp`.** Indian operators silently drop an unregistered SMS after the provider has already answered "accepted", so an SMS route would count as a success that never arrives: the in-request fallback and the resend would both end there. Add the SMS route (and `LOGIN_CHANNELS=whatsapp,sms`) only once DLT is done.
 
 If every route fails, Auth answers the app with `sms_send_failed`; if the function is misconfigured, with `sms_not_configured`.
 
@@ -148,12 +153,16 @@ If every route fails, Auth answers the app with `sms_send_failed`; if the functi
    - Click *Generate secret* and copy the `v1,whsec_…` value into `SEND_SMS_HOOK_SECRETS` (step 4).
    - Save. While the hook is on it replaces the built-in provider, but keep the Phone provider enabled.
 7. **Rotation:** Supabase signs with every secret it holds. The function accepts any of several values separated by `|` in `SEND_SMS_HOOK_SECRETS`, so add the new secret to the function first, then to the dashboard, then remove the old one.
-8. **Apps:** `LOGIN_CHANNELS=whatsapp,sms` (or `sms`). On the hook, the first code goes by the first route and "Send code by SMS instead" (a resend) moves to the next.
+8. **Apps:** set `LOGIN_DELIVERY=hook` and `LOGIN_CHANNELS` to the channels in `AUTH_SMS_ROUTES`, in the same order (`whatsapp` before DLT, `whatsapp,sms` after), in both apps (`NEXT_PUBLIC_…` on the web host, `EXPO_PUBLIC_…` in EAS, then rebuild).
+   - With two channels the screens are channel-neutral: "Get code", "Enter the 6-digit code sent on WhatsApp or by SMS", and one "Send a new code" button. They cannot name the channel, because the hook may fall back within the request or move a resend to the next route.
+   - With one channel the screen names it, which is accurate because the hook has only that route.
 
 **Built-in safety:**
-- Mock mode is refused unless `PLATFORM_ENV=local` and the function runs on a local stack.
+- Mock mode is refused unless the function runs on a local stack (`PLATFORM_ENV`, `_shared/platform.ts`, the same rule as every other mock).
 - The published local secret from `.env.example` is refused outside a local stack.
 - The function URL is public, but it does nothing without a valid signature, and the signature must be less than 5 minutes old.
+- A deployed function with no `SEND_SMS_HOOK_SECRETS` (the built-in path needs none) answers every request exactly like a bad signature (401), so a caller learns nothing about its configuration. The misconfiguration is logged and sent to Sentry once per function instance, not once per request.
+- Replays: each instance remembers the `webhook-id` of every signed delivery until its signature expires and refuses a second one (409). Supabase signs every attempt, its own retries included, with a new id. This lives in the instance's memory: a replay that reaches a fresh instance can still cause one more send there.
 
 ## Hosted auth settings (security)
 
@@ -163,32 +172,39 @@ Set these on every hosted project (staging and production) before the first outs
   - A phone + password signup is marked confirmed without any code. Checked on the local stack on 2026-11-06: `POST /auth/v1/signup {phone, password}` returned a session with `phone_confirmed_at` set. Such an account could then pick up staff or rider invites for that number.
   - Supabase skips its SMS rate limit for auto-confirmed signups (`supabase/auth` `internal/api/phone.go`).
 
-  The apps never use passwords; with confirmations on, every phone account must prove it holds the number. (A separate change makes `claim_invites` also require `phone_confirmed_at`.)
-- **Signup policy (Phase 1):**
-  - Keep **"Allow new users to sign up" ON**. Invited staff and riders create their account at their first login, and `claim_invites` then adds them to the kitchen. With signups off, Auth refuses them (`otp_disabled`, "Signups not allowed for otp"), and the apps show "This number is not registered yet…".
-  - Keep email and anonymous sign-ins off.
-  - Any number that passes the code check can still create a *draft* kitchen. Drafts are private (D-005) and visible to the founder in /admin.
-  - The stronger option is a follow-up: a `before_user_created` hook that only allows numbers with a pending invite, an approved vendor application or an allowlist entry. It needs a migration and is not built yet.
+  The apps never use passwords; with confirmations on, every phone account must prove it holds the number.
+  - **What the code checks.** `claim_invites` has required `phone_confirmed_at` since M1 (`tenancy.sql`), but that does not help here: an auto-confirmed password signup has it too (`supabase/auth` `signup.go` confirms the phone and opens a session). The code-side guard is that `claim_invites` only accepts a session signed in with a one-time code (JWT `amr` contains `otp`). That guard is part of the wave 2 database work (migration `20261108000200_manager_accountant_roles.sql`, with pgTAP cases for an `amr` `password` session and an `amr` `otp` session); `tests/integration/auth-sms.test.ts` pins what Supabase Auth really puts in `amr` (`otp` after `verifyOtp`, only `password` after an auto-confirmed signup). Until that migration is merged, this dashboard setting is the only protection.
+  - **Not covered by code:** `invite_member` adds an existing account for the invited number straight away (no claim step). With "Confirm phone" on this is safe: a stranger's password signup stays unconfirmed and cannot sign in, and when the real owner of the number first verifies a code, Auth replaces the stranger's password (`signup.go`, existing unconfirmed user). With "Confirm phone" off, an account a stranger made before the invite is added directly. So the setting stays mandatory either way.
+- **Signup policy: ⏳ PENDING your decision (D-135).** Who may create a login is not decided yet; the current default is open.
+  - Today, with **"Allow new users to sign up" ON**, invited staff and riders create their account at their first login and `claim_invites` adds them to the kitchen. With signups off, Auth refuses them (`signup_disabled`, "Signups not allowed for this instance"; the apps show "This number is not registered yet…").
+  - **The risk of open signup:** Supabase's "SMS sent per hour" limit is **one bucket for the whole project**, checked before every code it sends (built-in provider or hook). A script that asks for codes for random +91 numbers, staying under the per-IP limit, uses up the hour's codes. Every real owner, staff member or rider then gets "Please wait a little before asking for another code" (`over_sms_send_rate_limit`) until the hour rolls over: a login outage, for example for a rider at the start of lunch delivery, not only an SMS bill. Each such request also creates an empty account.
+  - **Options** (none is built yet):
+    1. *Invited and approved numbers only* (the audit's Phase 1 recommendation): a `before_user_created` hook that allows a number only with a pending staff or rider invite, an approved vendor application or a platform allowlist entry. It stops scripts creating accounts. It does not stop code requests for numbers that already have an account, so combine it with the rate limits below.
+    2. *CAPTCHA on login*: turn on Supabase's CAPTCHA (Turnstile or hCaptcha) and send `captchaToken` from both login screens. The mobile app needs a WebView-based widget.
+    3. *Open* (today): rely on the rate limits and the India-only rules below, and watch the auth logs.
+  - A per-number or per-IP throttle in `auth-send-sms` would not help the outage: Auth counts the code against its hourly bucket before it calls the hook.
+  - Whatever you choose, keep email and anonymous sign-ins off. Any number that passes the code check can still create a *draft* kitchen; drafts are private (D-005) and visible to the founder in /admin.
 - **Rate limits** (Authentication → Rate Limits):
-  - SMS sent per hour: start at about 60 for the pilot.
+  - SMS sent per hour: start at about 60 for the pilot. Remember this is shared by every login in the project (see above): set it above your real peak (owners, staff and riders logging in around delivery time) and watch for `over_sms_send_rate_limit` in the auth logs.
   - Token verifications: the default.
   - Minimum interval between codes (`max_frequency`): 30 s to 60 s. The apps count down 30 s and then read Supabase's "after N seconds" message.
 - **Abuse limits outside Supabase:**
   - Twilio Geo Permissions: India only.
   - Telnyx whitelisted destinations: India only.
   - `AUTH_SMS_ALLOWED_COUNTRY_CODES=91` on the hook.
-  - Add CAPTCHA (Turnstile or hCaptcha) once both apps send a captcha token.
 - **Test numbers:** remove all `test_otp` numbers at launch. The only exception is D-114's single store-review number, with a random code and an expiry.
 - **Keys:** put the Twilio auth token, Telnyx API key and hook secret only in the dashboard or `supabase secrets set`, and keep them in the password manager. Never put them in the repo, `config.toml` or `.env.example`.
 
 ## Apps
 
 - `NEXT_PUBLIC_LOGIN_CHANNELS` (web) and `EXPO_PUBLIC_LOGIN_CHANNELS` (mobile, inlined at build time) list the channels in order, for example `whatsapp,sms`. Unset means `sms`, which is what the local test numbers use.
+- `NEXT_PUBLIC_LOGIN_DELIVERY` / `EXPO_PUBLIC_LOGIN_DELIVERY`: `channel` (default, the built-in provider honours the person's pick) or `hook` (the Send SMS hook picks; set it whenever the hook is on).
 - **First screen:** "Get code on WhatsApp" (or "Send code by SMS" when SMS is first).
   - If WhatsApp is first and SMS is offered, a line says SMS can be asked for on the next screen.
   - If sending fails, "Send code by SMS instead" appears at once.
 - **Code screen:** a 30 s countdown, then "Send code by SMS instead" and "Resend on WhatsApp". A rate-limit answer restarts the countdown with Supabase's own wait time.
-- **Errors:** mapped in `apps/web/src/lib/errors.ts` (`loginErrorText`) and `apps/mobile/src/i18n/en.ts` (`errors.*`), through `loginErrorKey` in `@tiffin/core`. The mapped errors are `over_sms_send_rate_limit`, `over_request_rate_limit`, `sms_send_failed` (also hook timeouts), `sms_not_configured`, `phone_not_allowed`, `otp_expired` (wrong or expired code), `signup_disabled`/`otp_disabled`, `phone_provider_disabled`, `validation_failed` (bad number) and network failures.
+- **Hook mode with two channels** (`LOGIN_DELIVERY=hook`, `LOGIN_CHANNELS=whatsapp,sms`): "Get code" with "We send it on WhatsApp or by SMS", then "Enter the 6-digit code sent on WhatsApp or by SMS" and one "Send a new code" after the countdown. No "instead" buttons: the hook cannot be told which channel was picked.
+- **Errors:** mapped in `apps/web/src/lib/errors.ts` (`loginErrorText`) and `apps/mobile/src/i18n/en.ts` (`errors.*`), through `loginErrorKey` in `@tiffin/core`. The mapped errors are `over_sms_send_rate_limit`, `over_request_rate_limit`, `sms_send_failed` (also hook timeouts), `sms_not_configured`, `phone_not_allowed`, `otp_expired` (wrong or expired code), `signup_disabled` (signups off; also `otp_disabled`, which Auth uses when `create_user` is false), `phone_provider_disabled`, `validation_failed` (bad number) and network failures.
 - The mobile test-build server switch on the login screen is unchanged.
 
 ## Local development and the local check
@@ -204,7 +220,7 @@ Set these on every hosted project (staging and production) before the first outs
   pnpm db:stop
   SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED=true pnpm db:start
   AUTH_SEND_SMS_E2E=1 pnpm test:integration -- auth-sms           # includes a non-test number through Auth → hook
-  docker logs supabase_edge_runtime_tiffin 2>&1 | grep auth-send-sms   # {"event":"sent","mode":"mock","channel":"whatsapp","to":"+91******…"}
+  docker logs supabase_edge_runtime_tiffin 2>&1 | grep auth-send-sms   # {"event":"sent","mode":"mock","kind":"login","channel":"whatsapp","to":"+91******…"}
   ```
   - Without `AUTH_SEND_SMS_E2E`, the suite still runs the unit tests and checks that the local function accepts a correctly signed request and refuses a tampered one.
   - `AUTH_SMS_MOCK_FAIL=whatsapp` (in `supabase/functions/.env`, then restart) makes the mock fail WhatsApp, so you can see the fallback and error screens.
@@ -217,7 +233,8 @@ Set these on every hosted project (staging and production) before the first outs
 | `sms_send_failed` (built-in) | Twilio refused: a wrong SID or token, the Content SID missing for WhatsApp, Geo Permissions, or a template not approved. See Twilio's Messaging logs. |
 | `sms_send_failed` (hook) | Every route failed. Function logs list the attempts, for example `whatsapp:twilio:twilio_http_400_63016`. |
 | `sms_not_configured` | Hook secrets or provider secrets are missing, or mock mode is on in a hosted project. The function log says which. |
-| "Hook requires authorization token" (500) | The function answered 401: `SEND_SMS_HOOK_SECRETS` does not match the dashboard secret. |
+| "Hook requires authorization token" (500) | The function answered 401: `SEND_SMS_HOOK_SECRETS` is not set in the function or does not match the dashboard secret (or is the published local secret on a hosted project). The function log says `hook_secret_not_configured` for the first case. |
+| `sms_send_failed` with Twilio error 20003 | Wrong Twilio credentials. The built-in provider needs the Account SID and the Auth Token; an API key secret does not work there. |
 | `hook_timeout` | Providers took longer than about 5 s. Lower `AUTH_SMS_TIMEOUT_MS` or use one route. |
 | WhatsApp accepted but never arrives | The number is not on WhatsApp (Twilio error 63003 in the logs, reported later, not at send time). The person taps "Send code by SMS instead". |
 | `otp_expired` | Wrong code, or older than the OTP expiry. |
@@ -230,13 +247,19 @@ Researched 2026-11-06. supabase.com, twilio.com and developers.telnyx.com were n
 - Auth source, `internal/api/sms_provider/twilio.go`: WhatsApp via `ContentSid` + `ContentVariables {"1": otp}`, and the `whatsapp:` prefix.
 - Auth source, `internal/api/sms_provider/sms_provider.go`: WhatsApp only on `twilio` / `twilio_verify`; any channel when the hook is on.
 - Auth source, `internal/api/sms_provider/twilio_verify.go` and `internal/api/verify.go`: the `sms` / `phone_change` types; test OTPs are checked first; Verify checks the code at Twilio.
-- Auth source, `internal/api/phone.go`: test OTPs skip sending; the hook gets `SMS{OTP, Phone}` with no channel; no SMS rate limit when auto-confirming.
+- Auth source, `internal/api/phone.go`: test OTPs skip sending; the hook gets `SMS{OTP, Phone}` with no channel; no SMS rate limit when auto-confirming; the SMS limit (`limiterOpts.Phone.Allow()`) is checked before the provider or the hook is called.
+- Auth source, `internal/api/apilimiter/apilimiter.go`: the SMS limit is one `ratelimit.New(RateLimitSmsSent)` for the whole project (no per-number or per-IP key).
+- Auth source, `internal/models/user.go`: `PhoneChange` is serialised as `new_phone`; `ConfirmPhone` clears only the token and sets `phone_confirmed_at` (it keeps `confirmation_sent_at`); `last_sign_in_at` is part of the user JSON.
+- Auth source, `internal/api/signup.go` and `internal/api/otp.go`: an auto-confirmed phone signup confirms the phone and opens a `password` session; signing up again over an unconfirmed user replaces its password; signups off answer `signup_disabled` ("Signups not allowed for this instance"), and `otp_disabled` only when `create_user` is false; `verify.go` issues `otp` sessions (`models/factor.go`: `otp`, `password`).
+- Auth source, `internal/api/sms_provider/twilio.go`: Basic auth with `AccountSid:AuthToken`.
+- Checked on the local stack (2026-11-06): a test-number `verifyOtp` session has `amr` `[{"method":"otp"}]`; an auto-confirmed `signUp({phone, password})` session has `[{"method":"password"}]`; `last_sign_in_at` moves past `confirmation_sent_at` on verify.
 - Auth source, `internal/hooks/v0hooks/v0hooks.go` (`SendSMSInput`) and `internal/hooks/hookshttp/hookshttp.go`: `webhook-id` / `webhook-timestamp` / `webhook-signature` joined by `", "`, a 5 s timeout, and retry only on 429/503 with `retry-after`.
 - Auth source, `internal/hooks/hookserrors/hookserrors.go`: `{error: {http_code, message}}` in a 200 answer becomes that error.
 - Auth source, `internal/conf/configuration.go`: `content_sid`; secrets separated by `|` in the format `v1,whsec_…`; http only for localhost, 127.0.0.1, ::1 and host.docker.internal.
 - Supabase docs sources: `apps/docs/content/guides/auth/auth-hooks/send-sms-hook.mdx` (payload, example), `auth-hooks.mdx` (Standard Webhooks, the `[auth.hook.send_sms]` keys `enabled` / `uri` / `secrets = "env(…)"`, status codes) and `phone-login.mdx` (`options.channel: 'whatsapp'`, Twilio and Twilio Verify only, `verifyOtp` type `sms`).
 - Supabase CLI 2.122.0 (the version in this repo):
-  - `[auth.sms.twilio]` / `[auth.sms.twilio_verify]` take `account_sid`, `message_service_sid` and `auth_token`, with no Content SID key; the Management API field is `sms_twilio_content_sid`.
+  - `[auth.sms.twilio]` / `[auth.sms.twilio_verify]` take `account_sid`, `message_service_sid` and `auth_token`; `[auth.sms.twilio]` also takes `content_sid` (env override `SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID`, Management API field `sms_twilio_content_sid`), but the local Auth container only gets `GOTRUE_SMS_TWILIO_ACCOUNT_SID`, `…_AUTH_TOKEN` and `…_MESSAGE_SERVICE_SID`.
+  - In `supabase/functions/.env`, a comment after an empty value (`KEY=   # note`) becomes the value; comments go on their own line.
   - It loads `supabase/.env` for `env()` and leaves an unset `env(X)` as literal text.
   - It validates hook secrets against `^v1,whsec_[A-Za-z0-9+/=]{32,88}$`.
   - `SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED` overrides the config value (all checked on the local stack).

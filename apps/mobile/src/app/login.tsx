@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  RESEND_SECONDS, alternateChannel, formatPhone, loginErrorKey, normalizePhone, parseLoginChannels, retryAfterSeconds,
-  type LoginChannel,
+  RESEND_SECONDS, alternateChannel, channelNeutral, formatPhone, loginErrorKey, normalizePhone, parseLoginChannels,
+  parseLoginDelivery, retryAfterSeconds, type LoginChannel,
 } from '@tiffin/core';
 import { loadServerOverride, saveServerOverride, supabase } from '@/lib/supabase';
 import { friendlyError } from '@/lib/errors';
@@ -16,8 +16,13 @@ import { t } from '@/i18n';
 // Login by phone code (docs/LOGIN.md). EXPO_PUBLIC_LOGIN_CHANNELS, e.g. "whatsapp,sms": the first is
 // the default, the other is offered as "instead" once a code was asked for (or sending failed).
 // Inlined at build time; unset means SMS only (the local stack's test numbers).
+// EXPO_PUBLIC_LOGIN_DELIVERY=hook: the Send SMS hook picks the channel (Supabase does not pass the
+// person's pick on), so with two channels the screen is channel-neutral ("Get code", both named).
 const CHANNELS = parseLoginChannels(process.env.EXPO_PUBLIC_LOGIN_CHANNELS);
 const PRIMARY: LoginChannel = CHANNELS[0] ?? 'sms';
+const NEUTRAL = channelNeutral(CHANNELS, parseLoginDelivery(process.env.EXPO_PUBLIC_LOGIN_DELIVERY));
+/** i18n key suffix: the channel, or 'any' when the screen cannot know which channel was used. */
+const via = (channel: LoginChannel) => (NEUTRAL ? 'any' : channel);
 
 /** signInWithOtp / verifyOtp errors → text (Auth codes and the auth-send-sms hook's codes). */
 function loginError(error: { code?: string; message?: string; status?: number }): string {
@@ -77,8 +82,8 @@ export default function Login() {
     if (await sendCode(via, e164)) setStep('otp');
   }
 
-  async function resend(via: LoginChannel) {
-    if (await sendCode(via, phone)) setNotice(t(`login.resent.${via}`));
+  async function resend(channelPicked: LoginChannel) {
+    if (await sendCode(channelPicked, phone)) setNotice(t(`login.resent.${via(channelPicked)}`));
   }
 
   async function verify() {
@@ -92,7 +97,8 @@ export default function Login() {
     if (error) setError(loginError(error));
   }
 
-  const other = alternateChannel(CHANNELS, step === 'phone' ? PRIMARY : channel);
+  // Channel-neutral: no "instead" button (the hook already falls back and moves a resend on by itself).
+  const other = NEUTRAL ? null : alternateChannel(CHANNELS, step === 'phone' ? PRIMARY : channel);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -109,9 +115,10 @@ export default function Login() {
               <Input value={phoneInput} onChangeText={(v) => { setPhoneInput(v); setWait(0); }} keyboardType="phone-pad" placeholder="98610 00001" autoFocus testID="phone" />
               <ErrorText>{error}</ErrorText>
               <Button
-                title={busy ? t('login.sending') : wait > 0 ? t('login.tryAgainIn', { seconds: wait }) : t(`login.send.${PRIMARY}`)}
+                title={busy ? t('login.sending') : wait > 0 ? t('login.tryAgainIn', { seconds: wait }) : t(`login.send.${via(PRIMARY)}`)}
                 onPress={() => void start(PRIMARY)} busy={busy} disabled={wait > 0}
               />
+              {NEUTRAL && <Muted>{t('login.sendHint.any')}</Muted>}
               {other && sendFailed && (
                 <Pressable onPress={() => void start(other)} disabled={busy}>
                   <Text style={styles.action}>{t(`login.instead.${other}`)}</Text>
@@ -141,7 +148,7 @@ export default function Login() {
             </>
           ) : (
             <>
-              <Muted>{t(`login.sent.${channel}`, { phone: formatPhone(phone) })}</Muted>
+              <Muted>{t(`login.sent.${via(channel)}`, { phone: formatPhone(phone) })}</Muted>
               <Label>{t('login.code')}</Label>
               <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} autoFocus textContentType="oneTimeCode" autoComplete="sms-otp" testID="otp" />
               <ErrorText>{error}</ErrorText>
@@ -157,7 +164,7 @@ export default function Login() {
                     </Pressable>
                   )}
                   <Pressable onPress={() => void resend(channel)} disabled={busy} testID="login-resend">
-                    <Text style={styles.link}>{t(`login.resend.${channel}`)}</Text>
+                    <Text style={styles.link}>{t(`login.resend.${via(channel)}`)}</Text>
                   </Pressable>
                 </>
               )}
