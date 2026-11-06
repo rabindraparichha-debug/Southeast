@@ -268,11 +268,12 @@ export const TEMPLATES: Record<string, Def> = {
     quickReplies: () => [{ payload: 'l_show', title: { en: 'Show kitchens', hi: 'किचन दिखाएँ', or: 'କିଚେନ୍ ଦେଖାନ୍ତୁ' } }],
   },
   vendor_welcome: {
-    name: 'vendor_welcome_v1', category: 'UTILITY',
+    // v2 (wave 4): new kitchens need approval first, so the welcome no longer says "log in now".
+    name: 'vendor_welcome_v2', category: 'UTILITY',
     text: {
-      en: 'Namaskar {{1}}! Thank you for joining Tiffin OS. It is free. Log in with this number to set up your kitchen: {{2}}',
-      hi: 'नमस्कार {{1}}! Tiffin OS से जुड़ने के लिए धन्यवाद। यह मुफ़्त है। किचन सेट करने के लिए इसी नंबर से लॉग इन करें: {{2}}',
-      or: 'ନମସ୍କାର {{1}}! Tiffin OSରେ ଯୋଗ ଦେଇଥିବାରୁ ଧନ୍ୟବାଦ। ଏହା ମାଗଣା। କିଚେନ୍ ସେଟ୍ କରିବାକୁ ଏହି ନମ୍ବରରେ ଲଗଇନ୍ କରନ୍ତୁ: {{2}}',
+      en: 'Namaskar {{1}}! Thank you for applying to Tiffin OS. It is free. Our team will call you to approve your number; after that, log in with this number to set up your kitchen: {{2}}',
+      hi: 'नमस्कार {{1}}! Tiffin OS पर आवेदन के लिए धन्यवाद। यह मुफ़्त है। हमारी टीम आपका नंबर स्वीकृत करने के लिए कॉल करेगी; उसके बाद किचन सेट करने के लिए इसी नंबर से लॉग इन करें: {{2}}',
+      or: 'ନମସ୍କାର {{1}}! Tiffin OSରେ ଆବେଦନ କରିଥିବାରୁ ଧନ୍ୟବାଦ। ଏହା ମାଗଣା। ଆପଣଙ୍କ ନମ୍ବର ଅନୁମୋଦନ ପାଇଁ ଆମ ଟିମ୍ କଲ୍ କରିବ; ତା’ପରେ କିଚେନ୍ ସେଟ୍ କରିବାକୁ ଏହି ନମ୍ବରରେ ଲଗଇନ୍ କରନ୍ତୁ: {{2}}',
     },
     params: (p) => [String(p.name ?? ''), String(p.url ?? '')],
   },

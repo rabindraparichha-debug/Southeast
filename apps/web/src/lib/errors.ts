@@ -120,6 +120,28 @@ const MESSAGES: Record<string, string> = {
   invalid_change_type: 'To undo a skip or pause, use Undo on it.',
   not_cancelled: 'This subscription is not cancelled.',
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
+  // Wave 4: onboarding and founder support
+  not_approved: 'Ask the Tiffin team to approve your number. New kitchens start after a short call with us.',
+  invalid_name: 'Enter a kitchen name of 2 to 80 letters.',
+  invalid_slug: 'Use English letters or numbers for the web address.',
+  invalid_location: 'That map location is not valid. Pick it again.',
+  application_rejected: 'This application was rejected. Change its status first.',
+  reason_too_long: 'Keep the reason under 500 characters.',
+  same_phone: 'That is already their number.',
+  phone_in_use: 'Another account already uses that number.',
+  phone_not_changed: 'The number was not changed. Try again.',
+  auth_update_failed: 'The login service did not accept the change. Try again in a minute.',
+  not_recorded: 'The number was changed but the log entry failed. Tell the developer.',
+  already_owner: 'This person already owns the kitchen.',
+  invalid_option: 'Choose one of the options.',
+  no_account: 'This number has never logged in. Ask them to log in once first.',
+  last_admin: 'The last platform admin cannot be removed. Add another admin first.',
+  use_vendor_signup: 'Use the vendor signup switch on the Access page (it asks for a reason).',
+  date_too_far: 'Choose a date within the next year.',
+  already_started: 'This price has already started. Set a new price instead.',
+  invalid_category: 'Choose what the complaint is about.',
+  invalid_subscription: 'Choose one of this customer’s subscriptions.',
+  invalid_part: 'Unknown export part.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

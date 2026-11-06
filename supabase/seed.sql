@@ -461,3 +461,14 @@ begin
   update public.notifications_outbox set status = 'cancelled', last_error = 'seed'
   where status = 'pending' and template in ('payment_receipt', 'new_platform_customer', 'vendor_welcome', 'lead_welcome', 'low_balance_reminder');
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Vendor approval gate (wave 4), local only
+-- ---------------------------------------------------------------------------
+-- New kitchens need an approved application or an allowed number (D-131). The spare test numbers
+-- may create kitchens, except +919000000155 … +919000000159, which the onboarding tests use to
+-- check the refusal and the admin approval flow.
+insert into public.vendor_allowed_phones (phone_enc, phone_hash, phone_last4, note)
+select private.encrypt_phone(p), private.phone_hash(p), right(p, 4), 'Local test number'
+from (select '+91' || (9000000000 + n)::text as p
+      from generate_series(100, 199) n where n not between 155 and 159) t;

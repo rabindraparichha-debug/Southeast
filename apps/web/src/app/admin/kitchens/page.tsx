@@ -46,7 +46,7 @@ export default async function AdminKitchensPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-semibold text-ink-900">{k.name}</h2>
+                    <h2 className="text-base font-semibold text-ink-900"><Link href={`/admin/kitchens/${k.id}`} className="hover:underline">{k.name}</Link></h2>
                     <Badge tone={STATUS[k.status].tone}>{STATUS[k.status].label}</Badge>
                     {k.open_complaints > 0 && <Badge tone="red">{k.open_complaints} open complaint{k.open_complaints === 1 ? '' : 's'}</Badge>}
                   </div>

@@ -234,13 +234,16 @@ select is((select status::text from public.vendor_applications where id = (selec
   'the vendor application is recorded');
 select is((select count(*) from public.notifications_outbox where template = 'vendor_welcome' and recipient_type = 'vendor_application'),
   (select count(*) from public.vendor_applications where whatsapp_opt_in)::bigint, 'each applicant who opted in gets a welcome');
+-- The platform team approves the application (wave 4 gate); only then is the applicant nudged to
+-- log in and create the kitchen.
+update public.vendor_applications set approved_at = '2026-11-02 10:00:00+05:30' where id = (select (v #>> '{}')::uuid from t where k = 'app');
 select set_config('app.now', '2026-11-03 11:00:00+05:30', true);
 select ok((private.growth_tick() ->> 'vendor_nudges')::int >= 1, 'day 1: a nudge');
 select is((select payload ->> 'next_step' from public.notifications_outbox where template = 'vendor_nudge'
            and recipient_id = (select (v #>> '{}')::uuid from t where k = 'app')), 'signup', 'telling them to sign up');
 -- The applicant signs up in the app with the same number (they are user f2…02).
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"f2000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"f2000000-0000-4000-f000-000000000002","role":"authenticated","amr":[{"method":"otp","timestamp":0}]}', true);
 insert into t select 'kitchen', to_jsonb(public.create_kitchen('Gita''s Kitchen', p_area => 'Khandagiri'));
 reset role;
 select is((select status::text || '/' || (kitchen_id is not null)::text from public.vendor_applications

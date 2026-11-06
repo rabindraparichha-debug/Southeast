@@ -7,6 +7,7 @@ import { firstParam, istDateTime, SOURCE_LABEL, VENDOR_STATUS_LABEL, VENDOR_STAT
 import { Badge, Card, PageHeader } from '@/components/ui';
 import { RevealPhone } from '../reveal-phone';
 import { ApplicationActions } from './application-actions';
+import { ApproveApplicationButton } from '../support-tools';
 
 export const metadata: Metadata = { title: 'Vendor applications · Admin' };
 
@@ -23,8 +24,12 @@ export default async function VendorApplicationsPage({ searchParams }: PageProps
   const wanted = firstParam((await searchParams).status);
   const status = STATUSES.find((s) => s === wanted);
   const supabase = await createClient();
-  const { data } = await supabase.rpc('admin_vendor_applications', { p_status: status });
+  const [{ data }, { data: approvals }] = await Promise.all([
+    supabase.rpc('admin_vendor_applications', { p_status: status }),
+    supabase.from('vendor_applications').select('id, approved_at').not('approved_at', 'is', null),
+  ]);
   const apps = (Array.isArray(data) ? data : []) as unknown as Application[];
+  const approved = new Set((approvals ?? []).map((r) => r.id));
 
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
@@ -49,6 +54,8 @@ export default async function VendorApplicationsPage({ searchParams }: PageProps
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-base font-semibold">{a.name}</span>
                     <Badge tone={VENDOR_STATUS_TONE[a.status]}>{VENDOR_STATUS_LABEL[a.status]}</Badge>
+                    {approved.has(a.id) && <Badge tone="green">Approved</Badge>}
+                    <ApproveApplicationButton id={a.id} approved={approved.has(a.id)} rejected={a.status === 'rejected'} />
                   </div>
                   <div><RevealPhone kind="vendor" id={a.id} masked={a.phone} /></div>
                   <div className="text-ink-700">{a.kitchen_name ?? 'Kitchen name not given'}{a.area ? ` · ${a.area}` : ''}</div>

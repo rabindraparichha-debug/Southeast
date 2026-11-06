@@ -16,7 +16,7 @@ values
 -- create_kitchen
 -- ===========================================================================
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-000000000101","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-000000000101","role":"authenticated","amr":[{"method":"otp","timestamp":0}]}', true);
 
 select is((select count(*) from public.kitchens), 0::bigint, 'new user has no kitchens');
 select lives_ok($$select public.create_kitchen('Ghar Ka Khana!', null, 'Nayapalli', null, null, null, null, 'Asha')$$,

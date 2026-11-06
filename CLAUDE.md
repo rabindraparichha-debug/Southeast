@@ -72,6 +72,8 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
 | 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
 | 90000 00180 – 90000 00189 | Spare for the held-back apps track (`held-apps.test.ts` uses 00180 – 00182) |
+| 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
+| 90000 00149 | Spare (wave 4: phone + password sign-up test; never logs in with a code) |
 
 ## Conventions (follow these in every change)
 
@@ -106,7 +108,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Customer requests go through `private.apply_change()`; the vendor RPC is `request_schedule_change(..., p_dry_run)`. Always preview first in the UI.
 - Counted order = `status <> 'skipped' or charged`. The lock (`private.lock_slot`) is idempotent. Never add a second path that posts `meal` entries.
 - Use `private.now()` / `private.ist_today()` in SQL, never `now()`, so tests can set `app.now`.
-- pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST).
+- pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST), `tiffin-plan-prices` (00:05 IST, wave 4).
 
 **Money (M3)**
 - Every recharge, refund, credit and adjustment is one `balance_entries` row.
@@ -191,6 +193,16 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Mobile photos go through `shrinkPhoto()` (`apps/mobile/src/lib/photo.ts`) before they are saved or queued; never queue a full-size camera file.
 - Adding a native module: install with `EXPO_OFFLINE=1 npx expo install`, bump `expo.version` in `apps/mobile/app.json` (runtime version policy `appVersion`) so no over-the-air update reaches an install without it, and say a new APK/TestFlight build is needed.
 - Mobile text goes through `t()`; dates through the `@tiffin/core` helpers with `locale()` from `@/i18n`. New keys go in `en.ts`; Odia/Hindi drafts (`or.ts`, `hi.ts`) fall back to English until a translator adds them. Web: only the nav and Today use `lib/i18n` (`getTranslator()` on the server); keep other pages English until the drafts are reviewed.
+**Onboarding and founder support (wave 4)**
+- New kitchens need approval (D-131): `create_kitchen` checks `private.vendor_signup_basis()` (approved application, `vendor_allowed_phones`, `open_vendor_signup` flag, existing owner, admin). Change who may sign up there, not in the apps. A phone counts only when proven (D-139): `private.session_phone()` (OTP session, JWT `amr` `otp`); never trust `phone_confirmed_at` alone. When an account gains trust (a kitchen on an approved number, platform admin) call `private.secure_account()` (random password, other sessions end). pgTAP claims for such tests need `"amr":[{"method":"otp","timestamp":0}]`. `open_vendor_signup` changes only through `admin_set_vendor_signup` (reason, logged). The seed allows the spare test numbers except 00155 – 00159; a new integration test that creates a kitchen must use an allowed number.
+- "Set up your kitchen" is gated by `onboarding_status()` (web `app/onboarding/gate.tsx`, mobile `components/onboarding-gate.tsx`): invited people are joined and sent to their kitchen, never shown the create form.
+- Every founder support action writes `admin_actions` through `private.log_admin_action()` (append-only; reasons via `private.require_reason()`). Never change `private.audit_row` for this. Admin RPCs start with `perform private.require_admin()`.
+- Login phones change only through the Edge Function `admin-change-phone` (Auth admin API, service role), between `admin_phone_change_check` (records a pending `private.phone_changes` row) and `admin_phone_change_done(change_id)` called as the admin; `admin_sign_out_user` signs someone out everywhere. Never log client-supplied phone digits.
+- Owner-only areas (full customer phones, closing the kitchen, the admin log) check the exact owner: `private.require_owner()` / `private.owner_kitchen_ids()` (wave 2's `'{owner}'` also admits managers).
+- Vendor messages that say "log in and set up your kitchen" go only to approved applicants (`growth_tick`, D-143).
+- Prices: a meal is charged the plan price in force on its service date (`plan_prices`, read by `private.charge_orders`; `private.plan_price_on()` elsewhere). Change prices with `set_plan_price(plan, price, from)`; `plans.price_per_meal_paise` is "today's price", moved by `tiffin-plan-prices`.
+- Phoned-in complaints: `log_complaint` (channel `vendor`, starts `responded`). Exports: `export_kitchen` (owner, paged; customer pages are logged); CSV/ZIP helpers in `@tiffin/core` (`toCsvText`, `zipFiles`). Closing a kitchen is a request (`kitchen_close_requests`), never a delete.
+- Support contact: `NEXT_PUBLIC_SUPPORT_WHATSAPP` / `EXPO_PUBLIC_SUPPORT_WHATSAPP` via `SupportLink` (web falls back to `NEXT_PUBLIC_GRIEVANCE_CONTACT`; mobile onboarding shows a hint).
 
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
@@ -243,7 +255,7 @@ WhatsApp and AI Edge Function secrets (same file):
 | `PUBLIC_WEB_URL` | Base URL for customer page links |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
-Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites), `NEXT_PUBLIC_GRIEVANCE_CONTACT` and `NEXT_PUBLIC_SUPPORT_WHATSAPP` (vendor support link; mobile: `EXPO_PUBLIC_SUPPORT_WHATSAPP`).
 
 Login channels (docs/LOGIN.md): `NEXT_PUBLIC_LOGIN_CHANNELS` (web) and `EXPO_PUBLIC_LOGIN_CHANNELS` (mobile, build time), e.g. `whatsapp,sms`; unset means `sms` (local test numbers). `NEXT_PUBLIC_LOGIN_DELIVERY` / `EXPO_PUBLIC_LOGIN_DELIVERY`: `channel` (default, built-in provider) or `hook` (Send SMS hook on: channel-neutral screens).
 

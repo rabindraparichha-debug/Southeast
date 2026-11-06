@@ -15,6 +15,7 @@ import { FoodHealthCard } from './food-health-card';
 import { ReferralCard } from './referral-card';
 import { UpcomingHolds } from './upcoming-holds';
 import { ReactivateSubscription } from './reactivate-subscription';
+import { ComplaintsCard } from './complaints-card';
 import type { CustomerScore } from '@/lib/p5';
 
 const formatDate = (d: string) =>
@@ -267,6 +268,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           </Card>
         )}
 
+        {isOwner && <ComplaintsCard customerId={c.id!} />}
         {isOwner && <EraseCustomer customerId={c.id!} />}
       </div>
     </>

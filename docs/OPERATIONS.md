@@ -20,7 +20,7 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 
    | Function | Deploy with |
    |---|---|
-   | `razorpay-payment-link`, `razorpay-refund`, `whatsapp-outbox`, `notebook-import`, `route-optimize` | `supabase functions deploy <name>` |
+   | `razorpay-payment-link`, `razorpay-refund`, `whatsapp-outbox`, `notebook-import`, `route-optimize`, `admin-change-phone` | `supabase functions deploy <name>` |
    | `razorpay-webhook`, `whatsapp-webhook`, `lead-intake`, `lead-email`, `ads-conversions`, `weather-alerts` | `supabase functions deploy <name> --no-verify-jwt` (they check their own signature or key, matching `supabase/config.toml`) |
 
    Not deployed: `razorpay-mock` (local only).

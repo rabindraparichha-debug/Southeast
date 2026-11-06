@@ -269,6 +269,8 @@ enable_signup = true
 enable_confirmations = false
 # Template for sending OTP to users (built-in providers only; the auth-send-sms hook uses AUTH_SMS_TEMPLATE).
 # In India the SMS text must match the DLT content template exactly.
+enable_confirmations = true  # phone: a phone + password sign-up must prove the number with a code (D-139)
+# Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 # Local 5s for fast test runs; hosted 30s to 60s (the apps show a 30 s resend countdown).
@@ -307,6 +309,16 @@ max_frequency = "5s"
 919000000187 = "123456"
 919000000188 = "123456"
 919000000189 = "123456"
+919000000150 = "123456"
+919000000151 = "123456"
+919000000152 = "123456"
+919000000153 = "123456"
+919000000154 = "123456"
+919000000155 = "123456"
+919000000156 = "123456"
+919000000157 = "123456"
+919000000158 = "123456"
+919000000159 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]

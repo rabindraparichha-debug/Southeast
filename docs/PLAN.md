@@ -363,6 +363,30 @@ Known gaps:
 - Review fixes (2026-11-06): a report naming the old run of a stop the owner moved (`move_stop`) is accepted (it used to be refused and dropped); a report that arrives after the same action synced is stored closed and never reopens; reports keep `customer_id`.
 - On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)`; renumber D-128 – D-130 into the global sequence (the migration headers cite the decision by title, not number).
 
+## Vendor-first wave 4: onboarding and founder support (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md Phase 1 steps 2, 4, 5 and 7 (work order 34, parts of 21, 33 and 35). Defaults: D-131 – D-138.
+Migrations `20261113000100` – `20261113000600`; pgTAP `15_onboarding.test.sql` (156 checks); integration `onboarding.test.ts`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 1 | New kitchens need an approved application, an allowed number or `open_vendor_signup` | ✅ | `create_kitchen`, `vendor_allowed_phones`, `admin_set_vendor_approval`, `admin_allow_vendor_phone`, Admin → Access, Admin → Vendor applications (D-131) |
+| 2 | Odia / non-Latin kitchen names get a valid web address; short error codes | ✅ | `private.kitchen_slug`, `create_kitchen` (D-132) |
+| 3 | Invited staff/riders never see "Set up your kitchen"; retry on a slow network | ✅ | `onboarding_status`, web `onboarding/gate.tsx`, mobile `components/onboarding-gate.tsx` |
+| 4 | Founder support: kitchen detail, logged reveal, phone change, ownership transfer, platform admins, support contact | ✅ | `admin_actions`, `admin_kitchen_detail`, Edge Function `admin-change-phone`, `admin_transfer_ownership`, `admin_add/remove_platform_admin`, `/admin/kitchens/[id]`, `/admin/access` (D-133, D-134, D-138) |
+| 5 | Plan price from a date ("₹80 from next month"), charged per service date | ✅ | `plan_prices`, `set_plan_price`, `cancel_plan_price`, `charge_orders`, cron `tiffin-plan-prices`, Plans editor (D-135) |
+| 6 | Phoned-in complaints | ✅ web | `log_complaint`, customer page Complaints card (D-136) |
+| 7 | Export my kitchen (ZIP of CSVs), request to close | ✅ | `export_kitchen`, `kitchen_close_requests`, `/settings/export`, `@tiffin/core` `toCsvText`/`zipFiles` (D-137) |
+
+Review fixes (`20261113000700`, D-139 – D-145): proven phone (OTP session) for the gate and `onboarding_status`, accounts secured (random password, other sessions end) when they get a kitchen or admin rights; owner basis only in good standing; pending phone changes (`admin_phone_change_done(change_id)`, `admin_sign_out_user`); exact-owner export and close requests; vendor messages and nudges wait for approval (backfill of onboarding/live applications); `admin_set_vendor_signup`; `charged_slots` from `set_plan_price`; `enable_confirmations = true` locally.
+
+Known gaps:
+- Mobile has no "Log complaint" form yet (web only).
+- Wave 2 already lets managers into `'{owner}'` checks. Wave 4's owner-only areas (export, close requests, admin_actions) check the exact owner (D-142); `log_complaint` and plan prices follow `'{owner}'` (so managers too). `plan_prices_select` should become `'{owner,accountant}'` when merged with wave 2 (accountants read plans there); the accountant must never get `export_kitchen`. pgTAP manager/accountant cases need wave 2's roles.
+- Dues are valued at today's plan price until wave 2's ledger-valued `private.dues` lands (D-144, pgTAP `todo`).
+- On merge with wave 3/ops: add `tiffin-plan-prices` to `private.engine_jobs` and run it through `private.run_job`. With wave 5: its complaint support RPCs should also write `admin_actions`.
+- Meta must approve `vendor_welcome_v2` before deploy.
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

@@ -66,7 +66,7 @@ const en: Dict = {
   vendor_area: 'Which area is your kitchen in? Share your location 📍 or type the area.',
   vendor_size: 'About how many tiffin customers do you have?',
   size_small: 'Under 20', size_mid: '20 – 100', size_big: 'More than 100',
-  vendor_done: 'Thank you! 🙌 You can start right now: log in at {url} with this WhatsApp number and set up your kitchen in 5 minutes. Our team will also call you within a day to help.',
+  vendor_done: 'Thank you! 🙌 Our team will call you within a day to check a few details and approve this number. After that, log in at {url} with this WhatsApp number and set up your kitchen in 5 minutes.',
 };
 const hi: Dict = {
   welcome: 'नमस्कार{name}! 🍱 घर जैसा टिफिन ढूँढ रहे हैं? मैं एक मिनट में पास के भरोसेमंद किचन दिखा सकता हूँ।',
@@ -85,7 +85,7 @@ const hi: Dict = {
   vendor_hello: 'नमस्कार{name}! 🙏 Tiffin OS टिफिन/मेस चलाने वालों के लिए *मुफ़्त सॉफ़्टवेयर* है: रोज़ की गिनती, WhatsApp पर पॉज़/स्किप, आपके खाते में भुगतान, राइडर ऐप — और हम नए ग्राहक भेजते हैं।\n\nआपके किचन का नाम क्या है?',
   vendor_area: 'आपका किचन किस इलाके में है? लोकेशन 📍 भेजें या इलाका लिखें।',
   vendor_size: 'लगभग कितने टिफिन ग्राहक हैं?', size_small: '20 से कम', size_mid: '20 – 100', size_big: '100 से ज़्यादा',
-  vendor_done: 'धन्यवाद! 🙌 अभी शुरू करें: इसी WhatsApp नंबर से {url} पर लॉग इन करें और 5 मिनट में किचन सेट करें। हमारी टीम एक दिन में कॉल भी करेगी।',
+  vendor_done: 'धन्यवाद! 🙌 हमारी टीम एक दिन में कॉल करके कुछ जानकारी जाँचेगी और यह नंबर स्वीकृत करेगी। उसके बाद इसी WhatsApp नंबर से {url} पर लॉग इन करें और 5 मिनट में किचन सेट करें।',
 };
 const or: Dict = {
   welcome: 'ନମସ୍କାର{name}! 🍱 ଘର ପରି ଟିଫିନ୍ ଖୋଜୁଛନ୍ତି? ମୁଁ ଏକ ମିନିଟରେ ପାଖର ଭରସାଯୋଗ୍ୟ କିଚେନ୍ ଦେଖାଇପାରିବି।',
@@ -104,7 +104,7 @@ const or: Dict = {
   vendor_hello: 'ନମସ୍କାର{name}! 🙏 Tiffin OS ଟିଫିନ୍/ମେସ୍ ମାଲିକଙ୍କ ପାଇଁ *ମାଗଣା ସଫ୍ଟୱେର୍*: ଦୈନିକ ଗଣନା, WhatsApp‌ରେ ପଜ୍/ସ୍କିପ୍, ଆପଣଙ୍କ ଆକାଉଣ୍ଟକୁ ପେମେଣ୍ଟ, ରାଇଡର୍ ଆପ୍ — ଆଉ ଆମେ ନୂଆ ଗ୍ରାହକ ପଠାଉ।\n\nଆପଣଙ୍କ କିଚେନ୍‌ର ନାମ କ’ଣ?',
   vendor_area: 'ଆପଣଙ୍କ କିଚେନ୍ କେଉଁ ଅଞ୍ଚଳରେ? ଲୋକେସନ୍ 📍 ପଠାନ୍ତୁ ବା ଅଞ୍ଚଳ ଲେଖନ୍ତୁ।',
   vendor_size: 'ପାଖାପାଖି କେତେ ଟିଫିନ୍ ଗ୍ରାହକ ଅଛନ୍ତି?', size_small: '20 ରୁ କମ୍', size_mid: '20 – 100', size_big: '100 ରୁ ଅଧିକ',
-  vendor_done: 'ଧନ୍ୟବାଦ! 🙌 ଏବେ ଆରମ୍ଭ କରନ୍ତୁ: ଏହି WhatsApp ନମ୍ବରରେ {url}ରେ ଲଗଇନ୍ କରି 5 ମିନିଟରେ କିଚେନ୍ ସେଟ୍ କରନ୍ତୁ। ଆମ ଟିମ୍ ଏକ ଦିନ ଭିତରେ କଲ୍ ବି କରିବ।',
+  vendor_done: 'ଧନ୍ୟବାଦ! 🙌 ଆମ ଟିମ୍ ଏକ ଦିନ ଭିତରେ କଲ୍ କରି କିଛି ବିବରଣୀ ଯାଞ୍ଚ କରିବ ଏବଂ ଏହି ନମ୍ବର ଅନୁମୋଦନ କରିବ। ତା’ପରେ ଏହି WhatsApp ନମ୍ବରରେ {url}ରେ ଲଗଇନ୍ କରି 5 ମିନିଟରେ କିଚେନ୍ ସେଟ୍ କରନ୍ତୁ।',
 };
 const DICTS: Record<Lang, Dict> = { en, hi, or };
 

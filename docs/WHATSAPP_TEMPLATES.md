@@ -47,8 +47,10 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 |---|---|---|---|---|
 | `lead_welcome_v1` | Utility | `Namaskar {{1}}! Thanks for your tiffin enquiry. Tap below and we will show you home kitchens near you with space.` | first name | `Find my tiffin` (`lead_start`) |
 | `lead_reminder_v1` | Utility | `Namaskar! The kitchens we found near you still have space: {{1}}. Tap below to see them again.` | kitchen names | `Show kitchens` (`l_show`) |
-| `vendor_welcome_v1` | Utility | `Namaskar {{1}}! Thank you for joining Tiffin OS. It is free. Log in with this number to set up your kitchen: {{2}}` | first name, link | – |
+| `vendor_welcome_v2` | Utility | `Namaskar {{1}}! Thank you for applying to Tiffin OS. It is free. Our team will call you to approve your number; after that, log in with this number to set up your kitchen: {{2}}` | first name, link | – |
 | `vendor_nudge_v1` | Utility | `Namaskar {{1}}! Your next step on Tiffin OS: {{2}}. Open: {{3}}` | first name, next step, link | – |
+
+`vendor_welcome_v2` replaces `vendor_welcome_v1` (wave 4: new kitchens need approval first; submit v2 to Meta before deploying). `vendor_nudge_v1` with the step "log in … and create your kitchen" is sent only once the applicant's number is approved (or vendor signup is open).
 
 ## Kitchen-owner templates (English)
 
