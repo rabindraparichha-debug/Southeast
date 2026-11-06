@@ -5,14 +5,16 @@ import { requireAdmin } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { istDateTime } from '@/lib/public';
 import { Alert, Badge, Card, PageHeader } from '@/components/ui';
+import { RequeueMock } from './requeue-mock';
 
 export const metadata: Metadata = { title: 'Ad conversions · Admin' };
 
 type Conversion = {
   id: string; lead: string | null; campaign: string | null; stage: 'trial' | 'plan' | 'renewal'; value_paise: number;
-  occurred_at: string; status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'; attempts: number; last_error: string | null; sent_at: string | null;
+  occurred_at: string; status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped' | 'mock'; attempts: number; last_error: string | null; sent_at: string | null;
 };
-const TONE = { pending: 'gray', sending: 'blue', sent: 'green', failed: 'red', skipped: 'amber' } as const;
+const TONE = { pending: 'gray', sending: 'blue', sent: 'green', failed: 'red', skipped: 'amber', mock: 'amber' } as const;
+const STATUS = { pending: 'pending', sending: 'sending', sent: 'sent', failed: 'failed', skipped: 'skipped', mock: 'not sent (mock)' } as const;
 const STAGE = { trial: 'Paid trial', plan: 'Plan', renewal: 'Renewal' } as const;
 
 // Paying customers reported back to Google Ads (offline click conversions, docs/LEAD_SOURCES.md 1c).
@@ -26,6 +28,12 @@ export default async function ConversionsPage() {
       <Link href="/admin/leads" className="text-sm text-brand-700 hover:underline">← Leads</Link>
       <PageHeader title="Ad conversions" subtitle="Google Ads clicks that became paying customers, uploaded every 15 minutes. Only the click id, time and value are sent." />
       {error && <Alert>{error.message}</Alert>}
+      {rows.some((c) => c.status === 'mock') && (
+        <Alert tone="amber">
+          Rows marked “not sent (mock)” were handled while Google Ads was in mock mode: nothing reached Google. The first live run
+          uploads them; <RequeueMock /> to do it on the next run.
+        </Alert>
+      )}
       <Card className="overflow-x-auto p-0">
         <table className="min-w-full text-sm">
           <thead className="border-b border-ink-100 text-left text-xs uppercase text-ink-500">
@@ -42,7 +50,7 @@ export default async function ConversionsPage() {
                 <td className="px-4 py-3">{formatPaise(c.value_paise)}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-ink-500">{istDateTime(c.occurred_at)}</td>
                 <td className="px-4 py-3">
-                  <Badge tone={TONE[c.status]}>{c.status}</Badge>
+                  <Badge tone={TONE[c.status]}>{STATUS[c.status]}</Badge>
                   {c.last_error && <div className="text-xs text-ink-500">{c.last_error}</div>}
                 </td>
               </tr>

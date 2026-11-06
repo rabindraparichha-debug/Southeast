@@ -291,6 +291,13 @@ export const TEMPLATES: Record<string, Def> = {
     text: { en: '{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.' },
     params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.plan_name ?? ''), String(p.trial_meals ?? '')],
   },
+  // A friend joined through a customer's invite link (referral_join, D-127).
+  referral_customer: {
+    name: 'referral_customer_v1', category: 'UTILITY',
+    text: { en: '{{1}}: {{2}} ({{3}}) joined with the invite of {{4}}: {{5}}, trial of {{6}} meals from {{7}}. Please call them to confirm.' },
+    params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.referrer_name ?? 'a customer'),
+      String(p.plan_name ?? ''), String(p.trial_meals ?? ''), day(p.start_date)],
+  },
   owner_daily_summary: {
     name: 'owner_summary_v1', category: 'UTILITY',
     text: { en: '{{1}} for {{2}}: lunch {{3}} meals, dinner {{4}} meals (preview until cutoff). Collections today: {{5}}. Low stock: {{6}}.' },

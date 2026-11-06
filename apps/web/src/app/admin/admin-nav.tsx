@@ -9,6 +9,7 @@ const ITEMS = [
   { href: '/admin/leads', label: 'Leads' },
   { href: '/admin/funnel', label: 'Funnel & gaps' },
   { href: '/admin/vendors', label: 'Vendor applications' },
+  { href: '/admin/complaints', label: 'Complaints' },
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/quality', label: 'Complaint scores' },
   { href: '/admin/calendar', label: 'Food calendar' },

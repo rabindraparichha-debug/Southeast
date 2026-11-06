@@ -68,9 +68,9 @@ describe('P5/P6 over the API', () => {
     const anon = anonClient();
     const { data: page, error } = await anon.rpc('portal_get', { p_token: parentToken });
     expect(error).toBeNull();
-    const p = page as { dependents: { customer_id: string; name: string }[]; referral: { code: string } };
+    const p = page as { dependents: { customer_id: string; name: string }[]; referral: { code: string } | null };
     expect(p.dependents).toEqual([expect.objectContaining({ customer_id: studentId, name: 'Student Eater' })]);
-    expect(p.referral.code).toMatch(/^[A-Z2-9]{8}$/);
+    expect(p.referral).toBeNull(); // no referral card while the kitchen's reward is 0 meals (D-127)
 
     // New kitchens have no verified payout account: the Edge Function reports it.
     const blocked = await invoke<{ error: string }>('razorpay-payment-link', env().anonKey,

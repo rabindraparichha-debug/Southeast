@@ -2,7 +2,11 @@
 
 Meta only lets us message a customer outside the 24-hour customer-service window with **approved templates**. The worker (`supabase/functions/whatsapp-outbox`) picks a template automatically when the window is closed. Inside the window it sends the same content as a normal message.
 
-**Source of truth:** `supabase/functions/_shared/templates.ts`. The names, parameters and wording below must match it exactly. Change both together.
+**Source of truth:** `supabase/functions/_shared/templates.ts`. The names, parameters and wording below must match it exactly. Change both together; `tests/integration/template-pack.test.ts` fails when they drift.
+
+**Ready-to-submit pack:** [`docs/whatsapp-templates.csv`](whatsapp-templates.csv) has one row per template and language (34 templates sent through the outbox, plus the login code), with category, audience, body, number of variables, a sample value for each variable, quick-reply buttons and a `checks` column. It is generated from `templates.ts` and the sample payloads in `supabase/functions/_shared/template-pack.ts` (D-134): after changing a template run `UPDATE_TEMPLATE_PACK=1 pnpm --filter @tiffin/integration-tests exec vitest run template-pack.test.ts` and commit the CSV. Use the `example_N` columns as Meta's "sample content" (or Twilio's `variables`). Rows with status `draft` (Odia, Hindi) wait for the native-speaker review (D-057).
+
+**Before submitting, read the `checks` column.** Meta's guidelines say a body should not start or end with a variable; most of our bodies start with `{{1}}` (the kitchen name) and a few end with a link or the kitchen's text. Meta may accept them as they are; if it rejects one, add a word before or after the variable (e.g. `From {{1}}: …`), bump the template version (`_v2`) and change `templates.ts` in the same commit.
 
 | Status | Languages |
 |---|---|
@@ -58,16 +62,19 @@ Sent from the platform number with no kitchen name. Leads and vendor applicants 
 | `stock_alert_v1` | Utility | `{{1}} stock alert: {{2}}. Details are in the app.` | kitchen, alert ("Toor dal is low: 4 kg left (minimum 5 kg)", "Toor dal price up 25% (₹120 → ₹150 per kg)", "stock-take found Toor dal short by 1 kg (Spilled)") |
 | `production_sheet_v1` | Utility | `{{1}} final count for {{2}} {{3}}: {{4}} meals (veg {{5}}, non-veg {{6}}, Jain {{7}}). Packing list is in the app.` | kitchen, date, slot, total, veg, non-veg, Jain |
 | `new_platform_customer_v1` | Utility | `{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.` | kitchen, customer, area, plan, trial meals |
+| `referral_customer_v1` | Utility | `{{1}}: {{2}} ({{3}}) joined with the invite of {{4}}: {{5}}, trial of {{6}} meals from {{7}}. Please call them to confirm.` | kitchen, new customer, area, referrer, plan, trial meals, start date (D-127) |
 | `inbox_alert_v1` | Utility | `{{1}}: {{2}} needs a reply in your inbox ({{3}}).` | kitchen, customer, reason |
 | `weather_alert_v1` | Utility | `{{1}}: {{2}} expected during {{3}} delivery on {{4}} ({{5}}). Plan riders and packing accordingly.` | kitchen, kind, lunch/dinner, date, detail ("rain up to 12 mm/h, up to 41°C") |
 | `late_delivery_v1` | Utility | `{{1}}: {{2}} stop(s) on {{3}} ({{4}}) are still not delivered {{5}} minutes after the meals were packed.` | kitchen, pending stops, route, rider, minutes |
 | `customer_switched_out_v1` | Utility | `{{1}}: {{2}} is moving to another kitchen from {{3}}. Their subscription ends before that date and unused meals are refunded automatically.` | kitchen, customer, date |
 
-## Still to add (later milestones)
+## Authentication template (login)
 
-| Name | Category | Purpose |
-|---|---|---|
-| `otp_v1` | Authentication | Login codes, if WhatsApp OTP is chosen (D-004) |
+Not sent through the outbox: the `auth-send-sms` hook sends it through Twilio's Content API (its Content SID goes in `TWILIO_WHATSAPP_CONTENT_SID`). Meta fixes the wording of authentication templates; only the code is a variable.
+
+| Name | Category | Body (English) | Parameters | Buttons |
+|---|---|---|---|---|
+| `login_code_v1` | Authentication | `{{1}} is your verification code. For your security, do not share this code.` | 6-digit code | `Copy code` (one-tap copy); set a 10-minute expiry |
 
 ## P5 routing to payers
 

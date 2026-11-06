@@ -64,6 +64,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00160 – 90000 00169 | Spare for the Phase 2 hardening tests (00160: `tests/integration/phase2.test.ts`) |
 
 ## Conventions (follow these in every change)
 
@@ -171,6 +172,16 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
 
+**Phase 2 hardening (D-126 – D-134)**
+- **Delivery codes:** never raise after counting a code attempt (the raise rolls the counter back): answer `status 'pending'`, `otp_ok false`. `otp` is a redacted audit column (`private.audit_redacted_columns`); outbox payloads lose `otp` once not pending/sending; never copy a code anywhere else.
+- **Referrals:** the share link is `/k/<slug>/join?ref=<CODE>` (`referral_invite`, `referral_join`, flag `customer_portal`). A join creates the kitchen's own customer (`source 'web'`, never platform-sourced) and records the referral; codes from another kitchen raise `referral_other_kitchen`.
+- **AI fallback:** every model call takes a unit of the budget first (`BotDeps.aiBudget` → `wa_ai_take`; caps `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`). Build the Claude call only with `makeClaudeComplete` (`_shared/ai-claude.ts`); the model comes from `ANTHROPIC_CHAT_MODEL` / `ANTHROPIC_MODEL`.
+- **Payment links:** wrap every Razorpay link creation in `createLinkOrCancel` (`_shared/payment-link.ts`) so a failure cancels the `created` row (`cancel_payment_link_record`).
+- **Lead-intake keys:** header `X-Lead-Key` or Basic auth only, checked by `checkLeadKey` / `checkGoogleKey` (`_shared/leads.ts`); the only URL key is `JUSTDIAL_LEAD_KEY` on `?source=justdial`.
+- **Google Ads:** mock mode stores conversions as `mock`, never `sent`.
+- **Escalated complaints:** the platform team works through the `admin_*complaint*` RPCs (reveals logged, team log `complaint_admin_events`); the team never credits meals.
+- **Templates:** a new template goes in `_shared/templates.ts`, `TEMPLATE_SAMPLES` (`_shared/template-pack.ts`) and `docs/WHATSAPP_TEMPLATES.md`; regenerate `docs/whatsapp-templates.csv` (`UPDATE_TEMPLATE_PACK=1`, see the doc).
+
 **Migrations and data**
 - Migrations are named `supabase/migrations/YYYYMMDDHHMMSS_name.sql`. Never edit an applied migration once it has been pushed to a shared environment; add a new one.
 - Seed data lives only in `supabase/seed.sql` (local).
@@ -221,10 +232,11 @@ WhatsApp and AI Edge Function secrets (same file):
 | `WHATSAPP_VERIFY_TOKEN` | Webhook subscription handshake |
 | `PUBLIC_WEB_URL` | Base URL for customer page links |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
+| `ANTHROPIC_CHAT_MODEL`, `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`, `AI_TIMEOUT_MS` | Chat model override and caps (D-128) |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
 
-Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
+Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (generic JSON and `lead-email`, header `X-Lead-Key` or Basic auth), `JUSTDIAL_LEAD_KEY` (Justdial push, the only key allowed in a URL) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Hosted projects refuse the `local-dev-*` examples and keys under 24 characters (D-130). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 
 Vault also needs `public_web_url` (links in messages, e.g. `https://app.example.in`).
 

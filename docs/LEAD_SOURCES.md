@@ -76,9 +76,11 @@ Setup:
 
 5. Vault (once): `functions_base_url` and `service_role_key` (already needed for the outbox cron).
 
-Until `GOOGLE_ADS_MODE=live` and a developer token are set, uploads run in **mock** mode: rows are
-marked sent with "mock" and nothing leaves the server. A stage without a conversion action id is
-marked skipped. Google accepts clicks up to 90 days old.
+Until `GOOGLE_ADS_MODE=live` and a developer token are set, uploads run in **mock** mode: nothing
+leaves the server and rows are marked **"not sent (mock)"** (status `mock`, never `sent`). The first
+live run uploads them too; to send them at once, press "queue them now" on Admin → Leads →
+Conversions (`admin_requeue_mock_conversions`). A stage without a conversion action id is marked
+skipped. Google accepts clicks up to 90 days old (D-131).
 
 Privacy: only the click id, the time and the value are sent; never a name or phone number.
 
@@ -89,12 +91,15 @@ Justdial sends every enquiry by SMS and email, and offers a **lead push API** on
 **Option A, push API (instant).** Ask your Justdial account manager to push leads to:
 
 ```
-https://<project>.functions.supabase.co/lead-intake?source=justdial&key=<LEAD_INTAKE_KEY>
+https://<project>.functions.supabase.co/lead-intake?source=justdial&key=<JUSTDIAL_LEAD_KEY>
 ```
 
 GET or form POST with their usual fields (`leadid`, `prefix`, `name`, `mobile`, `area`, `city`,
-`category`, …). The function answers `RECEIVED` as Justdial expects. Set the key with
-`supabase secrets set LEAD_INTAKE_KEY=<32+ random chars>`.
+`category`, …). The function answers `RECEIVED` as Justdial expects. Justdial can only call a URL,
+so this is the one place a key goes in the URL, and it is a **separate** key: set it with
+`supabase secrets set JUSTDIAL_LEAD_KEY=<32+ random chars>`. A leaked access-log line then lets
+someone post Justdial leads and nothing else. (If Justdial can send a header, use
+`X-Lead-Key: <LEAD_INTAKE_KEY>` without `&key=` instead.) Any other `?key=` is refused (D-130).
 
 **Option B, email forwarding.** Forward the Justdial enquiry emails to the inbound address in
 section 4. The sender `@justdial.com` marks them as Justdial leads.
@@ -113,8 +118,9 @@ their app, forward the confirmation email that includes it.
 phone number are listed and skipped; uploading the same file twice creates nothing
 (`admin_import_leads`).
 
-**Option C, partner JSON.** If Sulekha (or any aggregator) enables an API push for you, use
-`lead-intake?source=sulekha&key=<LEAD_INTAKE_KEY>` with our JSON body:
+**Option C, partner JSON.** If Sulekha (or any aggregator) enables an API push for you, POST to
+`lead-intake?source=sulekha` with the header `X-Lead-Key: <LEAD_INTAKE_KEY>` and our JSON body
+(the key in the URL is refused with `key_in_url`):
 
 ```json
 {"external_id":"SK-123","name":"Priya","phone":"98610 00981","area":"Patia","slots":["lunch"],"diet":"veg","whatsapp_opt_in":false}
@@ -126,8 +132,13 @@ The `lead-email` function reads "Label: value" lines from an enquiry email (the 
 next line) and ignores emails without a mobile number (newsletters, offers).
 
 ```
-https://<project>.functions.supabase.co/lead-email?key=<LEAD_INTAKE_KEY>
+https://<project>.functions.supabase.co/lead-email
 ```
+
+The key goes in the header `X-Lead-Key: <LEAD_INTAKE_KEY>`, or, for services that cannot set
+headers, as the password of HTTP Basic auth in the webhook URL:
+`https://leads:<LEAD_INTAKE_KEY>@<project>.functions.supabase.co/lead-email` (it arrives as an
+`Authorization` header, not in the logged URL). `?key=` is refused (D-130).
 
 It accepts our JSON `{from, subject, text, messageId}`, Postmark inbound JSON, and SendGrid or
 Mailgun inbound form posts. Pick one:
@@ -141,9 +152,9 @@ export default {
     const raw = await new Response(message.raw).text();
     // Plain-text part only; enquiry emails are simple.
     const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').replace(/=\r?\n/g, '').replace(/<[^>]+>/g, ' ');
-    await fetch(`${env.LEAD_EMAIL_URL}?key=${env.LEAD_INTAKE_KEY}`, {
+    await fetch(env.LEAD_EMAIL_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Lead-Key': env.LEAD_INTAKE_KEY },
       body: JSON.stringify({ from: message.from, subject: message.headers.get('subject') ?? '', text,
         messageId: message.headers.get('message-id') }),
     });
@@ -153,7 +164,8 @@ export default {
 
 (Set `LEAD_EMAIL_URL` and `LEAD_INTAKE_KEY` as Worker secrets.)
 
-**Postmark / SendGrid / Mailgun inbound.** Point the inbound webhook at the URL above.
+**Postmark / SendGrid / Mailgun inbound.** Point the inbound webhook at the Basic-auth URL above
+(`https://leads:<LEAD_INTAKE_KEY>@…/lead-email`).
 
 Then in Gmail (or wherever the Sulekha/Justdial account emails go): Settings → Forwarding → add
 `leads@yourdomain.in`, and a filter `from:(sulekha.com OR justdial.com)` → forward.
