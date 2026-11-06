@@ -106,6 +106,18 @@ const MESSAGES: Record<string, string> = {
   unreadable_output: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   model_refused: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   ai_error: 'Reading the photo failed. Try again in a minute.',
+  // Wave 3 (riders track): stop corrections, routes by area, devices, minimum app version.
+  not_recorded: 'This stop has no outcome yet. Mark it delivered or not delivered first.',
+  too_old: 'Stops older than 7 days cannot be changed.',
+  cash_confirmed: 'The cash for this stop is already confirmed. Reject or adjust the payment first.',
+  invalid_rules: 'Each line needs an area and a route.',
+  too_many_rules: 'Use at most 200 lines.',
+  invalid_route: 'That route does not belong to this meal.',
+  invalid_token: 'This device could not be registered for alerts.',
+  invalid_platform: 'This device could not be registered for alerts.',
+  invalid_version: 'Use a version like 1.2.0.',
+  invalid_url: 'The download link must start with https://',
+  invalid_decision: 'Choose give back or refuse.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

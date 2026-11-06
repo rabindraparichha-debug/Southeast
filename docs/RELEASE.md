@@ -29,6 +29,10 @@ The vendor app (owners, staff and rider mode) ships to Android first. Builds run
 4. **Google Play Console:**
    - Create the developer account (one-time fee; organisation accounts need a D-U-N-S number) and the app "Tiffin OS".
    - Create a service account with release permissions for `eas submit`, and save its JSON key outside the repo.
+5. **Push notifications (owner alerts, D-131):** push only works in a development or release build (not Expo Go).
+   - Android: create a Firebase project for `in.tiffinos.vendor`, download its FCM V1 service-account key and upload it with `npx eas-cli@latest credentials` (Android → Google Service Account → FCM V1). No `google-services.json` needs committing for Expo push.
+   - iOS: let EAS create the APNs key on the first iOS build (`eas credentials` → Push Notifications).
+   - Hosted Supabase: deploy the `push-outbox` function. Nothing else is required (Expo needs no key); optionally `supabase secrets set PUSH_MODE=live`, and `EXPO_ACCESS_TOKEN` only if you switch on Expo's enhanced push security.
 
 ## Each release
 

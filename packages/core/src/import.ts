@@ -195,5 +195,5 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
 /** Template the vendor can download and fill in. */
 export const IMPORT_TEMPLATE_HEADERS = [
   'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan',
-  'Start date', 'Tiffins per meal', 'Opening balance (meals)',
+  'Start date', 'Tiffins per meal', 'Opening balance (meals)', 'Route',
 ];

@@ -17,6 +17,7 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 2. Database: `supabase link --project-ref <ref>` then `supabase db push`. Migrations are append-only: never edit one that a shared environment has applied (CLAUDE.md).
 3. Regenerate types if the schema changed: `pnpm db:types`, and commit them.
 4. Edge Functions: `supabase functions deploy <name>` for each changed function (`--no-verify-jwt` for `razorpay-webhook`, `razorpay-mock`, `whatsapp-webhook`, `lead-intake`, matching `supabase/config.toml`).
+   `push-outbox` (wave 3) also needs `--no-verify-jwt`: it checks the service role key itself.
 5. Secrets: `supabase secrets set KEY=value` (see `supabase/functions/.env.example`). Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
 6. Web: deploy as usual. Mobile: `eas build` / `eas update` (docs/RELEASE.md).
 
@@ -31,6 +32,7 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 | `tiffin-escalate-complaints` | every 15 min | Complaints with no reply in 2 h go to the admin page | Run `select private.escalate_complaints();` |
 | `tiffin-outbox` | every minute | Starts the WhatsApp outbox worker via `pg_net` | Messages queue up. Check Vault `functions_base_url` and `service_role_key`; call the function by hand |
 | `tiffin-growth` | hourly at :07 | Trial follow-ups, lead reminders, vendor nudges | Run `select private.growth_tick();` |
+| `tiffin-push` | every minute | Starts the `push-outbox` function (owner push alerts) via `pg_net` when a push is due | Alerts still show in the app list; pushes older than 12 h are dropped. Check Vault secrets; call the function by hand |
 
 Check jobs: `select jobname, status, start_time, return_message from cron.job_run_details order by start_time desc limit 50;`
 

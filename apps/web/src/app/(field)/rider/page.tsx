@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { requireKitchen } from '@/lib/session';
 import { RiderApp } from './rider-app';
+import { RiderDesk } from './rider-desk';
 
 export const metadata: Metadata = { title: 'My stops · Tiffin OS' };
 
@@ -10,5 +11,11 @@ export default async function RiderPage() {
   const session = await requireKitchen();
   const canRide = session.memberships.some((m) => m.role === 'rider' || m.role === 'owner');
   if (!canRide) redirect('/');
-  return <RiderApp userId={session.userId} isOwner={session.kitchen.role === 'owner'} />;
+  const isOwner = session.kitchen.role === 'owner';
+  return (
+    <>
+      <RiderDesk userId={session.userId} isOwner={isOwner} />
+      <RiderApp userId={session.userId} isOwner={isOwner} />
+    </>
+  );
 }

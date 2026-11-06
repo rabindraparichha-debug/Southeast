@@ -323,6 +323,26 @@ Known gaps:
 - **iOS needs** an Apple Developer account, an App Store Connect API key and an Expo token (docs/RELEASE.md).
 - **Google Ads conversion upload** runs in mock mode until the developer token and OAuth are set.
 
+## Vendor-first wave 3 — riders ✅ (built 2026-11-06, waiting for your test pass)
+
+Audit items 25, 29 and the rest of 26 (docs/VENDOR_FIRST_AUDIT.md). Decisions D-126…D-133.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 25 | Default rider (owner when the kitchen has no rider), runs without a rider shown to owners, a leaving rider is taken off routes | ✅ | `private.default_rider`, `unassigned_runs`, trigger `members_left_routes`; Deliver tab (mobile), `/rider` (web) |
+| 25 | Routes by area in one step (preview first), Route column in the import | ✅ | `area_routes`, `assign_routes_by_area`, trigger `import_rows_route`; web Delivery → Routes → "Routes by area" |
+| 25 | Rider kitchen-fault credits wait for the owner; owner corrects a recorded stop | ✅ | `decide_stop_credit`, `stop_credit_requests`, `correct_stop`; web live board "Correct", Delivery → Cash & credits; mobile Cash and credits |
+| 25 | Cash handover per rider | ✅ | `cash_handover`, `confirm_rider_cash`, `my_cash_handover`; web Delivery → Cash & credits and `/rider`; mobile Today desk, Cash and credits, Deliver tab |
+| 29 | Push notifications for owners and an in-app alerts list | ✅ mock locally; live needs FCM/APNs in EAS | `member_devices`, `register_device`, push twins of member alerts, `push-outbox` function, cron `tiffin-push`, `my_notifications`; mobile Alerts screen |
+| 26 | Minimum app version, shown only after the rider queue is sent | ✅ | `platform_settings.min_app_version`, `app_config` (anon), `admin_set_min_app_version`; mobile `components/app-guards.tsx`; Admin → Mobile app |
+
+Tests: `supabase/tests/14_riders_wave3.test.sql` (incl. a kitchen with no rider and 180 imported customers split by area into 3 routes), `tests/integration/w3-riders.test.ts`, `tests/integration/push.test.ts`, `packages/core/test/version.test.ts`, `import-route.test.ts`. Existing 06/12/m5 assertions now approve the rider's credit as the owner.
+
+Known gaps:
+- **Push on real phones** needs a development/release build (not Expo Go), the FCM V1 key in EAS for Android and the APNs key for iOS.
+- **Managers** (wave 2, D-117) should be added to the credit and cash RPCs, and get pushes once `notify_owners` includes them.
+- Read/unread for alerts, a per-member choice between push and WhatsApp, and the `x-app-version` header are not built.
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

@@ -477,7 +477,7 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
           <div className="flex flex-wrap gap-2">
             {REASONS.map((r) => <Chip key={r} label={REASON_LABEL[r]} selected={reason === r} onClick={() => setReason(r)} testId={`reason-${r}`} />)}
           </div>
-          {reason && KITCHEN_FAULT.has(reason) && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">The customer gets the meal back as credit.</p>}
+          {reason && KITCHEN_FAULT.has(reason) && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">The meal is credited back to the customer once the owner approves.</p>}
           <label className="block space-y-1">
             <span className="text-sm font-medium text-ink-700">Note{reason === 'other' ? ' (required)' : ''}</span>
             <FieldInput value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} data-testid="fail-note" />

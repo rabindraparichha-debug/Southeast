@@ -427,7 +427,8 @@ end;
 $$;
 
 create trigger import_rows_route after insert on public.import_rows
-  for each row execute function private.import_row_route();
+  for each row when (new.status = 'imported' and nullif(trim(new.raw ->> 'route'), '') is not null)
+  execute function private.import_row_route();
 
 -- ===========================================================================
 -- 5. Kitchen-fault credits: owner approval for riders' failures

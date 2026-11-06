@@ -683,3 +683,47 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 
 ### D-118 Customers may share a phone number (owner, 2026-11-06)
 - Several customers in one kitchen may share a phone (siblings, family phone). Phone search returns all of them; messages to that number are sent per customer. The one-open-lead-per-phone rule for platform leads is unchanged.
+
+### D-126 Default rider and runs without a rider (wave 3, audit item 25)
+- A new route's default rider (`private.default_rider`) is the kitchen's only rider; with **no rider, the owner** (small kitchens where the owner delivers); with two or more riders, nobody: the owner assigns. Existing routes without a rider in kitchens that have no rider were given the owner once (migration backfill).
+- A rider who leaves (or becomes staff) is taken off routes and planned runs from today; they fall back to the same rule (trigger on `members`).
+- Owners see today's runs that have no rider (`unassigned_runs()`) in the rider screens and take them with the existing `assign_run` ("always me" also sets the route's rider with `update_route`). `rider_today` is unchanged.
+
+### D-127 Routes by area and the import Route column (wave 3, audit item 25)
+- `assign_routes_by_area(kitchen, slot, rules, dry_run)` moves every address of an area (matched ignoring case and extra spaces) onto a route, for one slot (or both when the slot is null; the web screen does one slot at a time). A new route name creates the route; a rule may also set the rider. Preview (dry run) comes first in the UI.
+- Routes that receive addresses are re-optimised from scratch (hand-placed pins on them are cleared: it is an explicit bulk action). Routes that only lose addresses keep their order.
+- Slots already locked from today on are rebuilt at once (planned runs only, as `build_runs` does); a rebuild failure keeps the new routes and is reported (`rebuild_failed`), and "Plan / refresh runs" or the next lock rebuilds.
+- Addresses of a slot = live subscriptions of that slot, upcoming orders (dated moves) and addresses already on a route of that slot.
+- Import: an optional **Route** column (last in the template) places the customer's default address on that route for the plan's slots (both without a plan), creating the route if needed. It is a trigger on `import_rows`, so `import_customers` is unchanged; a bad route never fails the import (the address then joins a route at the next lock).
+
+### D-128 Kitchen-fault credits from riders wait for the owner (wave 3, audit item 25)
+- A kitchen-fault reason (`kitchen_late`, `food_issue`, `missing_meal`, `rider_issue`) recorded by anyone but an owner of the kitchen no longer posts a credit: the stop gets `credit_status = 'pending'` and the owners get an app alert (`stop_credit_request`, push + in-app list, never WhatsApp). The owner gives the meal back (`decide_stop_credit(..., true)`, credit at the price charged, same rule as before) or refuses it.
+- An owner's own kitchen-fault failure credits at once (`credit_status = 'approved'`).
+- Only owners decide for now; managers (D-117, wave 2) should be added to `decide_stop_credit` and `stop_credit_requests` when that role lands.
+- Updates D-071 (kitchen-side failures credited automatically).
+
+### D-129 The owner corrects a recorded stop (wave 3, audit item 25)
+- `correct_stop(stop, status, reason, note)`: owner only, a note is required (kept on the stop as `correction_note`, plus the audit log), stops up to 7 days old, and only stops that already have an outcome (pending stops use the rider actions).
+- `pending` = try again (a finished run reopens to `out`); `delivered` = it did arrive (proof `none`); `failed` with a reason.
+- Credits follow, append-only: leaving a kitchen-fault failure reverses its credit with an `adjust` row (`ref_type 'stop_credit_reversal'`, ref = the credit); entering one posts a credit (the owner's decision is the approval). After a reversal, a new credit is keyed on that reversal (`delivery_stop_again` / `delivery_stop_order_again`), so every step stays idempotent.
+- Door cash: moving a delivered stop away from `delivered` rejects its pending cash; confirmed cash blocks the change (`cash_confirmed`: reject or adjust the payment first).
+- Known limit: tiffin counts recorded on the first attempt stay in the tiffin ledger (one row per stop).
+
+### D-130 Cash handover per rider (wave 3, audit item 25)
+- Owners see the door cash each person holds (`cash_handover`: pending list, plus confirmed and rejected in the last 7 days) and confirm it in one step (`confirm_rider_cash`, all pending or the listed payments). Each payment goes through `confirm_payment`, so recharges stay on one path.
+- Whoever collected cash sees what they hold (`my_cash_handover`, names only, no phones).
+- Owner only for now; managers (D-117) should be added when wave 2 lands. Rejecting a single payment stays on the customer's money panel.
+
+### D-131 Owner push notifications without WhatsApp (wave 3, audit item 29)
+- Owners register their phone (Expo push token, `register_device`) when the app starts; sign-out unregisters it. A token moves to whoever signed in last on that phone; at most 10 active devices per person. `member_devices` is not audited (no money/customer data, and `last_seen_at` changes on every start).
+- Every member alert already queued for WhatsApp gets a `push` twin when the member has a device (trigger on `notifications_outbox`; `lock_slot`, `notify_owners` and the other writers are unchanged, and managers get pushes once wave 2 sends them the alerts). App-only alerts (`private.notify_owners_push`) are never sent on WhatsApp.
+- While WhatsApp is live too, an owner may get both; a per-member channel setting can come later.
+- `push-outbox` sends through the Expo Push API. `PUSH_MODE` unset = mock on a local stack, live on a hosted project (Expo needs no key; `EXPO_ACCESS_TOKEN` only with enhanced push security). Mock is refused on a hosted project (same PLATFORM_ENV rule as wave 1). Mock sends are recorded `sent` with `last_error = 'mock'`.
+- Push rows older than 12 hours are dropped (`expired`); unregistered devices are switched off; failures retry 5 times with backoff; rows stuck in `sending` for 10 minutes are claimed again. Kicked every minute by `tiffin-push`.
+
+### D-132 In-app alerts list (wave 3, audit item 29)
+- `my_notifications()` lists a member's alerts of the last 30 days (kitchens they still belong to), each once (push twins hidden), with title/body rendered in the database (`private.member_alert_text`, English) so the list and the push say the same thing. Mobile: Alerts screen and the Today desk card. Read/unread is not tracked yet.
+
+### D-133 Minimum app version (wave 3, audit item 26)
+- `platform_settings` row `min_app_version` (enabled + `{version, android_url, ios_url, message}`), set by platform admins (`admin_set_min_app_version`, Admin → Mobile app). `app_config()` serves it to everyone, before login too (an old build may not be able to log in), and the app caches it for offline starts.
+- The mobile gate first sends the rider's queued actions (a banner says so) and only then shows "Update required" with the download link; actions that need attention stay saved on the phone. The `x-app-version` request header from audit item 26 is not part of this track.

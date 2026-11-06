@@ -64,6 +64,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00105 | Spare (used by the M1, M3, M7, M6 and P5/P6 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00130 | Spare (used by the wave 3 riders integration test, `tests/integration/w3-riders.test.ts`) |
 
 ## Conventions (follow these in every change)
 
@@ -128,6 +129,18 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Rider actions go through `complete_stop` / `fail_stop` / `start_run` / `finish_run` with `p_at` (device time) and `p_client_op` (idempotency key). Never use `now()` for a rider's action time.
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
+
+**Riders, wave 3 (D-126…D-130, D-133)**
+- A new route's rider comes only from `private.default_rider()` (the only rider; no rider = the owner; 2+ riders = nobody). Owners see riderless runs through `unassigned_runs()` and take them with `assign_run`.
+- Bulk route changes go through `assign_routes_by_area` (preview with `p_dry_run` first). The import Route column is handled by the `import_rows` trigger (`private.import_row_route`); don't add route logic to `import_customers`.
+- Delivery credits are posted only by `private.post_stop_credit()` and taken back only by `private.reverse_stop_credit()` (an `adjust` row, `ref_type 'stop_credit_reversal'`). A kitchen-fault failure by a non-owner waits (`delivery_stops.credit_status = 'pending'`) for `decide_stop_credit`. Recorded outcomes change only through `correct_stop` (owner, note required).
+- Rider cash is confirmed in bulk with `confirm_rider_cash`, which calls `confirm_payment` per payment; never post recharges another way.
+
+**Push and app alerts (D-131, D-132)**
+- Member alerts queued for WhatsApp get a `push` twin automatically (trigger `notifications_outbox_push_twin`) when the member has a device in `member_devices`. App-only alerts use `private.notify_owners_push()`.
+- When you add a member template (WhatsApp or push-only), add its title/body/path to `private.member_alert_text` (one text for push and the in-app list, `my_notifications`). Paths must be screens in `apps/mobile/src/lib/push.ts` `PATHS`.
+- `push-outbox` (Edge Function, service role) sends through Expo; pure logic in `_shared/push.ts` (unit tests in `tests/integration/push.test.ts`). `PUSH_MODE=mock` is refused outside a local stack.
+- The mobile app-wide guards live in `apps/mobile/src/components/app-guards.tsx` (minimum version from `app_config()` after the rider queue is sent, push registration); sign-out calls `unregisterPush()` first.
 
 **Inventory (M6)**
 - Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.
@@ -236,6 +249,8 @@ P5/P6 Edge Function secrets (same file):
 | `NOTEBOOK_IMPORT_MODE` | Optional `mock` to force the fixture even with `ANTHROPIC_API_KEY` set; the model is `ANTHROPIC_MODEL` |
 
 Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the built-in optimiser is used) and `VROOM_USE_ROUTING` (`true` only if the VROOM server has its own OSRM/ORS).
+
+Push Edge Function secrets (same file): `PUSH_MODE` (`mock` | `live`; unset = mock on a local stack, live on a hosted project; mock is refused when hosted), `EXPO_ACCESS_TOKEN` (optional, only with Expo enhanced push security) and `EXPO_PUSH_URL` (optional override of `https://exp.host/--/api/v2/push/send`).
 
 Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
 

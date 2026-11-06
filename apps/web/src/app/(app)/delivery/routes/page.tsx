@@ -9,6 +9,7 @@ import { Alert, PageHeader } from '@/components/ui';
 import { DeliveryTabs } from '../tabs';
 import { RoutesManager, type RouteRow, type RiderOption } from './routes-manager';
 import { RouteEditor } from './route-editor';
+import { AreaAssign } from './area-assign';
 
 // Saved routes per meal: default rider, active flag, and the stop order the daily runs follow.
 export default async function RoutesPage({ searchParams }: PageProps<'/delivery/routes'>) {
@@ -48,8 +49,9 @@ export default async function RoutesPage({ searchParams }: PageProps<'/delivery/
       />
       <DeliveryTabs isOwner={kitchen.role === 'owner'} />
       <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-2">
+        <div className="space-y-6 lg:col-span-2">
           <RoutesManager kitchenId={kitchen.kitchenId} routes={rows} riders={riders} selectedId={selected?.id ?? null} />
+          <AreaAssign kitchenId={kitchen.kitchenId} riders={riders} />
         </div>
         <div className="lg:col-span-3">
           {selected ? (

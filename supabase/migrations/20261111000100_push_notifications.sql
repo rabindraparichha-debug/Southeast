@@ -182,8 +182,10 @@ begin
 end;
 $$;
 
+-- WHEN keeps the high-volume customer inserts (on the way, receipts, reminders) from calling it at all.
 create trigger notifications_outbox_push_twin after insert on public.notifications_outbox
-  for each row execute function private.outbox_push_twin();
+  for each row when (new.channel = 'whatsapp' and new.recipient_type = 'member')
+  execute function private.outbox_push_twin();
 
 -- App-only alert to the kitchen's owners (shown in the app list; pushed to their devices).
 create or replace function private.notify_owners_push(p_kitchen uuid, p_template text, p_payload jsonb, p_dedupe text)

@@ -20,6 +20,7 @@ import {
 import { Alert, Badge, Button, Card, Select } from '@/components/ui';
 import { SortableList } from '@/components/sortable-list';
 import type { MapRider, MapStop } from '@/components/delivery-map';
+import { CorrectStop } from './correct-stop';
 
 // Leaflet touches `window`, so the map only renders in the browser.
 const DeliveryMap = dynamic(() => import('@/components/delivery-map'), {
@@ -30,6 +31,13 @@ const DeliveryMap = dynamic(() => import('@/components/delivery-map'), {
 const POLL_MS = 15_000;
 type Msg = { tone: 'red' | 'green' | 'amber'; text: string } | null;
 
+/** Wave 3: credit decision per stop (pending / approved / rejected) for the last 14 days. */
+async function fetchCredits(kitchenId: string): Promise<Record<string, string>> {
+  const { data } = await supabaseBrowser().rpc('stop_credit_requests', { p_kitchen: kitchenId, p_status: null as unknown as string, p_days: 14 });
+  const list = (data ?? []) as unknown as { stop_id: string; credit_status: string }[];
+  return Object.fromEntries(list.map((c) => [c.stop_id, c.credit_status]));
+}
+
 export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: string; initial: LiveBoard; isOwner: boolean }) {
   const [board, setBoard] = useState<LiveBoard>(initial);
   const [busy, setBusy] = useState(false);
@@ -37,6 +45,17 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
   const [updatedAt, setUpdatedAt] = useState(() => new Date());
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [showMap, setShowMap] = useState(false);
+  // Wave 3: kitchen-fault credit decisions per stop (owners), from stop_credit_requests.
+  const [credits, setCredits] = useState<Record<string, string>>({});
+
+  const loadCredits = useCallback(
+    () => (isOwner ? fetchCredits(kitchenId).then(setCredits) : Promise.resolve()),
+    [isOwner, kitchenId],
+  );
+
+  useEffect(() => {
+    if (isOwner) void fetchCredits(kitchenId).then(setCredits);
+  }, [isOwner, kitchenId]);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabaseBrowser().rpc('live_board', {
@@ -176,6 +195,11 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
               }
               onReorder={(stops) => reorder(run, stops)}
               onMove={(stopId, toRun) => act(supabaseBrowser().rpc('move_stop', { p_stop: stopId, p_run: toRun }), 'Stop moved. It stays on that route from now on.')}
+              credits={credits}
+              onCorrected={(text, ok) => {
+                setMsg({ tone: ok ? 'green' : 'red', text });
+                if (ok) void refresh().then(loadCredits);
+              }}
             />
           ))}
         </div>
@@ -185,7 +209,7 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
 }
 
 function RunCard({
-  run, riders, otherRuns, isOwner, busy, photoUrls, onAssign, onReorder, onMove,
+  run, riders, otherRuns, isOwner, busy, photoUrls, onAssign, onReorder, onMove, credits, onCorrected,
 }: {
   run: BoardRun;
   riders: BoardRider[];
@@ -196,6 +220,8 @@ function RunCard({
   onAssign: (riderId: string) => void;
   onReorder: (stops: BoardStop[]) => void;
   onMove: (stopId: string, runId: string) => void;
+  credits: Record<string, string>;
+  onCorrected: (message: string, ok: boolean) => void;
 }) {
   const c = run.counts;
   const pct = (n: number) => (c.stops ? `${(n * 100) / c.stops}%` : '0%');
@@ -257,7 +283,7 @@ function RunCard({
           label="stop"
           onReorder={onReorder}
           renderItem={(s) => <StopRow stop={s} isOwner={isOwner} photoUrl={s.photo_path ? photoUrls[s.photo_path] : undefined}
-            otherRuns={otherRuns} busy={busy} onMove={(to) => onMove(s.id, to)} />}
+            otherRuns={otherRuns} busy={busy} onMove={(to) => onMove(s.id, to)} credit={credits[s.id]} onCorrected={onCorrected} />}
         />
         {!closed && run.stops.length > 1 && (
           <p className="text-xs text-ink-500">Drag stops (or use ▲ ▼) to change the order. The new order is saved to the route for the next days.</p>
@@ -288,7 +314,7 @@ function Proof({ stop, isOwner, photoUrl }: { stop: BoardStop; isOwner: boolean;
 }
 
 function StopRow({
-  stop: s, isOwner, photoUrl, otherRuns, busy, onMove,
+  stop: s, isOwner, photoUrl, otherRuns, busy, onMove, credit, onCorrected,
 }: {
   stop: BoardStop;
   isOwner: boolean;
@@ -296,6 +322,8 @@ function StopRow({
   otherRuns: BoardRun[];
   busy: boolean;
   onMove: (runId: string) => void;
+  credit?: string;
+  onCorrected: (message: string, ok: boolean) => void;
 }) {
   const address = [s.line1, s.landmark, s.area].filter(Boolean).join(', ');
   return (
@@ -317,7 +345,11 @@ function StopRow({
               {s.failed_note ? `: ${s.failed_note}` : ''}
             </span>
           )}
-          {s.status === 'failed' && s.kitchen_fault && <Badge tone="blue">Kitchen fault: credited</Badge>}
+          {s.status === 'failed' && s.kitchen_fault && (
+            credit === 'pending' ? <a href="/delivery/handover"><Badge tone="amber">Kitchen fault: credit waiting for you</Badge></a>
+              : credit === 'rejected' ? <Badge tone="gray">Kitchen fault: credit refused</Badge>
+              : <Badge tone="blue">Kitchen fault: credited</Badge>
+          )}
           {s.offline && (
             <span className="text-amber-700">
               Offline, synced later
@@ -332,6 +364,7 @@ function StopRow({
             <span className="text-ink-600">Tiffins out {s.tiffins_out} · back {s.tiffins_returned}</span>
           )}
           {isOwner && s.cash_paise != null && s.cash_paise > 0 && <span className="text-ink-700">Cash {formatPaise(s.cash_paise)}</span>}
+          {isOwner && s.status !== 'pending' && <CorrectStop stop={s} onDone={onCorrected} />}
         </div>
       </div>
       {s.status === 'pending' && otherRuns.length > 0 && (
