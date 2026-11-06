@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "db:backup": "scripts/backup.sh",
     "db:restore-drill": "scripts/restore-drill.sh",
+    "db:deploy": "scripts/deploy.sh",
     "db:loadtest": "docker exec -i supabase_db_tiffin psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/perf/lock_load.sql"
   },
   "devDependencies": {

@@ -1,8 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatIstShort, formatServiceDate } from '@tiffin/core';
 import type { SlotSummary, SlotTotals } from '@tiffin/db';
 import { colors, radius, space } from './theme';
+import { Button, ErrorText } from './ui';
 import { locale, t } from '@/i18n';
+import { supabase } from '@/lib/supabase';
+import { friendlyError } from '@/lib/errors';
 
 // P5/P6 counts. Optional: counts locked before P5 don't have them.
 type Totals = SlotTotals & { veg_switched?: number; by_health?: Record<string, number> };
@@ -16,20 +20,76 @@ export function healthSummary(byHealth: Record<string, number> | null | undefine
     .join(' · ');
 }
 
-export function SlotCard({ s, onPress }: { s: SlotSummary; onPress?: () => void }) {
+/** Minutes after the cutoff before an unlocked slot counts as "not frozen" (the lock job runs every minute). */
+export const FREEZE_GRACE_MS = 5 * 60_000;
+
+/**
+ * True when the cutoff passed (plus grace) with meals ordered but no count snapshot: the engine missed it.
+ * Uses slot_summary's own `overdue` (server clock) when present; closed slots are never overdue.
+ */
+export function isCountOverdue(s: SlotSummary, now = Date.now()): boolean {
+  if (s.locked || s.closed || s.live.orders <= 0) return false;
+  return s.overdue ?? now > Date.parse(s.cutoff_at) + FREEZE_GRACE_MS;
+}
+
+/** "Count not frozen" with Freeze now for the owner (freeze_slot: the idempotent lock). */
+function NotFrozen({ s, kitchenId, canFreeze, onFrozen }: { s: SlotSummary; kitchenId?: string; canFreeze: boolean; onFrozen?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const freeze = () => {
+    if (!kitchenId) return;
+    Alert.alert(t('today.freezeConfirmTitle'), t('today.freezeConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('today.freezeNow'),
+        style: 'destructive',
+        onPress: async () => {
+          setBusy(true);
+          setError('');
+          const { error } = await supabase.rpc('freeze_slot', { p_kitchen: kitchenId, p_date: s.service_date, p_slot: s.slot });
+          setBusy(false);
+          if (error) setError(friendlyError(error));
+          else onFrozen?.();
+        },
+      },
+    ]);
+  };
+  return (
+    <View style={styles.alert} accessibilityRole="alert">
+      <Text style={styles.alertText}>{t('today.notFrozen', { time: formatIstShort(s.cutoff_at, locale()) })}</Text>
+      {s.engine_error ? <Text style={styles.alertText}>{t('today.engineError', { message: s.engine_error })}</Text> : null}
+      {canFreeze && kitchenId
+        ? <Button title={busy ? t('today.freezing') : t('today.freezeNow')} onPress={freeze} busy={busy} />
+        : <Text style={styles.alertText}>{t('today.askOwnerToFreeze')}</Text>}
+      <ErrorText>{error}</ErrorText>
+    </View>
+  );
+}
+
+export function SlotCard({ s, onPress, kitchenId, canFreeze = false, onFrozen }: {
+  s: SlotSummary; onPress?: () => void; kitchenId?: string; canFreeze?: boolean; onFrozen?: () => void;
+}) {
   const totals: Totals = s.locked && s.locked_totals ? s.locked_totals : s.live;
   const health = healthSummary(totals.by_health);
+  const overdue = isCountOverdue(s);
   return (
-    <Pressable onPress={onPress} style={styles.card} accessibilityRole="button">
+    <Pressable onPress={onPress} style={[styles.card, overdue && styles.cardOverdue]} accessibilityRole="button">
       <View style={styles.row}>
         <Text style={styles.title}>{formatServiceDate(s.service_date, locale())} · {t(`slot.${s.slot}`)}</Text>
-        <Text style={[styles.badge, s.locked ? styles.final : styles.preview]}>{s.locked ? t('today.final') : t('today.preview')}</Text>
+        <Text style={[styles.badge, s.locked ? styles.final : overdue ? styles.overdue : styles.preview]}>
+          {s.locked ? t('today.final') : overdue ? t('today.notFrozenBadge') : t('today.preview')}
+        </Text>
       </View>
       <Text style={styles.sub}>
         {s.closed
           ? t('today.kitchenClosed') + (s.closure_reason ? ` · ${s.closure_reason}` : '')
-          : s.locked ? t('today.lockedAt', { time: formatIstShort(s.locked_at!, locale()) }) : t('today.closesAt', { time: formatIstShort(s.cutoff_at, locale()) })}
+          : s.locked
+            ? t('today.lockedAt', { time: formatIstShort(s.locked_at!, locale()) })
+            : overdue
+              ? t('today.notFrozenSub', { time: formatIstShort(s.cutoff_at, locale()) })
+              : t('today.closesAt', { time: formatIstShort(s.cutoff_at, locale()) })}
       </Text>
+      {overdue && <NotFrozen s={s} kitchenId={kitchenId} canFreeze={canFreeze} onFrozen={onFrozen} />}
       <Text style={styles.big}>{totals.total_meals} <Text style={styles.sub}>{t('today.meals')}</Text></Text>
       <Text style={styles.sub}>
         {t('diet.veg')} {totals.by_diet.veg} · {t('diet.nonveg')} {totals.by_diet.nonveg} · {t('diet.jain')} {totals.by_diet.jain}
@@ -46,6 +106,10 @@ export function SlotCard({ s, onPress }: { s: SlotSummary; onPress?: () => void 
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: radius, borderWidth: 1, borderColor: colors.line, padding: space(4), gap: space(1), flexBasis: '47%', flexGrow: 1 },
+  cardOverdue: { borderColor: '#FCA5A5', borderWidth: 2 },
+  alert: { backgroundColor: '#FEF2F2', borderRadius: 8, padding: space(3), gap: space(2), marginTop: space(1) },
+  alertText: { fontSize: 13, color: colors.danger },
+  overdue: { backgroundColor: '#FEE2E2', color: colors.danger },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space(2) },
   title: { fontSize: 14, fontWeight: '600', color: colors.ink, flexShrink: 1 },
   sub: { fontSize: 12, color: colors.muted },

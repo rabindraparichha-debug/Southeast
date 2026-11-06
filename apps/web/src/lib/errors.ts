@@ -161,6 +161,11 @@ const MESSAGES: Record<string, string> = {
   invalid_input: 'That choice is not valid.',
   key_in_url: 'Send the lead key in the X-Lead-Key header, not in the link.',
   intake_not_configured: 'Lead intake is not set up on this project yet.',
+  // Vendor-first wave 3 (ops): Freeze now, retention settings
+  before_cutoff: 'Changes are still open for this meal. It is frozen automatically at the cutoff.',
+  out_of_range: 'Only meals from the last 7 days can be frozen here. Contact Tiffin support.',
+  kitchen_suspended: 'This kitchen is suspended. Contact Tiffin support.',
+  invalid_setting: 'Retention days must be whole numbers from 1 to 3650.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
