@@ -94,7 +94,8 @@ describe('M4: WhatsApp through the webhook', () => {
     expect(res.status).toBe(200);
     const { data } = await owner.client.from('messages').select('body, handled_by, status').eq('conversation_id', conversationId)
       .eq('handled_by', 'vendor').order('created_at', { ascending: false }).limit(1).single();
-    expect(data).toMatchObject({ body: 'Namaskar Ankit, see you tomorrow.', status: 'sent' });
+    // WHATSAPP_MODE=mock sends nothing, so the conversation says 'mock', never 'sent'.
+    expect(data).toMatchObject({ body: 'Namaskar Ankit, see you tomorrow.', status: 'mock' });
   });
 
   it('"my page" sends a magic link that opens the customer page without login', async () => {

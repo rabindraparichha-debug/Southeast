@@ -242,7 +242,8 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"c1500000-0000-4000-c000-000000000001","role":"authenticated"}', true);
 select lives_ok($$select public.record_payment((select v from rx where k = 'door'), 30000, 'cash')$$, 'cash from an offline customer');
 reset role;
-select is((select status || '/' || last_error from public.notifications_outbox where template = 'payment_receipt'
+-- (a monthly customer's receipt is 'payment_receipt_monthly', held-back item 1)
+select is((select status || '/' || last_error from public.notifications_outbox where template like 'payment_receipt%'
            and recipient_id = (select v from rx where k = 'door')), 'cancelled/customer_messages_off',
   'its WhatsApp receipt is stored as cancelled while customer messages are off');
 select private.notify_owners('c1500000-0000-4000-c000-00000000000a', 'inbox_alert', '{}'::jsonb, 'test_alert_2');

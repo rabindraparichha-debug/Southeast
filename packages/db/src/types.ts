@@ -1621,6 +1621,7 @@ export type Database = {
           broadcast_cap_monthly: number;
           credit_limit_meals: number;
           default_billing_mode: Database['public']['Enums']['billing_mode'];
+          dues_overdue_days: number;
           gas_paise_per_meal: number;
           grace_days: number;
           kartika_veg_mode: boolean;
@@ -1645,6 +1646,7 @@ export type Database = {
           broadcast_cap_monthly?: number;
           credit_limit_meals?: number;
           default_billing_mode?: Database['public']['Enums']['billing_mode'];
+          dues_overdue_days?: number;
           gas_paise_per_meal?: number;
           grace_days?: number;
           kartika_veg_mode?: boolean;
@@ -1668,6 +1670,7 @@ export type Database = {
           broadcast_cap_monthly?: number;
           credit_limit_meals?: number;
           default_billing_mode?: Database['public']['Enums']['billing_mode'];
+          dues_overdue_days?: number;
           gas_paise_per_meal?: number;
           grace_days?: number;
           kartika_veg_mode?: boolean;
@@ -2468,6 +2471,7 @@ export type Database = {
         Row: {
           attempts: number;
           channel: string;
+          claimed_at: string | null;
           created_at: string;
           dedupe_key: string | null;
           expires_at: string | null;
@@ -2475,6 +2479,7 @@ export type Database = {
           kitchen_id: string | null;
           last_error: string | null;
           payload: NonNullable<Json>;
+          provider_message_id: string | null;
           recipient_id: string;
           recipient_type: string;
           send_after: string;
@@ -2486,6 +2491,7 @@ export type Database = {
         Insert: {
           attempts?: number;
           channel: string;
+          claimed_at?: string | null;
           created_at?: string;
           dedupe_key?: string | null;
           expires_at?: string | null;
@@ -2493,6 +2499,7 @@ export type Database = {
           kitchen_id?: string | null;
           last_error?: string | null;
           payload?: NonNullable<Json>;
+          provider_message_id?: string | null;
           recipient_id: string;
           recipient_type: string;
           send_after?: string;
@@ -2503,6 +2510,7 @@ export type Database = {
         Update: {
           attempts?: number;
           channel?: string;
+          claimed_at?: string | null;
           created_at?: string;
           dedupe_key?: string | null;
           expires_at?: string | null;
@@ -2510,6 +2518,7 @@ export type Database = {
           kitchen_id?: string | null;
           last_error?: string | null;
           payload?: NonNullable<Json>;
+          provider_message_id?: string | null;
           recipient_id?: string;
           recipient_type?: string;
           send_after?: string;
@@ -4410,7 +4419,15 @@ export type Database = {
       };
       finish_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
       import_customers: {
-        Args: { p_consent: boolean; p_file_name?: string; p_kitchen: string; p_rows: Json };
+        Args: {
+          p_batch?: string;
+          p_consent: boolean;
+          p_file_name?: string;
+          p_first_row?: number;
+          p_kitchen: string;
+          p_rows: Json;
+          p_total?: number;
+        };
         Returns: Json;
       };
       inventory_alerts: { Args: { p_kitchen: string }; Returns: Json };
@@ -4992,6 +5009,7 @@ export type Database = {
         Args: {
           p_error: string;
           p_id: string;
+          p_mock?: boolean;
           p_ok: boolean;
           p_rendered: string;
           p_skip?: boolean;
@@ -5035,7 +5053,7 @@ export type Database = {
       };
       wa_magic_link: { Args: { p_conversation: string }; Returns: string };
       wa_message_status: {
-        Args: { p_status: string; p_wa_message_id: string };
+        Args: { p_callback?: string; p_status: string; p_wa_message_id: string };
         Returns: undefined;
       };
       wa_payment_link_record: { Args: { p_conversation: string; p_meals: number }; Returns: Json };

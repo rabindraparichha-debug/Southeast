@@ -12,6 +12,10 @@ const rupees = (paise: unknown) => `₹${(Number(paise ?? 0) / 100).toLocaleStri
 const day = (d: unknown) =>
   new Date(`${String(d)}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+/** '2026-11' → 'November 2026' (statement month). */
+const monthLabel = (m: unknown) =>
+  new Date(`${String(m ?? '').slice(0, 7)}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
 const qty = (n: unknown, unit: unknown) => `${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${String(unit ?? '')}`.trim();
 function stockAlertText(p: Payload): string {
   if (p.kind === 'price_jump') return `${p.item} price up ${p.pct}% (${rupees(p.from_paise)} → ${rupees(p.to_paise)} per ${p.unit})`;
@@ -81,6 +85,26 @@ export const TEMPLATES: Record<string, Def> = {
       or: '{{1}}: ଆପଣଙ୍କ {{2}} ରିଫଣ୍ଡ ଦିଆଗଲା ({{3}})।',
     },
     params: (p, k) => [k, rupees(p.amount_paise), String(p.method ?? '').replace('_manual', '')],
+  },
+  // Monthly (pay-later) customers, D-115: a payment carries no meals, so the receipt says what is still to pay.
+  payment_receipt_monthly: {
+    name: 'payment_receipt_monthly_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: payment of {{2}} received. Still to pay: {{3}}. Thank you!',
+      hi: '{{1}}: {{2}} का भुगतान मिला। अभी बाकी: {{3}}। धन्यवाद!',
+      or: '{{1}}: {{2}} ପେମେଣ୍ଟ ମିଳିଲା। ଏବେ ବାକି: {{3}}। ଧନ୍ୟବାଦ!',
+    },
+    params: (p, k) => [k, rupees(p.amount_paise), rupees(p.due_paise)],
+  },
+  // Monthly customers: the bill for the month that ended (only while something is unpaid).
+  statement_ready: {
+    name: 'statement_ready_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: your bill for {{2}} is ready: {{3}} meals, {{4}}. Still to pay: {{5}}. Please pay the kitchen.',
+      hi: '{{1}}: {{2}} का आपका बिल तैयार है: {{3}} खाने, {{4}}। अभी बाकी: {{5}}। कृपया किचन को भुगतान करें।',
+      or: '{{1}}: {{2}}ର ଆପଣଙ୍କ ବିଲ୍ ପ୍ରସ୍ତୁତ: {{3}}ଟି ଖାଇବା, {{4}}। ଏବେ ବାକି: {{5}}। ଦୟାକରି କିଚେନ୍‌କୁ ପେମେଣ୍ଟ କରନ୍ତୁ।',
+    },
+    params: (p, k) => [k, monthLabel(p.month), String(p.meals ?? 0), rupees(p.charged_paise), rupees(p.amount_due_paise)],
   },
   low_balance_reminder: {
     name: 'low_balance_v1', category: 'UTILITY',
@@ -180,6 +204,25 @@ export const TEMPLATES: Record<string, Def> = {
       or: '{{1}}: {{4}}ଙ୍କ {{3}}ଟି ଖାଇବା ପାଇଁ {{2}} ପେମେଣ୍ଟ ମିଳିଲା। ତାଙ୍କ ବାଲାନ୍ସ: {{5}}ଟି ଖାଇବା। ଧନ୍ୟବାଦ!',
     },
     params: (p, k) => [k, rupees(p.amount_paise), String(p.meals ?? ''), String(p.eater_name ?? ''), String(p.balance_meals ?? '')],
+  },
+  payment_receipt_monthly_payer: {
+    name: 'payment_receipt_monthly_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: payment of {{2}} received for {{3}}. Still to pay: {{4}}. Thank you!',
+      hi: '{{1}}: {{3}} के लिए {{2}} का भुगतान मिला। अभी बाकी: {{4}}। धन्यवाद!',
+      or: '{{1}}: {{3}}ଙ୍କ ପାଇଁ {{2}} ପେମେଣ୍ଟ ମିଳିଲା। ଏବେ ବାକି: {{4}}। ଧନ୍ୟବାଦ!',
+    },
+    params: (p, k) => [k, rupees(p.amount_paise), String(p.eater_name ?? ''), rupees(p.due_paise)],
+  },
+  statement_ready_payer: {
+    name: 'statement_ready_payer_v1', category: 'UTILITY',
+    text: {
+      en: '{{1}}: the {{2}} bill for {{3}} is ready: {{4}} meals, {{5}}. Still to pay: {{6}}. See it and pay here: {{7}}',
+      hi: '{{1}}: {{3}} का {{2}} का बिल तैयार है: {{4}} खाने, {{5}}। अभी बाकी: {{6}}। यहाँ देखें और भुगतान करें: {{7}}',
+      or: '{{1}}: {{3}}ଙ୍କ {{2}}ର ବିଲ୍ ପ୍ରସ୍ତୁତ: {{4}}ଟି ଖାଇବା, {{5}}। ଏବେ ବାକି: {{6}}। ଏଠାରେ ଦେଖନ୍ତୁ ଓ ପେମେଣ୍ଟ କରନ୍ତୁ: {{7}}',
+    },
+    params: (p, k) => [k, monthLabel(p.month), String(p.eater_name ?? ''), String(p.meals ?? 0), rupees(p.charged_paise),
+      rupees(p.amount_due_paise), String(p.url ?? '')],
   },
   refund_notice_payer: {
     name: 'refund_notice_payer_v1', category: 'UTILITY',

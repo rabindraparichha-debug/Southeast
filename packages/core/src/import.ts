@@ -2,6 +2,7 @@
 // (public.import_customers) re-validates and is authoritative; error codes match.
 
 import { normalizePhone } from './phone';
+import { addDays, isIsoDate } from './time';
 
 export const IMPORT_FIELDS = [
   { key: 'name', label: 'Name', required: true, aliases: ['name', 'customer', 'customer name', 'full name', 'naam'] },
@@ -14,8 +15,11 @@ export const IMPORT_FIELDS = [
   { key: 'delivery_notes', label: 'Delivery notes', required: false, aliases: ['delivery notes', 'delivery instructions', 'instructions'] },
   { key: 'notes', label: 'Notes', required: false, aliases: ['notes', 'remarks', 'comment', 'comments'] },
   { key: 'plan', label: 'Plan', required: false, aliases: ['plan', 'plan name', 'package', 'subscription'] },
+  { key: 'plan_2', label: 'Second plan', required: false, aliases: ['plan 2', 'plan2', 'second plan', '2nd plan', 'dinner plan', 'evening plan', 'night plan'] },
   { key: 'start_date', label: 'Start date', required: false, aliases: ['start date', 'start', 'from', 'joining date', 'date'] },
   { key: 'qty', label: 'Tiffins per meal', required: false, aliases: ['qty', 'quantity', 'tiffins', 'count'] },
+  { key: 'status', label: 'Status (active / paused / stopped)', required: false, aliases: ['status', 'active/paused', 'current status', 'state'] },
+  { key: 'paused_from', label: 'Paused from', required: false, aliases: ['paused from', 'pause from', 'paused since', 'paused on', 'pause date', 'pause start'] },
   { key: 'balance', label: 'Opening balance (meals)', required: false, aliases: ['balance', 'opening balance', 'meals left', 'advance meals', 'remaining meals'] },
   { key: 'billing', label: 'Billing (monthly / prepaid)', required: false, aliases: ['billing', 'billing mode', 'monthly/prepaid', 'pay later', 'prepaid'] },
   { key: 'dues', label: 'Opening dues (₹)', required: false, aliases: ['dues', 'opening dues', 'due', 'khata', 'amount due', 'baki', 'pending amount'] },
@@ -42,7 +46,13 @@ export type ImportErrorCode =
   | 'invalid_location'
   | 'invalid_billing'
   | 'invalid_dues'
-  | 'dues_need_monthly';
+  | 'dues_need_monthly'
+  | 'unknown_second_plan'
+  | 'same_plan_twice'
+  | 'invalid_status'
+  | 'invalid_pause_date'
+  | 'paused_from_needs_paused'
+  | 'balance_on_repeated_row';
 
 export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   name_required: 'Name is missing',
@@ -60,7 +70,39 @@ export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   invalid_billing: 'Billing must be Monthly (pay later) or Prepaid',
   invalid_dues: 'Opening dues must be an amount in rupees (up to ₹1,00,000)',
   dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees',
+  unknown_second_plan: "No active plan with the second plan's name",
+  same_plan_twice: 'This plan is already on this customer (for more tiffins use Tiffins per meal)',
+  invalid_status: 'Status must be Active, Paused or Stopped',
+  invalid_pause_date: 'Paused-from date is not a valid date',
+  paused_from_needs_paused: 'A paused-from date needs status Paused (or leave status blank)',
+  balance_on_repeated_row: "Put the opening balance and dues on this customer's first row only",
 };
+
+/** Not errors: the row is saved, but the vendor should know. */
+export type ImportWarningCode = 'diet_differs_from_plan' | 'stopped_plan_ignored' | 'adds_plan';
+
+export const IMPORT_WARNING_MESSAGES: Record<ImportWarningCode, string> = {
+  diet_differs_from_plan: "Diet differs from the plan's diet: meals are cooked to the plan",
+  stopped_plan_ignored: 'Stopped: saved with any dues, but no plan',
+  adds_plan: 'Adds this plan to the same customer on an earlier row',
+};
+
+export function importWarningMessage(code: string): string {
+  return IMPORT_WARNING_MESSAGES[code as ImportWarningCode] ?? code;
+}
+
+export type ImportStatusValue = 'active' | 'paused' | 'stopped';
+
+/** Status column → status (same words as private.parse_import_status); null = not understood. Blank = active. */
+export function parseImportStatus(value: string | undefined): ImportStatusValue | null {
+  const v = (value ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (['', 'active', 'running', 'on', 'yes', 'chalu'].includes(v)) return 'active';
+  if (['paused', 'pause', 'hold', 'onhold', 'break'].includes(v)) return 'paused';
+  if (['stopped', 'stop', 'left', 'inactive', 'closed', 'cancelled', 'canceled', 'discontinued', 'off', 'no', 'band'].includes(v)) {
+    return 'stopped';
+  }
+  return null;
+}
 
 export type BillingModeValue = 'monthly' | 'prepaid';
 
@@ -155,7 +197,7 @@ export function applyMapping(rows: unknown[][], mapping: ColumnMapping): ImportR
       const idx = mapping[field.key];
       if (idx === undefined) continue;
       const raw = row[idx];
-      const value = field.key === 'start_date' ? normalizeDate(raw) : String(raw ?? '').trim();
+      const value = field.key === 'start_date' || field.key === 'paused_from' ? normalizeDate(raw) : String(raw ?? '').trim();
       if (value !== '') r[field.key] = value;
     }
     out.push(r);
@@ -176,34 +218,81 @@ export interface RowIssue {
   errors: ImportErrorCode[];
 }
 
+export interface RowWarning {
+  row: number;
+  warnings: ImportWarningCode[];
+  /** For 'adds_plan': the earlier row of the same customer. */
+  into?: number;
+}
+
+/** A plan as the preview needs it: its name and (optionally) its diet, to warn about diet mismatches. */
+export type ImportPlan = { name: string; diet?: string | null };
+
+const planKey = (s: string | undefined) => (s ?? '').trim().toLowerCase();
+const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+
 /**
- * Client-side preview. Catches everything except `already_exists`, which only
- * the server can know. planNames: the kitchen's active plan names; defaultBilling: the kitchen's
- * default billing mode (used for rows with a blank billing column).
- * D-118: several customers may share a phone, so only the same phone AND the same name is a duplicate.
+ * Client-side preview with the same rules as public.import_customers. Catches everything except
+ * `already_exists`, which only the server can know. plans: the kitchen's active plans (names, or
+ * names with diets); defaultBilling: the kitchen's default billing mode (for rows with a blank billing column).
+ *   - D-118: several customers may share a phone; only the same phone AND the same name is one person.
+ *   - A repeated row of the same person adds its plan(s) to the earlier row's customer. It fails as
+ *     `duplicate_in_file` when it adds nothing; opening balance and dues belong on the first row.
+ *   - Status: active (blank) | paused (from 'paused_from'; a paused-from date alone means paused) | stopped.
+ *   - Warnings never block a row: a diet that differs from a plan's diet, a stopped row's plan, a repeated row.
  */
-export function validateImportRows(rows: ImportRow[], planNames: string[], defaultBilling: BillingModeValue = 'monthly'): RowIssue[] {
-  const plans = new Set(planNames.map((p) => p.trim().toLowerCase()));
-  const seen = new Map<string, string[]>();
+export function previewImportRows(
+  rows: ImportRow[],
+  plans: (string | ImportPlan)[],
+  defaultBilling: BillingModeValue = 'monthly',
+): { issues: RowIssue[]; warnings: RowWarning[] } {
+  const planDiet = new Map<string, string | null>();
+  for (const p of plans) {
+    if (typeof p === 'string') planDiet.set(planKey(p), null);
+    else planDiet.set(planKey(p.name), p.diet ?? null);
+  }
+  // Saved rows by phone: the name, the row and the plans that customer has from this file.
+  const seen = new Map<string, { name: string; row: number; plans: Set<string> }[]>();
   const issues: RowIssue[] = [];
+  const warnings: RowWarning[] = [];
 
   rows.forEach((r, i) => {
     const errors: ImportErrorCode[] = [];
+    const notes: ImportWarningCode[] = [];
     if (!r.name?.trim()) errors.push('name_required');
 
     const phone = normalizePhone(r.phone);
+    const earlier = phone ? (seen.get(phone) ?? []).find((e) => sameName(e.name, r.name)) : undefined;
     if (!phone) errors.push('invalid_phone');
-    else if ((seen.get(phone) ?? []).some((n) => sameName(n, r.name))) errors.push('duplicate_in_file');
 
-    if (DIETS[(r.diet ?? '').toLowerCase().replace(/[^a-z]/g, '')] === undefined) errors.push('invalid_diet');
+    const diet = DIETS[(r.diet ?? '').toLowerCase().replace(/[^a-z]/g, '')];
+    if (diet === undefined) errors.push('invalid_diet');
     if (LANGUAGES[(r.language ?? '').trim().toLowerCase()] === undefined) errors.push('invalid_language');
-    if (r.plan?.trim() && !plans.has(r.plan.trim().toLowerCase())) errors.push('unknown_plan');
+
+    const rowPlans: string[] = [];
+    if (r.plan?.trim()) {
+      if (!planDiet.has(planKey(r.plan))) errors.push('unknown_plan');
+      else rowPlans.push(planKey(r.plan));
+    }
+    if (r.plan_2?.trim()) {
+      if (!planDiet.has(planKey(r.plan_2))) errors.push('unknown_second_plan');
+      else if (rowPlans.includes(planKey(r.plan_2))) errors.push('same_plan_twice');
+      else rowPlans.push(planKey(r.plan_2));
+    }
     if (r.start_date) {
-      const ok = /^\d{4}-\d{2}-\d{2}$/.test(r.start_date) && !Number.isNaN(Date.parse(r.start_date));
-      if (!ok) errors.push('invalid_date');
-      if (!r.plan?.trim()) errors.push('start_date_requires_plan');
+      if (!isDate(r.start_date)) errors.push('invalid_date');
+      if (!r.plan?.trim() && !r.plan_2?.trim()) errors.push('start_date_requires_plan');
     }
     if (r.qty && !(/^\d{1,2}$/.test(r.qty) && Number(r.qty) >= 1 && Number(r.qty) <= 20)) errors.push('invalid_qty');
+
+    let status = parseImportStatus(r.status);
+    if (status === null) errors.push('invalid_status');
+    if (r.paused_from) {
+      if (!isDate(r.paused_from)) errors.push('invalid_pause_date');
+      if (!r.status?.trim()) status = 'paused';
+      else if (status !== 'paused') errors.push('paused_from_needs_paused');
+    }
+
     if (r.balance && !(/^-?\d{1,4}$/.test(r.balance) && Number(r.balance) >= -200 && Number(r.balance) <= 1000)) errors.push('invalid_balance');
     const billing = parseBilling(r.billing);
     if (billing === null) errors.push('invalid_billing');
@@ -217,15 +306,81 @@ export function validateImportRows(rows: ImportRow[], planNames: string[], defau
       errors.push('invalid_location');
     }
 
+    // A repeated row only adds plans to the earlier row's customer.
+    if (earlier) {
+      if (rowPlans.length === 0 || status === 'stopped') errors.push('duplicate_in_file');
+      else if (r.balance?.trim() || r.dues?.trim()) errors.push('balance_on_repeated_row');
+      else if (rowPlans.some((p) => earlier.plans.has(p))) errors.push('same_plan_twice');
+    }
+
+    if (errors.length === 0) {
+      if (earlier) notes.push('adds_plan');
+      if (status === 'stopped' && rowPlans.length > 0) notes.push('stopped_plan_ignored');
+      const planDiets = rowPlans.map((p) => planDiet.get(p)).filter((d): d is string => d != null);
+      if (r.diet?.trim() && status !== 'stopped' && planDiets.some((d) => d !== diet)) notes.push('diet_differs_from_plan');
+    }
+
     if (errors.length) issues.push({ row: i + 1, errors });
-    // Like the server, only rows that would be saved claim their phone number (with their name).
-    if (phone && errors.length === 0) seen.set(phone, [...(seen.get(phone) ?? []), r.name ?? '']);
+    if (notes.length) warnings.push({ row: i + 1, warnings: notes, ...(earlier ? { into: earlier.row } : {}) });
+    // Like the server, only rows that are saved claim their phone number (with their name).
+    if (phone && errors.length === 0) {
+      if (earlier) {
+        if (status !== 'stopped') rowPlans.forEach((p) => earlier.plans.add(p));
+      } else {
+        const entry = { name: r.name ?? '', row: i + 1, plans: new Set(status === 'stopped' ? [] : rowPlans) };
+        seen.set(phone, [...(seen.get(phone) ?? []), entry]);
+      }
+    }
   });
-  return issues;
+  return { issues, warnings };
 }
 
-/** Template the vendor can download and fill in. */
+/** Errors only (see previewImportRows). */
+export function validateImportRows(
+  rows: ImportRow[],
+  plans: (string | ImportPlan)[],
+  defaultBilling: BillingModeValue = 'monthly',
+): RowIssue[] {
+  return previewImportRows(rows, plans, defaultBilling).issues;
+}
+
+/** Rows per import_customers call, so a register of hundreds of rows never hits the statement timeout. */
+export const IMPORT_CHUNK_SIZE = 100;
+
+/** Splits rows into chunks, each with the file position (1-based) of its first row. */
+export function importChunks<T>(rows: T[], size: number = IMPORT_CHUNK_SIZE): { firstRow: number; rows: T[] }[] {
+  const out: { firstRow: number; rows: T[] }[] = [];
+  for (let i = 0; i < rows.length; i += Math.max(1, size)) out.push({ firstRow: i + 1, rows: rows.slice(i, i + Math.max(1, size)) });
+  return out;
+}
+
+/** Template the vendor can download and fill in (the example rows follow the same order). */
 export const IMPORT_TEMPLATE_HEADERS = [
-  'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan',
-  'Start date', 'Tiffins per meal', 'Opening balance (meals)', 'Billing (monthly / prepaid)', 'Opening dues (₹)',
+  'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan', 'Second plan',
+  'Start date', 'Tiffins per meal', 'Status (active / paused / stopped)', 'Paused from', 'Opening balance (meals)',
+  'Billing (monthly / prepaid)', 'Opening dues (₹)',
 ];
+
+const ddmmyyyy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/**
+ * The template: header plus two example rows. The first fills every column (a monthly customer on two
+ * plans of the same diet where the kitchen has them, paused from next week, with opening dues); the
+ * second is a typical prepaid customer whose blank diet takes the plan's. Dates are written the Indian
+ * way (dd/mm/yyyy) from today's IST date: pass istDate().
+ */
+export function importTemplateRows(plans: (string | ImportPlan)[], todayIst: string): string[][] {
+  const list = plans.map((p) => (typeof p === 'string' ? { name: p, diet: null } : { name: p.name, diet: p.diet ?? null }));
+  const first = list[0] ?? { name: 'Lunch', diet: null };
+  const others = list.filter((p) => planKey(p.name) !== planKey(first.name));
+  const second = others.find((p) => p.diet === first.diet) ?? others[0];
+  const dietLabel = first.diet === 'nonveg' ? 'Non-veg' : first.diet === 'jain' ? 'Jain' : 'Veg';
+  const today = isIsoDate(todayIst) ? todayIst : '2026-11-02';
+  return [
+    IMPORT_TEMPLATE_HEADERS,
+    ['Asha Das', '9861012345', dietLabel, 'Odia', 'Flat 2A', 'Patia', 'Near KIIT gate', 'Call on arrival', 'Less oil', first.name,
+      second?.name ?? '', ddmmyyyy(today), '1', 'Paused', ddmmyyyy(addDays(today, 7)), '0', 'Monthly', '250'],
+    ['Ravi Nayak', '9861054321', '', 'English', 'Plot 14', 'Saheed Nagar', 'Behind the temple', '', '', first.name, '',
+      ddmmyyyy(today), '2', 'Active', '', '10', 'Prepaid', ''],
+  ];
+}

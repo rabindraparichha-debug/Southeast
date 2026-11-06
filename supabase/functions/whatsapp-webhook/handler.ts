@@ -49,7 +49,9 @@ export async function handleWhatsAppWebhook(req: Request, deps: WebhookDeps): Pr
 
   const { messages, statuses } = parseWebhook(payload);
   for (const s of statuses) {
-    await deps.rpc('wa_message_status', { p_wa_message_id: s.id, p_status: s.status }).catch((e) => console.error('status', e));
+    // p_callback ('outbox:<id>') lets the database mark an outbox row sent even if the worker never recorded it.
+    await deps.rpc('wa_message_status', { p_wa_message_id: s.id, p_status: s.status, p_callback: s.callbackData ?? null })
+      .catch((e) => console.error('status', e));
   }
   const results: string[] = [];
   for (const m of messages) results.push(await processMessage(m, deps));
@@ -71,7 +73,8 @@ async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<stri
     const sent = await deps.send(m.from, out);
     await deps.rpc('wa_log_outbound', {
       p_conversation: conversation, p_body: previewOf(out), p_payload: { type: out.type }, p_wa_message_id: sent.id,
-      p_handled_by: handledBy, p_status: deps.cfg.mode === 'mock' ? 'sent' : 'queued', p_intent: intent,
+      // Mock mode sends nothing: the inbox shows the reply as 'mock', never as 'sent'.
+      p_handled_by: handledBy, p_status: deps.cfg.mode === 'mock' ? 'mock' : 'queued', p_intent: intent,
     });
   };
 

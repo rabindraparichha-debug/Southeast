@@ -353,6 +353,25 @@ Known gaps:
 - WhatsApp from a shared phone always talks about the oldest customer on it (Phase 2).
 - The customer page and bot still show prepaid meal balances for monthly customers (Phase 2 screens; the context now carries `billing_mode` and `balance_paise`).
 
+## Held-back items: billing-aware messages, import, outbox (2026-11-06)
+
+Built on `wave2/db` (branch `held/db`). Defaults in D-120.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| Phase 2 step 6 + Phase 1 step 7 | Monthly customers get no low-balance or dues reminders mid-month; one month-end `statement_ready` message (Phase 2 flag only, unpaid only); monthly payment receipt; churn `dues_overdue` after `dues_overdue_days` (default 40) instead of "owes money" | ✅ DB, templates, settings field, at-risk labels | `20261115000100_billing_aware_messages.sql`, `_shared/templates.ts`, `docs/WHATSAPP_TEMPLATES.md` |
+| Phase 1 step 5 | Import: status column (paused from a date, stopped without a plan), second plan column and repeated rows merged by phone + name, diet taken from or checked against the plan, 100-row chunks with a client batch id (idempotent per row, resumable), IST start date, full template example | ✅ DB, core, web wizard | `20261115000200_import_upgrades.sql`, `packages/core/src/import.ts`, `apps/web/src/app/(app)/customers/import/` |
+| Phase 2 step 6 / item 41 / item 10 (mock) | Outbox: stuck `sending` rows re-queued (cron), provider id stored with the sent mark, row id sent to Meta and matched on status webhooks, no failure report after a send; `mock` status for mock sends (conversation, rider OTP hint, admin metrics) | ✅ | `20261115000300_outbox_reliability.sql`, `whatsapp-outbox`, `whatsapp-webhook` |
+
+Tests: `supabase/tests/16_held_back.test.sql` (both billing modes, import per role, outbox paths),
+`tests/integration/held-db.test.ts` (245-row import in chunks with a retried chunk, templates, the
+callback key), core Vitest (preview, chunks, template); `m4.test.ts` now expects `mock`.
+
+Known gaps:
+- Refund notices and delivery or complaint credits still use meal wording for monthly customers.
+- The statement message has no link to a statement page (the customer page is a Phase 2 flag).
+- Mobile has no import (web only, as before) and no settings screen for `dues_overdue_days`.
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

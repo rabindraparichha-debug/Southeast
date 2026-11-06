@@ -15,6 +15,7 @@ const MESSAGES: Record<string, string> = {
   has_live_subscription: 'Cancel this customer’s subscriptions before deleting their data.',
   invalid_initial_status: 'New subscriptions can only start as Trial or Active.',
   too_many_rows: 'Import at most 2,000 rows at a time.',
+  invalid_batch: 'This import could not continue. Choose the file again and import it.',
   date_in_past: 'Choose today or a later date.',
   date_required: 'Choose a date.',
   invalid_range: 'The end date must be on or after the start date.',
