@@ -39,6 +39,11 @@ pnpm db:types                # regenerate packages/db/src/types.ts after every m
 pnpm db:loadtest             # 5,000-subscription lock timing (rolled back)
 pnpm db:restore-drill        # backup → restore → compare counts and ledger totals
 
+# Every check in one go (stack, pgTAP, types, integration, load test, typecheck, lint, builds);
+# prints a PASS/FAIL table. In a worktree, give it its own stack: docs/OPERATIONS.md "Verifying a branch"
+scripts/verify-all.sh [--skip-mobile-export] [--skip-build] [--keep-stack]
+PROJECT_ID=tiffinmv PORT_BASE=6132 INSPECTOR_PORT=8783 scripts/verify-all.sh
+
 # Web
 cp apps/web/.env.example apps/web/.env.local       # anon key: pnpm supabase status
 pnpm --filter @tiffin/web dev                      # http://localhost:3000
