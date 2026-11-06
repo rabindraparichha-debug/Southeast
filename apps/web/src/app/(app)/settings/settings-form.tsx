@@ -25,7 +25,6 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
   const [s, setS] = useState({
     low_balance_meals: String(settings.low_balance_meals), credit_limit_meals: String(settings.credit_limit_meals),
     grace_days: String(settings.grace_days), notice_days: String(settings.notice_days),
-    phone_pause_close_time: hhmm(settings.phone_pause_close_time),
   });
   const [msg, setMsg] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,7 +47,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
       }).eq('id', kitchen.id),
       supabase.from('kitchen_settings').update({
         low_balance_meals: Number(s.low_balance_meals), credit_limit_meals: Number(s.credit_limit_meals),
-        grace_days: Number(s.grace_days), notice_days: Number(s.notice_days), phone_pause_close_time: s.phone_pause_close_time,
+        grace_days: Number(s.grace_days), notice_days: Number(s.notice_days),
       }).eq('kitchen_id', kitchen.id),
     ]);
     setBusy(false);
@@ -96,9 +95,6 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
                 </label>
               </div>
             ))}
-            <Field label="Phone requests close at" hint="Pauses/skips the customer asks for by phone (entered by you) close at this time; WhatsApp stays open until the cutoff.">
-              <Input type="time" value={s.phone_pause_close_time} onChange={(e) => setS({ ...s, phone_pause_close_time: e.target.value })} required />
-            </Field>
           </div>
         </Card>
 

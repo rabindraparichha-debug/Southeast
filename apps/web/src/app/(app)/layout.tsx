@@ -16,6 +16,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const items: NavItem[] = [{ href: '/', label: 'Today', icon: '📋' }];
   if (role === 'owner' || role === 'staff') {
     items.push({ href: '/customers', label: 'Customers', icon: '👥' });
+    if (role === 'owner') items.push({ href: '/desk', label: 'Phone desk', icon: '📞' });
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
     items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
     if (role === 'owner') items.push({ href: '/rider', label: 'Deliver', icon: '📍' });
