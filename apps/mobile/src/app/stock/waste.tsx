@@ -5,6 +5,7 @@ import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components
 import { ItemPicker, UnitChips } from '@/components/stock-ui';
 import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
+import { friendlyErrorFor, newClientOp } from '@/lib/money';
 import { useKitchen } from '@/lib/session';
 import { formatQty, parseQty, type StockRow, type StockUnit } from '@/lib/stock';
 import { supabase } from '@/lib/supabase';
@@ -32,6 +33,7 @@ export default function Waste() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const [clientOp, setClientOp] = useState(newClientOp); // one key per entry: a retried save records it once
 
   const load = async (keep?: string) => {
     const { data, error: e } = await supabase.rpc('stock_levels', { p_kitchen: kitchen.kitchenId });
@@ -73,9 +75,10 @@ export default function Waste() {
     if (reason === 'other' && !other.trim()) return setError(t('errors.note_required'));
     const text = reason === 'other' ? other.trim() : REASONS.find((r) => r.key === reason)!.value;
     setBusy(true);
-    const { error: e } = await supabase.rpc('record_waste', { p_item: item.item_id, p_qty: n, p_reason: text, p_unit: unit });
+    const { error: e } = await supabase.rpc('record_waste', { p_item: item.item_id, p_qty: n, p_reason: text, p_unit: unit, p_client_op: clientOp });
     setBusy(false);
-    if (e) return setError(friendlyError(e));
+    if (e) return setError(friendlyErrorFor(e, 'stock'));
+    setClientOp(newClientOp());
     setSaved(t('stock.waste.saved', { qty: formatQty(n), unit, item: item.name, reason: reason === 'other' ? text : t(`stock.waste.reason.${reason}`) }));
     setQty('');
     setReason(null);

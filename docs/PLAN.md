@@ -342,6 +342,23 @@ Tests: `supabase/tests/14_billing.test.sql`, `15_roles_requests_phones_flags.tes
 accountant sections in `01_rls_isolation` and `02_rpcs_and_guards`; `tests/integration/wave2.test.ts`;
 core import validation (`packages/core`).
 
+Mobile (branch `wave2/mobile`, apps/mobile only):
+- Roles: `apps/mobile/src/lib/roles.ts` (same lists as the web). Managers get the owner's tabs except
+  Inbox, and the Deliver tab; accountants get a Money home tab, Customers (masked phones, no meals,
+  addresses or notes) and Account, all read-only. Today shows owners and managers a card with rider
+  requests waiting and rider cash / dues, opening `/requests` and `/money`.
+- Billing: the choice on Add customer (kitchen default preselected), with food type, an address and an
+  opening balance (rupees owed or advance for monthly, meals for prepaid); a badge, the balance
+  (rupees for monthly) and this month's statement line on the customer Money card; switching mode.
+- Payments: any amount by cash, UPI or bank, a payment date (backdating), a note and one idempotency
+  key per form; Void with a reason; confirm or reject rider cash on the customer page and on Money.
+  Purchases and waste pass `p_client_op`. Monthly bills can be sent on WhatsApp as a text summary.
+- Rider requests: a card at the bottom of the stop screen (skip, pause, new address; one key per
+  form, kept for a resend after a network error) and `/requests` for owners and managers (preview,
+  don't-charge toggle, plan choice, pick or save the new address, approve or reject).
+- Shared phones: the confirm step on Add customer (lists who has the number), "Same phone" links on
+  the customer page, a count on a full-number search.
+
 Still to do (UI agents): billing mode on customer forms and lists, rupee balances and statements on
 web and mobile, void and backdate buttons, the approvals list, manager and accountant navigation,
 CSV download buttons, the import columns in the wizard, mobile error texts in use. Item 27 hides

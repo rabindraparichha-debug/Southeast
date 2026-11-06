@@ -1,51 +1,61 @@
 import { useCallback, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { SLOT_LABEL, addDays, formatPaise, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { SLOT_LABEL, addDays, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
 import type { ChangeResult, ChangeType, MealSlot, View as DbView } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
+import { canReadMoney, isLead } from '@/lib/roles';
+import { isFullPhone } from '@/lib/money';
 import { friendlyError } from '@/lib/errors';
 import { Button, Card, Chip, DIET_COLOR, DIET_LABEL, ErrorText, Label, Muted } from '@/components/ui';
 import { CustomerExtras } from '@/components/customer-extras';
+import { MoneyPanel } from '@/components/money-panel';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
 type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; skip_reason: string | null; locked_at: string | null };
 type Sub = { id: string; status: string; plan: { name: string; price_per_meal_paise: number } | null };
 type Pending = { label: string; type: ChangeType; subscriptionId: string; from: string; to?: string; slot?: MealSlot; preview: ChangeResult };
-type CashProposal = { meals: number; amount: number };
+type Sibling = { id: string; name: string };
 
 export default function CustomerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const kitchen = useKitchen();
-  const isOwner = kitchen.role === 'owner';
+  const isOwner = isLead(kitchen.role); // owner or manager (D-119): customer changes, money, full phones
+  const accountant = kitchen.role === 'accountant'; // money only: no meals, addresses or notes
   const [c, setC] = useState<DbView<'customers_v'> | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
-  const [balance, setBalance] = useState<number | null>(null);
+  const [siblings, setSiblings] = useState<Sibling[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [busy, setBusy] = useState(false);
-  const [cash, setCash] = useState<CashProposal | null>(null);
-  const [link, setLink] = useState<{ url: string; amount: number; meals: number } | null>(null);
   const today = istDate();
 
   const load = useCallback(async () => {
-    const [cust, orders, s, b] = await Promise.all([
+    const [cust, orders, s] = await Promise.all([
       supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
+      accountant ? Promise.resolve({ data: [] }) :
       supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
         .eq('customer_id', id).gte('service_date', today).lte('service_date', addDays(today, 7)).order('service_date').order('slot'),
       isOwner ? supabase.from('subscriptions').select('id, status, plan:plans(name, price_per_meal_paise)').eq('customer_id', id).in('status', ['active', 'low_balance', 'paused', 'suspended', 'trial'])
               : Promise.resolve({ data: [] }),
-      isOwner ? supabase.from('customer_balances').select('meals').eq('customer_id', id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     setC(cust.data);
     setMeals((orders.data ?? []) as Meal[]);
     setSubs((s.data ?? []) as Sub[]);
-    setBalance((b.data as { meals: number } | null)?.meals ?? null);
-  }, [id, kitchen.kitchenId, isOwner, today]);
+    // D-118: other customers on the same phone (siblings, a family phone). Full numbers: owner and manager.
+    const phone = cust.data?.phone;
+    if (isOwner && isFullPhone(phone)) {
+      const { data } = await supabase.rpc('search_customers', { p_kitchen: kitchen.kitchenId, p_q: phone, p_limit: 20 });
+      setSiblings(((data ?? []) as { id: string | null; name: string | null }[])
+        .filter((r) => r.id && r.id !== id).map((r) => ({ id: r.id!, name: r.name ?? '' })));
+    } else {
+      setSiblings([]);
+    }
+  }, [id, kitchen.kitchenId, isOwner, accountant, today]);
 
   useFocusEffect(useCallback(() => void load(), [load]));
 
@@ -74,34 +84,8 @@ export default function CustomerDetail() {
     await load();
   }
 
-  async function recordCash() {
-    if (!cash) return;
-    setBusy(true);
-    setError('');
-    const { error } = await supabase.rpc('record_payment', { p_customer: id, p_amount_paise: cash.amount, p_method: 'cash', p_meals: cash.meals });
-    setBusy(false);
-    if (error) return setError(friendlyError(error));
-    setSaved(t('money.recorded'));
-    setCash(null);
-    await load();
-  }
-
-  async function sendLink(meals: number) {
-    setBusy(true);
-    setError('');
-    const { data, error } = await supabase.functions.invoke('razorpay-payment-link', { body: { customer_id: id, meals } });
-    setBusy(false);
-    if (error) {
-      const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
-      return setError(friendlyError({ message: body?.error ?? error.message }));
-    }
-    const res = data as { short_url: string; amount_paise: number; meals: number };
-    setLink({ url: res.short_url, amount: res.amount_paise, meals: res.meals });
-  }
-
   if (!c) return null;
   const canCall = isOwner && c.phone && !c.phone.includes('•');
-  const price = subs[0]?.plan?.price_per_meal_paise ?? null;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -109,47 +93,24 @@ export default function CustomerDetail() {
       <Card>
         <Text style={styles.name}>{c.name}</Text>
         <Muted>{formatPhone(c.phone)}</Muted>
-        <Text style={{ fontSize: 14 }}>
-          {c.diet && <Text style={{ color: DIET_COLOR[c.diet], fontWeight: '600' }}>{DIET_LABEL[c.diet]}</Text>}
-          {balance !== null && <Text style={{ color: colors.inkSoft }}>  ·  {t('balance.meals', { n: balance })}</Text>}
-        </Text>
+        {c.diet && <Text style={{ fontSize: 14, color: DIET_COLOR[c.diet], fontWeight: '600' }}>{DIET_LABEL[c.diet]}</Text>}
         <Muted>{[c.line1, c.landmark, c.area].filter(Boolean).join(', ')}</Muted>
+        {siblings.length > 0 && (
+          <View style={styles.siblings}>
+            <Muted>{t('customer.samePhone')}</Muted>
+            {siblings.map((x) => (
+              <Chip key={x.id} label={x.name} selected={false} onPress={() => router.push({ pathname: '/customer/[id]', params: { id: x.id } })} />
+            ))}
+          </View>
+        )}
         {canCall && <Button title={`📞 ${t('customer.call')}`} onPress={() => Linking.openURL(`tel:${c.phone}`)} variant="secondary" />}
       </Card>
 
-      {isOwner && price && (
-        <Card>
-          <Label>{t('money.title')}{balance !== null && balance < 0 ? ` · ${t('money.owes', { n: -balance })}` : ''}</Label>
-          {!cash && !link && (
-            <View style={styles.chips}>
-              {[10, 26, 30].map((n) => (
-                <Chip key={n} label={t('money.cash', { meals: n, amount: formatPaise(n * price) })} selected={false} onPress={() => setCash({ meals: n, amount: n * price })} />
-              ))}
-              <Chip label={t('money.link', { meals: 26 })} selected={false} onPress={() => sendLink(26)} />
-            </View>
-          )}
-          {cash && (
-            <View style={styles.confirm}>
-              <Text style={styles.confirmTitle}>{t('money.recordCash', { amount: formatPaise(cash.amount), meals: cash.meals })}</Text>
-              <Button title={t('actions.confirm')} onPress={recordCash} busy={busy} />
-              <Button title={t('actions.back')} onPress={() => setCash(null)} variant="secondary" />
-            </View>
-          )}
-          {link && (
-            <View style={styles.confirm}>
-              <Text style={styles.confirmTitle}>{t('money.linkReady', { amount: formatPaise(link.amount) })}</Text>
-              <Muted>{link.url}</Muted>
-              <Button
-                title={t('money.openWhatsapp')}
-                onPress={() =>
-                  Linking.openURL(`https://wa.me/${(c.phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(
-                    t('money.linkMessage', { name: c.name ?? '', amount: formatPaise(link.amount), meals: link.meals, kitchen: kitchen.kitchenName, url: link.url }))}`)
-                }
-              />
-              <Button title={t('actions.back')} onPress={() => setLink(null)} variant="secondary" />
-            </View>
-          )}
-        </Card>
+      {canReadMoney(kitchen.role) && c.billing_mode && (
+        <MoneyPanel
+          customerId={id} kitchenId={kitchen.kitchenId} kitchenName={kitchen.kitchenName} role={kitchen.role}
+          name={c.name ?? ''} phone={c.phone} billingMode={c.billing_mode} version={meals} onChanged={load}
+        />
       )}
 
       {isOwner && subs.filter((s) => s.status !== 'trial' && s.status !== 'suspended').map((s) => {
@@ -200,7 +161,7 @@ export default function CustomerDetail() {
       {saved ? <Text style={styles.saved}>✓ {saved}</Text> : null}
       <ErrorText>{error}</ErrorText>
 
-      <Card>
+      {!accountant && <Card>
         <Label>{t('meals.title')}</Label>
         {meals.length === 0 && <Muted>{t('meals.none')}</Muted>}
         {meals.map((m) => (
@@ -213,11 +174,11 @@ export default function CustomerDetail() {
             </Text>
           </View>
         ))}
-      </Card>
+      </Card>}
 
-      {kitchen.role !== 'rider' && <CustomerExtras customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} />}
+      {kitchen.role !== 'rider' && !accountant && <CustomerExtras customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} />}
 
-      {c.notes ? (
+      {c.notes && !accountant ? (
         <Card>
           <Label>{t('customer.notes')}</Label>
           <Text style={{ color: colors.inkSoft }}>{c.notes}</Text>
@@ -235,6 +196,7 @@ const styles = StyleSheet.create({
   confirmTitle: { fontSize: 16, fontWeight: '600', color: colors.ink },
   warn: { color: '#B45309', fontWeight: '600' },
   saved: { color: colors.veg, fontWeight: '600' },
+  siblings: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space(2) },
   meal: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space(2), borderTopWidth: 1, borderTopColor: colors.line },
   mealDate: { color: colors.inkSoft },
   mealStatus: { color: colors.veg, fontWeight: '500' },

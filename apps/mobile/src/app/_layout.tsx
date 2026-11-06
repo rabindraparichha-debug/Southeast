@@ -36,6 +36,8 @@ function RootStack() {
         <Stack.Screen name="stock/purchase" options={{ title: t('stock.purchase.title'), presentation: 'modal' }} />
         <Stack.Screen name="stock/waste" options={{ title: t('stock.waste.title') }} />
         <Stack.Screen name="stock/count" options={{ title: t('stock.count.title') }} />
+        <Stack.Screen name="money" options={{ title: t('tabs.money') }} />
+        <Stack.Screen name="requests" options={{ title: t('lead.requests') }} />
       </Stack.Protected>
     </Stack>
   );
