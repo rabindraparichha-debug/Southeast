@@ -122,7 +122,7 @@ const MESSAGES: Record<string, string> = {
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
   // Wave 4: onboarding and founder support
   not_approved: 'Ask the Tiffin team to approve your number. New kitchens start after a short call with us.',
-  invalid_name: 'Enter a kitchen name of 2 to 80 letters.',
+  invalid_name: 'Enter a name of 2 to 80 letters.',
   invalid_slug: 'Use English letters or numbers for the web address.',
   invalid_location: 'That map location is not valid. Pick it again.',
   application_rejected: 'This application was rejected. Change its status first.',
@@ -144,7 +144,6 @@ const MESSAGES: Record<string, string> = {
   invalid_part: 'Unknown export part.',
   // Phase 2 hardening (D-146..D-152)
   referral_other_kitchen: 'This code belongs to another kitchen. Ask your friend for their link to this kitchen.',
-  invalid_name: 'Enter a name (up to 80 letters).',
   invalid_date: 'Choose a start date within the next 30 days.',
   invalid_admin: 'Choose a member of the platform team.',
   note_too_long: 'Keep the note under 1,000 characters.',
