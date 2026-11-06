@@ -12,7 +12,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-006 | Vendor app languages | ⏳ PENDING | M1+ |
 | D-007 | Slots: lunch and dinner only | ⏳ PENDING | M2 |
 | D-008 – D-028 | Technical defaults | Decided | — |
-| D-031 | Phone-close rule: late vendor-entered changes are charged | ⏳ PENDING | M2 |
+| D-031 | Phone-close rule (superseded by D-116: vendor changes use the real cutoff) | Superseded | M2 |
 | D-033 | Trial subscriptions get no meals | ⏳ PENDING | M2, M7 |
 | D-035 | Cancellation defaults to today + notice days | ⏳ PENDING | M2, M3 |
 | D-029 – D-042 | Daily-engine defaults (M2) | Decided | — |
@@ -40,11 +40,12 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-093 | Backups: Supabase backups + portable dump + monthly restore drill | Decided | M8 |
 | D-094 | Play Store via EAS, internal track first | ⏳ PENDING (accounts) | M8 |
 | D-095 | Odisha food calendar dates are approximate drafts | ⏳ PENDING (verify dates) | P5 |
-| D-099 | First complaint credited with 1 free meal (kitchen's cost) | ⏳ PENDING | P5 |
+| D-099 | First complaint credited with 1 free meal (kitchen's cost; opt-in since D-119) | ⏳ PENDING | P5 |
 | D-101 | Rain/heat thresholds and delivery windows | ⏳ PENDING | P5 |
 | D-105 | Commission only on online payments of platform customers, rounded down | ⏳ PENDING (legal/tax) | P6 |
 | D-106 | Kitchen switching: platform customers only, admin approves, flag off | ⏳ PENDING | P6 |
 | D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
+| D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
 
 ---
 
@@ -212,9 +213,11 @@ Supabase session tokens are kept in AsyncStorage, as Supabase's React Native gui
 ### D-030 What "late = charged" means
 - A skip or pause that lands after the meal's cutoff is accepted. The meal stays in the locked count and its `meal` entry is posted (charged). It's marked `skipped` + `charged`, so the packing list shows "don't deliver".
 - A meal that was already skipped on time is never charged by a later request.
-- A late address change is still applied to meals that haven't left the kitchen, with no charge.
+- A late address change is still applied to meals that haven't left the kitchen, with no charge. Since wave 1 (D-121) it also applies to a meal already out with the rider while the stop is still pending.
+- Since D-116 the vendor can tick "don't charge" on a late skip: see D-120.
 
-### D-031 Phone-close rule ⏳ PENDING (policy)
+### D-031 Phone-close rule (superseded by D-116 / D-120 on 2026-11-06)
+- **No longer applies.** Vendor-entered changes now use the slot's real cutoff like every other channel. `kitchen_settings.phone_pause_close_time` is kept (unused) so older app builds that save the settings form keep working. The text below is the original rule, kept for history.
 - The spec says "phone pauses close at 7 pm, WhatsApp stays open until cutoff". Implementation:
   - Changes the vendor enters (`channel = vendor`) count as late once it's past `kitchen_settings.phone_pause_close_time` (default 19:00) on the evening before service, or past the slot cutoff if that's earlier.
   - WhatsApp and web changes use the slot cutoff.
@@ -222,7 +225,7 @@ Supabase session tokens are kept in AsyncStorage, as Supabase's React Native gui
 - **Your call:** charge or waive by default? Should the rule also apply to dinner (it currently closes 7 pm the evening before)?
 
 ### D-032 Resume semantics
-A resume ends every skip or pause requested before it that had already started by the resume date, for dates on or after the resume date. A future skip (for a date after the resume date) stays.
+A resume ends every skip or pause requested before it that had already started by the resume date, for dates on or after the resume date and, if the resume has an end date, up to that date (wave 1). A future skip (for a date after the resume date) stays; to cancel one specific skip or pause, use Undo (D-122).
 
 ### D-033 Trial subscriptions ⏳ PENDING
 Following the spec literally, meals are generated only for Active and Low balance (and Paused, for the days after the pause). A **trial gets no meals** until it becomes Active (payment, M3/M7). If pilot vendors run free or cash trials, I can generate meals for trials too.
@@ -464,7 +467,7 @@ Still deferred (see D-038).
 ## Acquisition (M7)
 
 ### D-078 Matching ⏳ PENDING (weights)
-- **Who can be offered:** kitchens that are active (which needs an FSSAI number, D-005) and taking platform leads (owner setting), with the lead inside the kitchen's own service radius (default 3 km), an active plan covering the requested meals and the exact diet, and a free place for every requested slot.
+- **Who can be offered:** kitchens that are active (which needs an FSSAI number, D-005) and taking platform leads (owner setting, **off** by default since D-119), with the lead inside the kitchen's own service radius (default 3 km), an active plan covering the requested meals and the exact diet, and a free place for every requested slot.
 - **Free places** = capacity minus the busiest day's counted meals over the 7 days from the start date, minus trials waiting for payment (each holds a place).
 - **Ranking:** 60% verified rating, 40% price fit (how close the plan price is to the budget), then distance. Ratings use a prior of 4.0 worth 3 reviews, so a single 5★ review doesn't top the list and new kitchens aren't buried.
 - **Plan offered:** per kitchen, a plan with exactly the requested meals first (a lunch-only lead gets a lunch plan, not a cheaper lunch + dinner one), then the price closest to the budget.
@@ -589,7 +592,7 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 
 ### D-099 First complaint credited ⏳ PENDING
 - A customer's **first** food or delivery complaint at a kitchen (late, quality, quantity, missing, hygiene, delivery) gets **1 free meal** at once, through the normal `credit` entry (valued ₹0, like credits given when resolving a complaint), once per complaint, then the balance status is re-checked and the customer is told (`complaint_credit_v1`).
-- Earlier billing, privacy or "other" complaints don't use up the first credit. Kitchen setting `auto_credit_first_complaint`, **on** by default.
+- Earlier billing, privacy or "other" complaints don't use up the first credit. Kitchen setting `auto_credit_first_complaint`, **off** by default since D-119 (it was on).
 - **Your call:** this is the kitchen's cost. Is "on by default" right, or should kitchens opt in?
 
 ### D-100 Complaint scores
@@ -683,3 +686,46 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 
 ### D-118 Customers may share a phone number (owner, 2026-11-06)
 - Several customers in one kitchen may share a phone (siblings, family phone). Phone search returns all of them; messages to that number are sent per customer. The one-open-lead-per-phone rule for platform leads is unchanged.
+
+## Vendor-first wave 1 (2026-11-06)
+
+Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14–19 (docs/VENDOR_FIRST_AUDIT.md). Migrations `20261107000200`–`20261107000500`; tests `supabase/tests/14_vendor_first.test.sql`.
+
+### D-119 Safe defaults for Phase 1
+- `kitchens.accepts_platform_leads` and `kitchen_settings.auto_credit_first_complaint` now default to **false**, and existing rows were switched off too: nobody chose the old values (they were defaults), and neither the marketplace nor the customer complaint channel is live in Phase 1. A kitchen opts in under Settings.
+- The local seed keeps kitchens A and C taking platform leads (they are the demo's live kitchens).
+- `notifications_outbox.send_after` defaults to `private.now()` (it was `now()`): rows queued under a simulated clock now come due on that clock. No effect in production, where the two are equal.
+
+### D-120 Vendor changes and "don't charge" (implements D-116)
+- Every channel uses the slot's real cutoff. Before it, a skip or pause is free. After it (or once locked), the meal stays in the count and is charged at lock, as before.
+- "Don't charge" (`p_waive_late` on `request_schedule_change`, vendor only) posts **one credit per meal**: `balance_entries` type `credit`, `ref_type = 'meal_order_waiver'`, `ref_id` = the meal order, meals = qty, amount = qty × the price it is charged (the frozen price, or the plan price if the lock has not run yet). It is idempotent on the meal order, sets `meal_orders.charge_waived`, and is followed by `sync_balance_status`. A late skip recorded as charged can be waived later the same way.
+- Preview rows now say `charged` (the customer pays) and `credited` (a "don't charge" credit). `after_cutoff` and the change feed's "Late" badge only count skips and pauses (an address change or resume after the cutoff is never charged).
+
+### D-121 Changes after the lock reach the rider
+- A change that touches a locked meal rebuilds that slot's runs straight away (`private.resync_runs`); a routing error is recorded (D-123) and never undoes the change.
+- Runs already **out**: delivered and failed stops never change. A pending stop follows late changes: a skipped meal leaves it, an emptied stop is removed, the meal count is updated, and a meal moved to a new address joins the run as a new stop at the end, with a delivery code and the customer's message (like a stop moved by hand).
+- Stops added or changed on a run that already existed get `delivery_stops.changed_at`; `rider_today` returns `changed` and `changed_at` per stop. Seq changes alone (reorders) do not count.
+- Stops are grouped per customer and address, so an office's billing customer who also orders to the office address no longer breaks run building for the slot (the audit's "ON CONFLICT double hit", reproduced against the old code).
+
+### D-122 Undo, resume with an end date, reactivation
+- **Undo** (`revoke_schedule_change`): a new change type `revoke` points at one skip or pause (`schedule_changes.revokes_change_id`, once per change). Its days come back where the slot is still open; frozen meals stay as they are (a late skip stays charged). Only skips and pauses can be undone; address changes, resumes and cancels cannot.
+- **Reactivate** (`reactivate_subscription`): a cancelled subscription goes back to `active` from today (or a later date within 90 days), its end date cleared, logged as `reactivated`. Balance rules still apply right after: on an empty prepaid balance it may come back as `low_balance` or `suspended`, and the result says so. Billing modes (D-115) are a later item.
+
+### D-123 Lock job and engine errors
+- `run_due_locks` locks each slot in its own subtransaction. If a kitchen's slot fails, that kitchen's later slots wait for the next minute (so charges stay in order) and every other kitchen still locks.
+- Catch-up: yesterday to tomorrow always (D-040), plus up to **7 days** back for slots that still have meals to freeze (after an outage). Slots older than 7 days are not locked automatically. Production sheets are not queued for past dates caught up this way.
+- Failures go to `engine_errors` (one open row per kitchen, job, date and slot; repeats bump `attempts`). Jobs: `lock`, `build_runs`, `consume`, `nightly_status`, `nightly_balance`, `nightly_cancel`, `nightly_refresh`, `nightly_reminders`. A row closes itself when the same work later succeeds (a later lock, `plan_runs`, a re-sync, the next night); the owner or the platform team can dismiss one. Owner and staff read their kitchen's rows; admins read all.
+- The nightly job runs each step, each kitchen's meal generation and each auto-cancel in its own subtransaction.
+- Cancelling a subscription freezes and charges only **that subscription's** meals already past their cutoff (it used to lock the whole kitchen's slot). The slot itself is still locked by the lock job.
+- `slot_summary` adds `overdue` (cutoff passed 5+ minutes ago, still not locked) and `engine_error`. Nothing is pushed to the owner yet (no channel without WhatsApp); the apps can show these.
+
+### D-124 Addresses
+- A permanent address change with a later start date no longer moves the subscription's own address at once: meals before the date stay on the old address. The nightly status sync makes it the subscription's address once it starts.
+- A subscription created without an address takes the customer's default (or latest) address; a customer's first address fills their subscriptions that have none (and frozen meals not yet out). Meal generation falls back to the customer's default address when the subscription has none.
+- `set_default_address(address, apply)`: "Make default" can also move every live subscription there from today (a permanent address change each, so meals and runs follow).
+
+### D-125 Closures and weekly off per meal
+- `kitchen_closures` (a date, and a meal or the whole day): no meals are generated, cooked or charged. Set and removed by the owner (`set_kitchen_closure`, `remove_kitchen_closure`, with a preview). A closure can only be set while the meal is still open (before its cutoff): it never undoes a charge. Removing one brings the meals back for meals still open. If a closed slot somehow still has unfrozen meals at lock, they are dropped, and the snapshot says `closed`.
+- Weekly off for one meal: `kitchens.weekly_off_lunch` / `weekly_off_dinner` (ISO days), on top of the whole-day `weekly_off`.
+- Customers are not told automatically (Phase 1 has no customer channel); the owner tells them.
+

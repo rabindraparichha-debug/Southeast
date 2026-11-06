@@ -781,7 +781,7 @@ declare
   r record;
 begin
   if p_type = 'revoke' then
-    raise exception 'invalid_type' using errcode = '22023'; -- undo goes through revoke_schedule_change
+    raise exception 'invalid_change_type' using errcode = '22023'; -- undo goes through revoke_schedule_change
   end if;
   select * into v_sub from public.subscriptions where id = p_subscription;
   if v_sub.id is null then

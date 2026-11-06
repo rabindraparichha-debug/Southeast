@@ -110,6 +110,13 @@ const MESSAGES: Record<string, string> = {
   payments_not_configured: 'Online payments are not set up yet. Record cash or UPI meanwhile.',
   whatsapp_not_configured: 'WhatsApp is not set up yet.',
   ai_not_configured: 'Reading notebook photos is not set up yet. Use the Excel or CSV import instead.',
+  // Vendor-first wave 1: closures, undo, reactivation, late skips
+  slot_locked: 'That meal is past its cutoff and its count is frozen. Choose a later date or meal.',
+  cannot_revoke: 'Only a skip or a pause can be undone.',
+  already_revoked: 'This change was already undone.',
+  invalid_change_type: 'To undo a skip or pause, use Undo on it.',
+  not_cancelled: 'This subscription is not cancelled.',
+  plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

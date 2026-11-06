@@ -926,6 +926,7 @@ export type Database = {
         Row: {
           address_id: string | null;
           cash_payment_id: string | null;
+          changed_at: string | null;
           client_op_id: string | null;
           created_at: string;
           credit_entry_id: string | null;
@@ -963,6 +964,7 @@ export type Database = {
         Insert: {
           address_id?: string | null;
           cash_payment_id?: string | null;
+          changed_at?: string | null;
           client_op_id?: string | null;
           created_at?: string;
           credit_entry_id?: string | null;
@@ -999,6 +1001,7 @@ export type Database = {
         Update: {
           address_id?: string | null;
           cash_payment_id?: string | null;
+          changed_at?: string | null;
           client_op_id?: string | null;
           created_at?: string;
           credit_entry_id?: string | null;
@@ -1161,6 +1164,60 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'delivery_runs';
             referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
+      engine_errors: {
+        Row: {
+          attempts: number;
+          first_seen_at: string;
+          id: number;
+          job: string;
+          kitchen_id: string | null;
+          last_seen_at: string;
+          message: string;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          service_date: string | null;
+          slot: Database['public']['Enums']['meal_slot'] | null;
+          sqlstate: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          attempts?: number;
+          first_seen_at?: string;
+          id?: never;
+          job: string;
+          kitchen_id?: string | null;
+          last_seen_at?: string;
+          message: string;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          service_date?: string | null;
+          slot?: Database['public']['Enums']['meal_slot'] | null;
+          sqlstate?: string | null;
+        };
+        Update: {
+          attempts?: number;
+          first_seen_at?: string;
+          id?: never;
+          job?: string;
+          kitchen_id?: string | null;
+          last_seen_at?: string;
+          message?: string;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          service_date?: string | null;
+          slot?: Database['public']['Enums']['meal_slot'] | null;
+          sqlstate?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'engine_errors_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -1397,6 +1454,48 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'items_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kitchen_closures: {
+        Row: {
+          closed_on: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kitchen_id: string;
+          reason: string | null;
+          slot: Database['public']['Enums']['meal_slot'] | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          closed_on: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id: string;
+          reason?: string | null;
+          slot?: Database['public']['Enums']['meal_slot'] | null;
+          updated_at?: string;
+        };
+        Update: {
+          closed_on?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kitchen_id?: string;
+          reason?: string | null;
+          slot?: Database['public']['Enums']['meal_slot'] | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kitchen_closures_kitchen_id_fkey';
             columns: ['kitchen_id'];
             isOneToOne: false;
             referencedRelation: 'kitchens';
@@ -1704,6 +1803,8 @@ export type Database = {
           trial_meals: number;
           updated_at: string;
           weekly_off: number[];
+          weekly_off_dinner: number[];
+          weekly_off_lunch: number[];
         };
         ComputedFields: never;
         Insert: {
@@ -1734,6 +1835,8 @@ export type Database = {
           trial_meals?: number;
           updated_at?: string;
           weekly_off?: number[];
+          weekly_off_dinner?: number[];
+          weekly_off_lunch?: number[];
         };
         Update: {
           accepts_platform_leads?: boolean;
@@ -1763,6 +1866,8 @@ export type Database = {
           trial_meals?: number;
           updated_at?: string;
           weekly_off?: number[];
+          weekly_off_dinner?: number[];
+          weekly_off_lunch?: number[];
         };
         Relationships: [];
       };
@@ -2027,6 +2132,7 @@ export type Database = {
         Row: {
           address_id: string | null;
           change_id: string | null;
+          charge_waived: boolean;
           charged: boolean;
           created_at: string;
           customer_id: string;
@@ -2052,6 +2158,7 @@ export type Database = {
         Insert: {
           address_id?: string | null;
           change_id?: string | null;
+          charge_waived?: boolean;
           charged?: boolean;
           created_at?: string;
           customer_id: string;
@@ -2076,6 +2183,7 @@ export type Database = {
         Update: {
           address_id?: string | null;
           change_id?: string | null;
+          charge_waived?: boolean;
           charged?: boolean;
           created_at?: string;
           customer_id?: string;
@@ -3208,6 +3316,7 @@ export type Database = {
           note: string | null;
           requested_at: string;
           requested_by: string | null;
+          revokes_change_id: string | null;
           slot: Database['public']['Enums']['meal_slot'] | null;
           subscription_id: string;
           to_date: string | null;
@@ -3225,6 +3334,7 @@ export type Database = {
           note?: string | null;
           requested_at?: string;
           requested_by?: string | null;
+          revokes_change_id?: string | null;
           slot?: Database['public']['Enums']['meal_slot'] | null;
           subscription_id: string;
           to_date?: string | null;
@@ -3241,6 +3351,7 @@ export type Database = {
           note?: string | null;
           requested_at?: string;
           requested_by?: string | null;
+          revokes_change_id?: string | null;
           slot?: Database['public']['Enums']['meal_slot'] | null;
           subscription_id?: string;
           to_date?: string | null;
@@ -3253,6 +3364,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'addresses';
             referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'schedule_changes_revokes_change_id_fkey';
+            columns: ['revokes_change_id'];
+            isOneToOne: false;
+            referencedRelation: 'schedule_changes';
+            referencedColumns: ['id'];
           },
           {
             foreignKeyName: 'schedule_changes_subscription_id_kitchen_id_fkey';
@@ -4175,6 +4293,8 @@ export type Database = {
           trial_meals: number;
           updated_at: string;
           weekly_off: number[];
+          weekly_off_dinner: number[];
+          weekly_off_lunch: number[];
         };
         SetofOptions: {
           from: '*';
@@ -4213,6 +4333,7 @@ export type Database = {
         }[];
       };
       dish_costs: { Args: { p_kitchen: string }; Returns: Json };
+      dismiss_engine_error: { Args: { p_error: number }; Returns: undefined };
       dues_list: {
         Args: { p_kitchen: string };
         Returns: {
@@ -4430,6 +4551,7 @@ export type Database = {
         Returns: Json;
       };
       razorpay_process_event: { Args: { p_event_id: string; p_payload: Json }; Returns: string };
+      reactivate_subscription: { Args: { p_from?: string; p_subscription: string }; Returns: Json };
       record_cash_at_door: {
         Args: { p_amount_paise: number; p_meal_order: string; p_note?: string };
         Returns: string;
@@ -4489,6 +4611,14 @@ export type Database = {
         Returns: string;
       };
       reject_payment: { Args: { p_payment: string; p_reason: string }; Returns: undefined };
+      remove_kitchen_closure: {
+        Args: {
+          p_date: string;
+          p_kitchen: string;
+          p_slot?: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
+      };
       remove_member: { Args: { p_member: string }; Returns: undefined };
       reorder_run: { Args: { p_run: string; p_stop_ids: string[] }; Returns: undefined };
       request_schedule_change: {
@@ -4511,6 +4641,10 @@ export type Database = {
       };
       reveal_customer_phone: { Args: { p_customer: string }; Returns: string };
       revoke_invite: { Args: { p_invite: string }; Returns: undefined };
+      revoke_schedule_change: {
+        Args: { p_change: string; p_dry_run?: boolean; p_note?: string };
+        Returns: Json;
+      };
       rider_call_number: { Args: { p_stop: string }; Returns: string };
       rider_ping: { Args: { p_lat: number; p_lng: number; p_run: string }; Returns: undefined };
       rider_stats: {
@@ -4572,9 +4706,23 @@ export type Database = {
         Returns: Json;
       };
       set_customer_office: { Args: { p_customer: string; p_office?: string }; Returns: undefined };
+      set_default_address: {
+        Args: { p_address: string; p_apply_to_subscriptions?: boolean };
+        Returns: Json;
+      };
       set_health_tags: {
         Args: { p_consent?: boolean; p_customer: string; p_tags: string[] };
         Returns: string[];
+      };
+      set_kitchen_closure: {
+        Args: {
+          p_date: string;
+          p_dry_run?: boolean;
+          p_kitchen: string;
+          p_reason?: string;
+          p_slot?: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
       };
       set_kitchen_status: {
         Args: { p_kitchen: string; p_status: Database['public']['Enums']['kitchen_status'] };
@@ -4676,6 +4824,21 @@ export type Database = {
           p_whatsapp_opt_in?: boolean;
         };
         Returns: string;
+      };
+      subscription_holds: {
+        Args: { p_subscription: string };
+        Returns: {
+          after_cutoff: boolean;
+          change_id: string;
+          channel: Database['public']['Enums']['change_channel'];
+          from_date: string;
+          note: string;
+          requested_at: string;
+          resumed_from: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          to_date: string;
+          type: Database['public']['Enums']['change_type'];
+        }[];
       };
       supplier_dues: {
         Args: { p_kitchen: string };
@@ -4894,7 +5057,7 @@ export type Database = {
     Enums: {
       balance_entry_type: 'recharge' | 'meal' | 'credit' | 'refund' | 'adjust';
       change_channel: 'whatsapp' | 'web' | 'vendor' | 'rider';
-      change_type: 'skip' | 'pause' | 'resume' | 'address' | 'cancel';
+      change_type: 'skip' | 'pause' | 'resume' | 'address' | 'cancel' | 'revoke';
       customer_source: 'vendor' | 'import' | 'whatsapp' | 'web' | 'platform';
       diet_type: 'veg' | 'nonveg' | 'jain';
       fail_reason:
@@ -5071,7 +5234,7 @@ export const Constants = {
     Enums: {
       balance_entry_type: ['recharge', 'meal', 'credit', 'refund', 'adjust'],
       change_channel: ['whatsapp', 'web', 'vendor', 'rider'],
-      change_type: ['skip', 'pause', 'resume', 'address', 'cancel'],
+      change_type: ['skip', 'pause', 'resume', 'address', 'cancel', 'revoke'],
       customer_source: ['vendor', 'import', 'whatsapp', 'web', 'platform'],
       diet_type: ['veg', 'nonveg', 'jain'],
       fail_reason: [

@@ -19,7 +19,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
     cutoff_lunch: hhmm(kitchen.cutoff_lunch), cutoff_lunch_prev_day: kitchen.cutoff_lunch_prev_day,
     cutoff_dinner: hhmm(kitchen.cutoff_dinner), cutoff_dinner_prev_day: kitchen.cutoff_dinner_prev_day,
     capacity_lunch: String(kitchen.capacity_lunch), capacity_dinner: String(kitchen.capacity_dinner),
-    weekly_off: kitchen.weekly_off,
+    weekly_off: kitchen.weekly_off, weekly_off_lunch: kitchen.weekly_off_lunch, weekly_off_dinner: kitchen.weekly_off_dinner,
   });
   const [pin, setPin] = useState<LatLng | null>(kitchen.lat && kitchen.lng ? { lat: kitchen.lat, lng: kitchen.lng } : null);
   const [s, setS] = useState({
@@ -44,6 +44,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
         cutoff_dinner: k.cutoff_dinner, cutoff_dinner_prev_day: k.cutoff_dinner_prev_day,
         capacity_lunch: Number(k.capacity_lunch), capacity_dinner: Number(k.capacity_dinner),
         weekly_off: [...k.weekly_off].sort(),
+        weekly_off_lunch: [...k.weekly_off_lunch].sort(), weekly_off_dinner: [...k.weekly_off_dinner].sort(),
       }).eq('id', kitchen.id),
       supabase.from('kitchen_settings').update({
         low_balance_meals: Number(s.low_balance_meals), credit_limit_meals: Number(s.credit_limit_meals),
@@ -106,20 +107,22 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
             <Field label="Lunch tiffins per day"><Input {...num('k', 'capacity_lunch')} /></Field>
             <Field label="Dinner tiffins per day"><Input {...num('k', 'capacity_dinner')} /></Field>
           </div>
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium text-ink-700">Weekly off</legend>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {WEEKDAYS.map((d) => {
-                const on = k.weekly_off.includes(d.iso);
-                return (
-                  <button type="button" key={d.iso} onClick={() => setK({ ...k, weekly_off: on ? k.weekly_off.filter((x) => x !== d.iso) : [...k.weekly_off, d.iso] })}
-                    className={`rounded-lg px-3 py-1.5 text-sm ring-1 ${on ? 'bg-ink-800 text-white ring-ink-800' : 'bg-white text-ink-700 ring-ink-200'}`}>
-                    {d.short}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+          {([['weekly_off', 'Weekly off (whole day)'], ['weekly_off_lunch', 'No lunch on'], ['weekly_off_dinner', 'No dinner on']] as const).map(([key, label]) => (
+            <fieldset key={key} className="mt-4">
+              <legend className="text-sm font-medium text-ink-700">{label}</legend>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {WEEKDAYS.map((d) => {
+                  const on = k[key].includes(d.iso);
+                  return (
+                    <button type="button" key={d.iso} onClick={() => setK({ ...k, [key]: on ? k[key].filter((x) => x !== d.iso) : [...k[key], d.iso] })}
+                      className={`rounded-lg px-3 py-1.5 text-sm ring-1 ${on ? 'bg-ink-800 text-white ring-ink-800' : 'bg-white text-ink-700 ring-ink-200'}`}>
+                      {d.short}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
         </Card>
 
         <Card title="Balance and cancellation rules">

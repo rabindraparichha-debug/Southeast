@@ -323,6 +323,27 @@ Known gaps:
 - **iOS needs** an Apple Developer account, an App Store Connect API key and an Expo token (docs/RELEASE.md).
 - **Google Ads conversion upload** runs in mock mode until the developer token and OAuth are set.
 
+## Vendor-first wave 1: daily engine (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md "Recommended work order" and owner decision D-116. Defaults: D-119 – D-125.
+Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sql` (118 checks).
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 2 | Date-dependent pgTAP fixed (05 tests 17–25, 07 test 76; also 06, 12, 13 used the real clock) | ✅ | `notifications_outbox.send_after` default `private.now()`; tests use `private.now()` |
+| 7 | Safe defaults: marketplace leads and first-complaint credit are opt-in | ✅ | `20261107000300_safe_defaults.sql` (D-119) |
+| 8 | `rider_today.otp_sent` only when the code message was really sent | ✅ SQL (screens: apps agent) | `rider_today` |
+| 11 | Vendor changes use the slot's real cutoff (no 19:00 phone close) | ✅ SQL | `private.apply_change` (D-120) |
+| 12 | Lock job: per-kitchen errors, 7-day catch-up, `engine_errors`; nightly per step; cancel charges only its own meals | ✅ | `run_due_locks`, `nightly`, `charge_orders`, `engine_errors`, `dismiss_engine_error` (D-123) |
+| 14 | Dated moves keep earlier meals; first address fills subscriptions; "Make default" can move meals | ✅ | `apply_change`, `sync_subscription_status`, `set_default_address`, mobile quick add address (D-124) |
+| 15 | Undo one skip/pause; resume honours its end date; upcoming list | ✅ SQL | `revoke_schedule_change`, `subscription_holds`, `active_hold` (D-122) |
+| 16 | Reactivate a cancelled subscription | ✅ SQL | `reactivate_subscription` (D-122) |
+| 17 | Closure days (or one meal); weekly off per meal | ✅ SQL + settings | `kitchen_closures`, `set_kitchen_closure`, `remove_kitchen_closure`, `kitchens.weekly_off_lunch/dinner` (D-125) |
+| 18 | Changes after lock reach planned and out runs; office stops fixed; `changed` flag | ✅ SQL | `build_runs`, `resync_runs`, `rider_today` (D-121) |
+| 19 | Skip a locked meal: charged, or "don't charge" = one credit linked to the meal; stop leaves the run | ✅ SQL | `waive_meal_charge`, `meal_orders.charge_waived` (D-120) |
+
+Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

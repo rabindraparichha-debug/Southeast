@@ -52,8 +52,11 @@ export function AddressManager({ kitchenId, customerId, addresses, editable, cen
     router.refresh();
   }
 
+  // "Make default" alone does not move meals; the owner can apply it to every live subscription
+  // from today (a permanent address change, so meals and the rider's runs follow).
   async function makeDefault(id: string) {
-    const { error } = await supabaseBrowser().from('addresses').update({ is_default: true }).eq('id', id);
+    const apply = window.confirm('Deliver this customer’s meals to this address from today?\n\nOK: move the meals now. Cancel: only mark it as the default.');
+    const { error } = await supabaseBrowser().rpc('set_default_address', { p_address: id, p_apply_to_subscriptions: apply });
     if (error) return setError(friendlyError(error));
     router.refresh();
   }

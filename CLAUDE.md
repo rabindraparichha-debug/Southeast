@@ -63,7 +63,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
-| 90000 00101 – 90000 00105 | Spare (used by the M1, M3, M7, M6 and P5/P6 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
 
 ## Conventions (follow these in every change)
 

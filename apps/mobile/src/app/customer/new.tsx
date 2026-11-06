@@ -16,6 +16,7 @@ export default function NewCustomer() {
   const kitchen = useKitchen();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState({ line1: '', area: '', landmark: '' });
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planId, setPlanId] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
@@ -37,8 +38,11 @@ export default function NewCustomer() {
     if (!normalizePhone(phone)) return setError(t('errors.invalid_phone'));
     if (!consent) return setError(t('errors.consent_required'));
     setBusy(true);
+    // The address is optional; without one the rider's stop has no place (added later on the customer page).
+    const hasAddress = Object.values(address).some((v) => v.trim());
     const { data: id, error } = await supabase.rpc('create_customer', {
       p_kitchen: kitchen.kitchenId, p_name: name, p_phone: phone, p_consent: consent,
+      p_address: hasAddress ? address : undefined,
     });
     if (error || !id) {
       setBusy(false);
@@ -60,6 +64,12 @@ export default function NewCustomer() {
       <Input value={name} onChangeText={setName} autoFocus testID="name" />
       <Label>{t('customer.phone')}</Label>
       <Input value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="98610 00001" testID="phone" />
+      <Label>{t('customer.flat')}</Label>
+      <Input value={address.line1} onChangeText={(v) => setAddress({ ...address, line1: v })} testID="line1" />
+      <Label>{t('customer.area')}</Label>
+      <Input value={address.area} onChangeText={(v) => setAddress({ ...address, area: v })} testID="area" />
+      <Label>{t('customer.landmark')}</Label>
+      <Input value={address.landmark} onChangeText={(v) => setAddress({ ...address, landmark: v })} testID="landmark" />
       {plans.length > 0 && (
         <>
           <Label>{t('customer.plan')}</Label>

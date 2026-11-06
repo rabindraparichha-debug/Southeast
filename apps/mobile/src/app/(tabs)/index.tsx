@@ -13,7 +13,7 @@ import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
 type Change = Database['public']['Functions']['change_feed']['Returns'][number];
-const TYPE: Record<Change['type'], string> = { skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address', cancel: 'Cancel' };
+const TYPE: Record<Change['type'], string> = { skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address', cancel: 'Cancel', revoke: 'Undo' };
 
 export default function Today() {
   const kitchen = useKitchen();

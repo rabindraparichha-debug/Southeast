@@ -52,7 +52,8 @@ select is((select coalesce(array_agg(distinct table_name::text), '{}') from info
                                 'schedule_changes', 'count_snapshots', 'meal_orders', 'delivery_stops', 'tiffin_ledger', 'leads',
                                 'customers', 'webhook_events', 'notifications_outbox', 'lead_events', 'platform_commissions',
                                 'customer_health', 'referrals', 'kitchen_switch_requests', 'offices', 'platform_settings',
-                                'food_calendar', 'churn_risks', 'dispatch_photos', 'festival_specials', 'weather_alerts')),
+                                'food_calendar', 'churn_risks', 'dispatch_photos', 'festival_specials', 'weather_alerts',
+                                'engine_errors', 'kitchen_closures')),
   '{}'::text[], 'no direct inserts or updates on ledgers, money, orders, leads or customers (RPCs only)');
 
 -- Append-only ledgers refuse updates and deletes even for the database owner.

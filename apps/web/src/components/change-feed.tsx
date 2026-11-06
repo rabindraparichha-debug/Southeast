@@ -6,7 +6,7 @@ import { Badge } from './ui';
 type Change = Database['public']['Functions']['change_feed']['Returns'][number];
 
 const TYPE_LABEL: Record<Change['type'], string> = {
-  skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address change', cancel: 'Cancel',
+  skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address change', cancel: 'Cancel', revoke: 'Undo',
 };
 const CHANNEL_LABEL: Record<Change['channel'], string> = { whatsapp: 'WhatsApp', web: 'Web', vendor: 'By phone', rider: 'Rider' };
 

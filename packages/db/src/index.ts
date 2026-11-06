@@ -45,6 +45,13 @@ export type SlotSummary = {
   locked_at: string | null;
   locked_totals: SlotTotals | null;
   live: SlotTotals;
+  /** Wave 1: a kitchen closure covers this meal (kitchen_closures). */
+  closed?: boolean;
+  closure_reason?: string | null;
+  /** Wave 1: cutoff passed 5+ minutes ago and the slot is still not locked. */
+  overdue?: boolean;
+  /** Wave 1: the open lock or run-building error for this slot (engine_errors), if any. */
+  engine_error?: string | null;
 };
 
 /** public.request_schedule_change result (preview or confirmed). */
@@ -54,5 +61,17 @@ export type ChangeResult = {
   after_cutoff: boolean;
   from_date: string;
   to_date: string | null;
-  affected: { date: string; slot: MealSlot; late: boolean; charged: boolean }[];
+  /** charged: the customer pays for it (late and not waived); credited: "don't charge" credit posted (D-116). */
+  affected: { date: string; slot: MealSlot; late: boolean; charged: boolean; credited?: boolean; order_id?: string }[];
+  /** revoke_schedule_change only: the skip or pause that was undone. */
+  revoked_change_id?: string;
 };
+
+/** public.subscription_holds row: an upcoming skip or pause (with Undo). */
+export type SubscriptionHold = Database['public']['Functions']['subscription_holds']['Returns'][number];
+
+/** public.reactivate_subscription result. */
+export type ReactivateResult = { subscription_id: string; status: SubscriptionStatus; from_date: string };
+
+/** public.set_kitchen_closure / remove_kitchen_closure result. */
+export type ClosureResult = { dry_run: boolean; closure_id?: string; service_date: string; slot: MealSlot | null; orders: number; meals: number };
