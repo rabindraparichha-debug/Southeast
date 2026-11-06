@@ -1,0 +1,12 @@
+-- Vendor-first wave 1, item 2: outbox rows come due on the engine's clock.
+--
+-- notifications_outbox.send_after defaulted to now(), but the worker claims rows with
+-- send_after <= private.now(). In production the two are the same instant. Under a simulated
+-- clock (tests and the seed set app.now) every row queued by the engine was dated by the real
+-- clock, so once the real date passed the simulated one those rows never came due (pgTAP
+-- 05_whatsapp 17-25 and 07_acquisition 76 failed from about 3 Nov 2026).
+--
+-- private.now() returns now() for every API role, so nothing changes outside direct postgres
+-- sessions. Only SECURITY DEFINER functions (owned by postgres) and the service role insert into
+-- the outbox; authenticated and anon have no insert grant.
+alter table public.notifications_outbox alter column send_after set default private.now();

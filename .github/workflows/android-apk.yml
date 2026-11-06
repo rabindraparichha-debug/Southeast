@@ -1,7 +1,8 @@
 # Builds a signed Android APK (apps/mobile/scripts/build-apk.sh) and attaches it to the run.
 # Secrets (Settings → Secrets and variables → Actions), all optional for a test APK:
-#   ANDROID_KEYSTORE_BASE64   base64 of your upload keystore (without it a throwaway key is made,
-#                             so phones must uninstall before installing the next build)
+#   ANDROID_KEYSTORE_BASE64   base64 of your upload keystore. Required for tag and store builds (they
+#                             fail without it). Branch test builds without it use a throwaway key, so
+#                             phones must uninstall before installing the next build.
 #   ANDROID_KEY_PASSWORD      its password
 #   ANDROID_KEY_ALIAS         its alias (default tiffin-upload)
 #   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY   backend baked into the APK
@@ -41,9 +42,18 @@ jobs:
       - name: Keystore
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          VARIANT: ${{ inputs.variant || 'test' }}
         run: |
           mkdir -p ~/.tiffin
-          if [[ -n "$KEYSTORE_B64" ]]; then echo "$KEYSTORE_B64" | base64 -d > ~/.tiffin/upload.keystore; else echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing with a throwaway key"; fi
+          if [[ -n "$KEYSTORE_B64" ]]; then
+            echo "$KEYSTORE_B64" | base64 -d > ~/.tiffin/upload.keystore
+          elif [[ "$GITHUB_REF_TYPE" == "tag" || "$VARIANT" == "store" ]]; then
+            # A throwaway key means phones must uninstall before the next build, which wipes unsynced rider actions.
+            echo "::error::Release builds (tags, store variant) must be signed with the upload keystore: set the ANDROID_KEYSTORE_BASE64 secret"
+            exit 1
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret; signing this test build with a throwaway key"
+          fi
       - name: Backend
         env:
           URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}

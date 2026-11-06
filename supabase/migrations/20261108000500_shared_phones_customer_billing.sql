@@ -9,7 +9,7 @@
 --   * Every lookup by phone hash was checked so none can raise too_many_rows / unique_violation:
 --       search_customers   returns all matches (roles migration)
 --       wa_receive         routes by kitchen; the conversation links to the oldest customer on
---                          that phone in the kitchen (deterministic; D-119)
+--                          that phone in the kitchen (deterministic; D-136)
 --       wa_select_kitchen  same deterministic pick
 --       portal_get         a sibling's page shares the phone's conversation but shows its own data
 --       convert_lead       unchanged (EXISTS: a phone already in the kitchen → already_customer)

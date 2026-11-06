@@ -1,0 +1,50 @@
+# Checks every push and pull request: typecheck, lint, unit tests, then the database (pgTAP) and the
+# integration suite against a local Supabase stack started in the runner (mock payments, mock WhatsApp).
+# Uses no repository secrets and never runs on pull_request_target, so a pull request from a fork
+# cannot read anything private.
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Core unit tests
+        run: pnpm --filter @tiffin/core test
+      - name: Start local Supabase
+        run: |
+          # Local-only Edge Function settings (mock modes, placeholder secrets).
+          cp supabase/functions/.env.example supabase/functions/.env
+          pnpm exec supabase start -x studio,imgproxy,logflare,vector,mailpit,supavisor,postgres-meta
+      - name: Reset the database (migrations + seed)
+        run: pnpm exec supabase db reset
+      - name: Database tests (pgTAP)
+        run: pnpm exec supabase test db
+      - name: Integration tests
+        run: pnpm test:integration
+      - name: Stop Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true

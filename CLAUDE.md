@@ -8,6 +8,7 @@ A free operating system for small tiffin vendors in Bhubaneswar.
 | `docs/PLAN.md` | Work packages and their status |
 | `docs/DECISIONS.md` | Defaults and open questions |
 | `docs/AUDIT.md` | Initial audit |
+| `docs/LOGIN.md` | Login codes: WhatsApp/SMS providers, hosted auth settings |
 
 **Working rules from the product owner:**
 - Build one milestone at a time, then stop for review. (During M5 the owner asked to build through to the end without stopping; see D-077.)
@@ -26,7 +27,7 @@ docs/               SPEC, PLAN, DECISIONS, AUDIT
 ```
 
 ## Commands
-Requirements: Node 20+, pnpm 10, Docker.
+Requirements: Node 22 (22.13 or later; `nvm use` reads `.nvmrc`), pnpm 10, Docker. Node 20 cannot run the integration tests or Expo SDK 58.
 
 ```bash
 pnpm install
@@ -38,6 +39,11 @@ pnpm test:integration        # needs db:start + db:reset
 pnpm db:types                # regenerate packages/db/src/types.ts after every migration
 pnpm db:loadtest             # 5,000-subscription lock timing (rolled back)
 pnpm db:restore-drill        # backup → restore → compare counts and ledger totals
+
+# Every check in one go (stack, pgTAP, types, integration, load test, typecheck, lint, builds);
+# prints a PASS/FAIL table. In a worktree, give it its own stack: docs/OPERATIONS.md "Verifying a branch"
+scripts/verify-all.sh [--skip-mobile-export] [--skip-build] [--keep-stack]
+PROJECT_ID=tiffinmv PORT_BASE=6132 INSPECTOR_PORT=8783 scripts/verify-all.sh
 
 # Web
 cp apps/web/.env.example apps/web/.env.local       # anon key: pnpm supabase status
@@ -65,7 +71,8 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00099 | Platform admin |
 | 90000 00100 | Pending rider invite to kitchen A |
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
-| 90000 00101 – 90000 00105 | Spare (used by the M1, M3, M7, M6 and P5/P6 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
+| 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
 | 90000 00112 – 90000 00119 | Spare (00113–00115: the wave-2 integration test's owner, manager and accountant) |
 
 ## Conventions (follow these in every change)
@@ -82,7 +89,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Policies use `kitchen_id = any ((select private.kitchen_ids('{owner,...}'))::uuid[])`.
 - **Grants are fail-closed:** new tables and functions get nothing. Add explicit `grant`s in the migration, and pgTAP tests for each role (owner, staff, rider, other kitchen, admin, anon).
 - **Roles:**
-  - Manager (D-117/D-119): every `'{owner}'` check also accepts a manager (`private.expand_roles`). Owner-only areas pass `true`: `private.require_role(k, '{owner}', true)` / `private.kitchen_ids('{owner}', true)` (inbox, broadcasts, settings, members and invites, payouts, commission, audit log). Decide for every new owner check.
+  - Manager (D-117/D-136): every `'{owner}'` check also accepts a manager (`private.expand_roles`). Owner-only areas pass `true`: `private.require_role(k, '{owner}', true)` / `private.kitchen_ids('{owner}', true)` (inbox, broadcasts, settings, members and invites, payouts, commission, audit log). Decide for every new owner check.
   - Accountant: reads money only. Add `accountant` explicitly to money reads (`'{owner,accountant}'`); never to a write. Phones masked.
   - Staff: no money, no phone numbers.
   - Riders: only their stops (M5); change requests via `rider_request_change`, approved by owner/manager.
@@ -106,7 +113,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST).
 
 **Money (M3)**
-- **Billing mode (D-115, D-119):** `customers.billing_mode` is `monthly` (default from `kitchen_settings.default_billing_mode`; pay later, never suspended or cancelled automatically) or `prepaid` (meal balance, low balance, suspend, grace cancel).
+- **Billing mode (D-115, D-136):** `customers.billing_mode` is `monthly` (default from `kitchen_settings.default_billing_mode`; pay later, never suspended or cancelled automatically) or `prepaid` (meal balance, low balance, suspend, grace cancel).
   - Monthly: the rupee balance Σ `amount_paise` is the truth; dues = −that. Payments carry 0 meals; credits are valued by the trigger `balance_entries_value_monthly`; adjustments take `p_amount_paise`.
   - Never value dues or statements with today's plan price: every meal carries its own `amount_paise`. `private.customer_unit_price` is only for turning rupees into meals.
   - Switch modes only with `set_billing_mode` (converts the balance once). Anything that suspends, cancels, reminds or flags on a low balance must skip monthly customers.
@@ -138,6 +145,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Rider actions go through `complete_stop` / `fail_stop` / `start_run` / `finish_run` with `p_at` (device time) and `p_client_op` (idempotency key). Never use `now()` for a rider's action time.
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
+- The queue never drops an action. Only the codes in `FINAL_ERRORS` (`rider-queue.ts`, mobile and web twins) are final, and those move to the saved "needs attention" list with photo and cash; everything else is retried with backoff. If a rider RPC gets a new `raise`, add the code there and in `tests/integration/rider-queue.test.ts`.
 
 **Inventory (M6)**
 - Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.
@@ -178,6 +186,12 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.
 - **Weather rules** live in `_shared/weather.ts` (`WEATHER_MODE=mock` by default). The `weather_*` RPCs are service-role only.
 
+**Login codes (D-126, docs/LOGIN.md)**
+- Apps call `signInWithOtp({ phone, options: { channel } })` (`whatsapp` | `sms`, offered per `*_LOGIN_CHANNELS`) and always `verifyOtp(..., type: 'sms')`. Map auth errors through `loginErrorKey` (`@tiffin/core`) in both apps.
+- Default delivery is Supabase's built-in Twilio provider (dashboard settings). The optional Send SMS hook `auth-send-sms` (logic in `_shared/auth-sms.ts`, tests in `tests/integration/auth-sms.test.ts`) checks the Standard Webhooks signature first (missing secrets answer like a bad signature; replayed `webhook-id`s are refused), never logs the code or a full phone, and its mock uses `mockAllowed` (`_shared/platform.ts`).
+- Supabase does not pass the channel to hooks, so with the hook on the apps must run channel-neutral (`*_LOGIN_DELIVERY=hook`, `channelNeutral` in `@tiffin/core`). Never label a code with a channel the screen cannot know.
+- Hosted: "Confirm phone" on, provider keys only in the dashboard / `supabase secrets set`, never `config push`. The signup policy is still open (D-127).
+
 **Channels, web app, builds (M9)**
 - Lead channels and their setup: `docs/LEAD_SOURCES.md` (Google Ads click ids + offline conversions via `ad_conversions` and the `ads-conversions` function, mock unless `GOOGLE_ADS_MODE=live`; Justdial/Sulekha via `lead-intake`, `lead-email`, `admin_import_leads`).
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
@@ -216,7 +230,8 @@ Edge Function secrets (`supabase/functions/.env`):
 
 | Variable | Notes |
 |---|---|
-| `RAZORPAY_MODE` | `mock` (default without keys) or `test` |
+| `PLATFORM_ENV` | `local` (default only when `SUPABASE_URL` is a local stack), `staging` or `production`. Mock modes (Razorpay, WhatsApp, notebook fixture) run only when local (`_shared/platform.ts`) |
+| `RAZORPAY_MODE` | `mock` (default without keys, local only) or `test` |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | `rzp_test_…` only |
 | `RAZORPAY_WEBHOOK_SECRET` | Must match the webhook secret set in Razorpay |
 | `PUBLIC_FUNCTIONS_URL` | Browser-reachable functions URL, used for mock payment pages |
@@ -234,6 +249,22 @@ WhatsApp and AI Edge Function secrets (same file):
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
+
+Login channels (docs/LOGIN.md): `NEXT_PUBLIC_LOGIN_CHANNELS` (web) and `EXPO_PUBLIC_LOGIN_CHANNELS` (mobile, build time), e.g. `whatsapp,sms`; unset means `sms` (local test numbers). `NEXT_PUBLIC_LOGIN_DELIVERY` / `EXPO_PUBLIC_LOGIN_DELIVERY`: `channel` (default, built-in provider) or `hook` (Send SMS hook on: channel-neutral screens).
+
+Login code Edge Function secrets (`auth-send-sms`, same file; only when the Send SMS hook is used):
+
+| Variable | Notes |
+|---|---|
+| `SEND_SMS_HOOK_SECRETS` | `v1,whsec_…` from Authentication > Hooks (several separated by a pipe, for rotation). The `.env.example` value is a published local placeholder, refused when hosted |
+| `AUTH_SMS_MODE` | `mock` (local only, nothing sent) or `live` |
+| `AUTH_SMS_ROUTES`, `AUTH_SMS_PROVIDER` | Order tried, e.g. `whatsapp:twilio,sms:telnyx`; provider for plain `sms` (`twilio` or `telnyx`) |
+| `AUTH_SMS_ESCALATE_SECONDS`, `AUTH_SMS_TIMEOUT_MS`, `AUTH_SMS_BUDGET_MS` | Resend window (600), per call (2000) and total (4300) ms |
+| `AUTH_SMS_ALLOWED_COUNTRY_CODES`, `AUTH_SMS_TEMPLATE`, `AUTH_SMS_VALIDITY_SECONDS`, `AUTH_SMS_MOCK_FAIL` | `91`; SMS text with `{code}` (= DLT template); Twilio validity; mock-only failures |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_WHATSAPP_CONTENT_SID`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM` | WhatsApp authentication template (`HX…`) and senders |
+| `TELNYX_API_KEY`, `TELNYX_FROM`, `TELNYX_MESSAGING_PROFILE_ID` | Telnyx SMS (India: DLT-registered alphanumeric sender) |
+
+Local config only (`config.toml` `env()`, unset locally): `SUPABASE_AUTH_SMS_TWILIO_ACCOUNT_SID`, `SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN`, `SUPABASE_AUTH_SMS_TWILIO_MESSAGE_SERVICE_SID`, `SUPABASE_AUTH_SMS_TWILIO_CONTENT_SID` (accepted for `config push`; CLI 2.122.0 does not pass it to the local Auth container), and `SEND_SMS_HOOK_SECRETS` in `supabase/.env` for the hook's local check (`SUPABASE_AUTH_HOOK_SEND_SMS_ENABLED=true pnpm db:start`).
 
 Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (Justdial and generic JSON, `?key=`) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 

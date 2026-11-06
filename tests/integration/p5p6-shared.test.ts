@@ -135,7 +135,8 @@ describe('Route split with platform commission', () => {
     expect(() => routeTransfer(70000, 0, 'acc_X')).toThrow('invalid_transfer');
   });
   it('mock mode validates too and never calls Razorpay', async () => {
-    const cfg = loadConfig((k) => (k === 'RAZORPAY_WEBHOOK_SECRET' ? 's' : undefined));
+    const env: Record<string, string> = { RAZORPAY_WEBHOOK_SECRET: 's', SUPABASE_URL: 'http://kong:8000' };
+    const cfg = loadConfig((k) => env[k]);
     await expect(createPaymentLink(cfg, { ...input, transferPaise: 80000 })).rejects.toThrow('invalid_transfer');
     expect((await createPaymentLink(cfg, { ...input, transferPaise: 63000 })).shortUrl).toContain('razorpay-mock');
   });

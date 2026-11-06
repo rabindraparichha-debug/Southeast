@@ -5,6 +5,7 @@ import { Nav, type NavItem } from '@/components/nav';
 import { KitchenSwitcher } from '@/components/kitchen-switcher';
 import { InstallApp } from '@/components/pwa';
 import { SignOutButton } from '@/components/sign-out-button';
+import { RiderSync } from '@/components/rider-sync';
 import { canReadMoney, isLead } from '@/lib/roles';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
@@ -13,7 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
 
-  // D-117/D-119: managers get every owner page except the owner-only ones (inbox, settings, team);
+  // D-117/D-136: managers get every owner page except the owner-only ones (inbox, settings, team);
   // accountants get the money pages, read-only.
   const lead = isLead(role);
   const supabase = await createClient();
@@ -26,6 +27,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/requests', label: requests ? `Rider requests (${requests})` : 'Rider requests', icon: '📨' });
   }
   if (role === 'owner' || role === 'manager' || role === 'staff') {
+    if (lead) items.push({ href: '/desk', label: 'Phone desk', icon: '📞' });
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
     items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
     if (role === 'owner') items.push({ href: '/rider', label: 'Deliver', icon: '📍' });
@@ -76,6 +78,8 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
           <SignOutButton />
         </div>
       </aside>
+      {/* Owners deliver too: their queued rider actions keep syncing from any page. */}
+      {role === 'owner' && <RiderSync userId={session.userId} />}
       <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
     </div>
   );

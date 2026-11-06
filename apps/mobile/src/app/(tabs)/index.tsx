@@ -12,11 +12,14 @@ import { AtRiskCard, SpecialsCard } from '@/components/insights';
 import { LeadCards } from '@/components/lead-cards';
 import { MoneyOverview } from '@/components/money-overview';
 import { isLead } from '@/lib/roles';
+import { ClosuresCard } from '@/components/closures-card';
+import { StaleBanner } from '@/components/offline-banner';
+import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
 type Change = Database['public']['Functions']['change_feed']['Returns'][number];
-const TYPE: Record<Change['type'], string> = { skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address', cancel: 'Cancel' };
+const TYPE: Record<Change['type'], string> = { skip: 'Skip', pause: 'Pause', resume: 'Resume', address: 'Address', cancel: 'Cancel', revoke: 'Undo' };
 
 export default function Today() {
   const kitchen = useKitchen();
@@ -25,6 +28,8 @@ export default function Today() {
   const [todo, setTodo] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [version, setVersion] = useState(0); // reloads the cards below on focus and pull-to-refresh
+  const scope = useCacheScope();
+  const [stale, setStale] = useState<Stale | null>(null); // showing the copy saved on this phone
 
   const load = useCallback(async () => {
     if (kitchen.role === 'rider') return;
@@ -32,18 +37,34 @@ export default function Today() {
     if (kitchen.role === 'accountant') return; // money home: no counts or kitchen orders
     const today = istDate();
     const wanted: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];
-    const [results, feed] = await Promise.all([
-      Promise.all(wanted.map(([d, s]) => supabase.rpc('slot_summary', { p_kitchen: kitchen.kitchenId, p_date: d, p_slot: s }))),
-      supabase.rpc('change_feed', { p_kitchen: kitchen.kitchenId, p_limit: 20 }),
-    ]);
-    setSlots(results.map((r) => r.data as unknown as SlotSummary).filter(Boolean));
-    setChanges(feed.data ?? []);
+    // Offline (or the server fails): the last copy saved on this phone, with a banner saying so.
+    const res = await cachedFetch({
+      scope, screen: 'today',
+      fetch: async () => {
+        const [results, feed] = await Promise.all([
+          Promise.all(wanted.map(([d, s]) => supabase.rpc('slot_summary', { p_kitchen: kitchen.kitchenId, p_date: d, p_slot: s }))),
+          supabase.rpc('change_feed', { p_kitchen: kitchen.kitchenId, p_limit: 20 }),
+        ]);
+        const error = results.find((r) => r.error)?.error ?? feed.error;
+        return { data: { slots: results.map((r) => r.data as unknown as SlotSummary).filter(Boolean), changes: feed.data ?? [] }, error };
+      },
+      onCached: (d, savedAt) => {
+        setSlots(d.slots);
+        setChanges(d.changes);
+        setStale({ savedAt, offline: false, error: '', updating: true });
+      },
+    });
+    if (res.data) {
+      setSlots(res.data.slots);
+      setChanges(res.data.changes);
+    }
+    setStale(res.stale);
     if (kitchen.role === 'owner') {
       // Onboarding: what is left before the kitchen can take customers from the platform.
       const { data } = await supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId });
       setTodo(((data ?? []) as { key: string; done: boolean }[]).filter((i) => !i.done).map((i) => i.key));
     }
-  }, [kitchen]);
+  }, [kitchen, scope]);
 
   useFocusEffect(useCallback(() => void load(), [load]));
 
@@ -63,6 +84,7 @@ export default function Today() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Title>{kitchen.kitchenName}</Title>
+      <StaleBanner stale={stale} />
       {todo.length > 0 && (
         <Card>
           <Text style={styles.cardTitle}>{t('checklist.title')}</Text>
@@ -77,6 +99,7 @@ export default function Today() {
           <SlotCard key={`${s.service_date}-${s.slot}`} s={s} onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })} />
         ))}
       </View>
+      <ClosuresCard kitchenId={kitchen.kitchenId} isOwner={isLead(kitchen.role)} version={version} onChanged={load} />
       <DispatchPhotoCard kitchenId={kitchen.kitchenId} version={version} />
       {isLead(kitchen.role) && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>

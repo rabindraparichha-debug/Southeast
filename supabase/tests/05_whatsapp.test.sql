@@ -99,8 +99,8 @@ select set_config('app.now', '2026-11-02 21:10:00+05:30', true);
 select public.wa_receive('wamid.6', '919444000001', 'thanks', '{}', null, null); -- customer 1 writes again: 24h window open
 delete from public.notifications_outbox where kitchen_id = '80000000-0000-4000-f000-000000000001';
 insert into public.notifications_outbox (kitchen_id, channel, recipient_type, recipient_id, template, payload, dedupe_key, send_after) values
-  ('80000000-0000-4000-f000-000000000001', 'whatsapp', 'customer', (select cust from w where n = 1), 'payment_receipt', '{"amount_paise":70000,"meals":10}', 't1', now() - interval '1 day'),
-  ('80000000-0000-4000-f000-000000000001', 'whatsapp', 'customer', (select cust from w where n = 3), 'low_balance_reminder', '{"balance_meals":2}', 't3', now() - interval '1 day');
+  ('80000000-0000-4000-f000-000000000001', 'whatsapp', 'customer', (select cust from w where n = 1), 'payment_receipt', '{"amount_paise":70000,"meals":10}', 't1', private.now() - interval '1 day'),
+  ('80000000-0000-4000-f000-000000000001', 'whatsapp', 'customer', (select cust from w where n = 3), 'low_balance_reminder', '{"balance_meals":2}', 't3', private.now() - interval '1 day');
 create temp table claimed as select * from public.wa_claim_outbox(10) where kitchen_id = '80000000-0000-4000-f000-000000000001';
 select is((select count(*) from claimed), 2::bigint, 'due rows are claimed');
 select is((select phone_e164 || '/' || in_window || '/' || opted_in from claimed where template = 'payment_receipt'), '+919444000001/true/true',

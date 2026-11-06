@@ -9,6 +9,7 @@ import { ChangeFeed } from '@/components/change-feed';
 import { OnboardingChecklist } from '@/components/onboarding-checklist';
 import { checklistItems } from '@/lib/checklist';
 import { isLead } from '@/lib/roles';
+import { UpcomingClosures } from './upcoming-closures';
 
 export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
@@ -62,6 +63,7 @@ export default async function TodayPage() {
         </Card>
         <div className="space-y-4">
           <Stat label="Customers" value={customerCount ?? 0} />
+          <UpcomingClosures kitchenId={kitchen.kitchenId} canEdit={lead} />
           {lead && <Stat label="Active subscriptions" value={active} hint={paused ? `${paused} paused` : undefined} />}
           {lead && (
             <div className="flex flex-wrap gap-2">

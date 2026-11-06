@@ -1,12 +1,17 @@
 import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { formatIstShort, SLOT_LABEL } from '@tiffin/core';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { formatIstShort, formatPaise, SLOT_LABEL } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
+import { ChangedBadge } from '@/components/changed-badge';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
-import { act, clearRiderError, loadRider, refreshRider, useRider, type RiderRun, type RiderStop } from '@/lib/rider-store';
+import {
+  act, clearRiderError, discardAttention, loadRider, refreshRider, retryAttention, useRider,
+  type AttentionItem, type RiderRun, type RiderStop,
+} from '@/lib/rider-store';
+import { cashOf } from '@/lib/rider-queue';
 import { useAuth } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/i18n';
@@ -86,9 +91,10 @@ export default function Rider() {
       {rider.online && rider.queue.length > 0 && <Banner tone="info" text={t('rider.pending', { n: rider.queue.length })} />}
       {rider.lastError && (
         <Pressable onPress={clearRiderError}>
-          <ErrorText>{t('rider.syncFailed', { error: friendlyError({ message: rider.lastError }) })}</ErrorText>
+          <ErrorText>{t('rider.syncFailed', { error: rider.lastError === 'not_authenticated' ? t('rider.waitLogin') : friendlyError({ message: rider.lastError }) })}</ErrorText>
         </Pressable>
       )}
+      {rider.attention.length > 0 && <NeedsAttention items={rider.attention} runs={rider.runs} />}
 
       {rider.runs.length > 1 && (
         <View style={styles.chips}>
@@ -148,6 +154,7 @@ function StopRow({ stop }: { stop: RiderStop }) {
       <View style={styles.seq}><Text style={styles.seqText}>{stop.seq}</Text></View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.name}>{stop.office ? `🏢 ${stop.name}` : stop.name}</Text>
+        <ChangedBadge stop={stop} />
         {stop.office && <Text style={styles.office}>{t('rider.officeMeals', { n: stop.meal_count })}</Text>}
         <Text style={styles.addr}>{[stop.line1, stop.landmark, stop.area].filter(Boolean).join(', ')}</Text>
         <Text style={styles.small}>{stop.office ? diets : `${t('rider.meals', { n: stop.meal_count })}${diets ? ` · ${diets}` : ''}`}
@@ -159,6 +166,45 @@ function StopRow({ stop }: { stop: RiderStop }) {
         {stop.queued && <Text style={styles.small}>⏳</Text>}
       </View>
     </Pressable>
+  );
+}
+
+/** Actions the server refused: kept on the phone with photo and cash until retried or discarded. */
+function NeedsAttention({ items, runs }: { items: AttentionItem[]; runs: RiderRun[] }) {
+  const stopName = (stopId?: string) => {
+    for (const r of runs) {
+      const s = r.stops.find((x) => x.id === stopId);
+      if (s) return `${s.seq}. ${s.name}`;
+    }
+    return stopId ? t('rider.attention.unknownStop') : '';
+  };
+  const discard = (a: AttentionItem) =>
+    Alert.alert(t('rider.attention.confirmTitle'), t('rider.attention.confirm'), [
+      { text: t('actions.back'), style: 'cancel' },
+      { text: t('rider.attention.discard'), style: 'destructive', onPress: () => void discardAttention(a.op.op) },
+    ]);
+  return (
+    <Card style={styles.attention}>
+      <Text style={styles.attentionTitle}>⚠ {t('rider.attention.title', { n: items.length })}</Text>
+      <Muted>{t('rider.attention.help')}</Muted>
+      {items.map((a) => {
+        const cash = cashOf(a.op);
+        const extra = [cash > 0 ? t('rider.attention.cash', { amount: formatPaise(cash) }) : '', a.op.photoPath ? t('rider.attention.photo') : '']
+          .filter(Boolean).join(' · ');
+        return (
+          <View key={a.op.op} style={styles.attentionItem}>
+            <Text style={styles.name}>{t(`rider.attention.kind.${a.op.kind}`)}{a.op.stopId ? `: ${stopName(a.op.stopId)}` : ''}</Text>
+            <Text style={styles.addr}>{friendlyError({ message: a.reason })}</Text>
+            {extra ? <Text style={styles.small}>{extra} · {formatIstShort(a.op.at)}</Text> : <Text style={styles.small}>{formatIstShort(a.op.at)}</Text>}
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}><Button title={t('rider.attention.retry')} variant="secondary" onPress={() => void retryAttention(a.op.op)} /></View>
+              <View style={{ flex: 1 }}><Button title={t('rider.attention.discard')} variant="secondary" onPress={() => discard(a)} /></View>
+            </View>
+          </View>
+        );
+      })}
+      {items.length > 1 && <Button title={t('rider.attention.retryAll')} onPress={() => void retryAttention()} />}
+    </Card>
   );
 }
 
@@ -188,4 +234,7 @@ const styles = StyleSheet.create({
   note: { fontSize: 13, color: colors.jain },
   status: { fontSize: 13, fontWeight: '600' },
   banner: { borderRadius: 10, padding: space(3) },
+  attention: { borderColor: colors.danger },
+  attentionTitle: { fontSize: 16, fontWeight: '700', color: colors.danger },
+  attentionItem: { gap: 2, paddingTop: space(2), borderTopWidth: 1, borderTopColor: colors.line },
 });

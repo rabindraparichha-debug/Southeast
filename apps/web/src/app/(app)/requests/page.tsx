@@ -9,7 +9,7 @@ import { RequestList, type Choice } from './request-list';
 
 // Change requests riders record at the door ("skip tomorrow", "new address"). Nothing changes until
 // the owner or a manager approves here; approval runs the normal schedule-change path (preview
-// first), so the slot cutoff decides what is charged at the time of approval (D-117, D-119).
+// first), so the slot cutoff decides what is charged at the time of approval (D-117, D-136).
 export default async function RequestsPage({ searchParams }: PageProps<'/requests'>) {
   const { kitchen } = await requireKitchen(LEAD_ROLES);
   const showAll = (await searchParams).status === 'all';

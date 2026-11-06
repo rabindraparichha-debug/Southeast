@@ -1,14 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { formatIstShort, rupeesToPaise, SLOT_LABEL } from '@tiffin/core';
+import { formatIstShort, formatPaise, rupeesToPaise, SLOT_LABEL } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError, friendlyErrorIn } from '@/lib/errors';
 import { downscaleJpeg } from '@/lib/image';
 import {
-  act, clearRiderError, isNetworkError, keepPhoto, loadRider, markOffline, refreshRider, useRider, uuid,
-  type RiderRun, type RiderStop,
+  act, clearRiderError, discardAttention, isNetworkError, keepPhoto, loadRider, markOffline, refreshRider, retryAttention,
+  useRider, uuid, type AttentionItem, type RiderRun, type RiderStop,
 } from '@/lib/rider-store';
+import { cashOf } from '@/lib/rider-queue';
 import { BigButton, Chip, ErrorText, FieldInput, Muted, Panel, Stepper } from '@/components/field-ui';
 import { ScanSticker } from './scan-sticker';
 
@@ -157,10 +158,54 @@ function SyncBanners() {
       )}
       {rider.lastError && (
         <button type="button" onClick={clearRiderError} className="block w-full rounded-xl bg-red-50 px-3 py-2.5 text-left text-sm text-red-800 ring-1 ring-red-200">
-          Could not save: {friendlyErrorIn('rider', { message: rider.lastError })} <span className="text-red-500">(tap to hide)</span>
+          Not synced yet, will try again: {friendlyErrorIn('rider', { message: rider.lastError })} <span className="text-red-500">(tap to hide)</span>
         </button>
       )}
+      {rider.attention.length > 0 && <NeedsAttention items={rider.attention} runs={rider.runs} />}
     </>
+  );
+}
+
+const KIND_LABEL = { start: 'Start run', complete: 'Delivered', fail: 'Not delivered', finish: 'Finish run' } as const;
+
+/** Actions the server refused: kept on this device with photo and cash until retried or discarded. */
+function NeedsAttention({ items, runs }: { items: AttentionItem[]; runs: RiderRun[] }) {
+  const stopName = (stopId?: string) => {
+    for (const r of runs) {
+      const s = r.stops.find((x) => x.id === stopId);
+      if (s) return `${s.seq}. ${s.name}`;
+    }
+    return stopId ? 'a stop no longer in today’s list' : '';
+  };
+  const discard = (a: AttentionItem) => {
+    if (window.confirm('Discard this? It is deleted from this phone, with its photo. Tell the kitchen about any cash you collected.')) {
+      void discardAttention(a.op.op);
+    }
+  };
+  return (
+    <div className="space-y-2 rounded-xl bg-red-50 p-3 ring-1 ring-red-200" data-testid="needs-attention">
+      <p className="text-base font-semibold text-red-800">⚠ Needs attention ({items.length})</p>
+      <p className="text-sm text-red-900">The server did not accept these. They stay on this phone, with their photo and cash, until you try again or discard them.</p>
+      <ul className="space-y-2">
+        {items.map((a) => {
+          const cash = cashOf(a.op);
+          return (
+            <li key={a.op.op} className="space-y-1 rounded-lg bg-white p-3 ring-1 ring-red-100">
+              <p className="text-sm font-semibold text-ink-900">{KIND_LABEL[a.op.kind]}{a.op.stopId ? `: ${stopName(a.op.stopId)}` : ''}</p>
+              <p className="text-sm text-ink-700">{friendlyErrorIn('rider', { message: a.reason })}</p>
+              <p className="text-xs text-ink-500">
+                {formatIstShort(a.op.at)}{cash > 0 ? ` · cash ${formatPaise(cash)}` : ''}{a.op.hasPhoto ? ' · photo kept' : ''}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <BigButton variant="secondary" onClick={() => void retryAttention(a.op.op)} data-testid="attention-retry">Try again</BigButton>
+                <BigButton variant="danger" onClick={() => discard(a)} data-testid="attention-discard">Discard</BigButton>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {items.length > 1 && <BigButton onClick={() => void retryAttention()}>Try all again</BigButton>}
+    </div>
   );
 }
 
@@ -253,7 +298,7 @@ function RunList({ isOwner, onOpen }: { isOwner: boolean; onOpen: (id: string) =
         {run.status === 'planned' && (
           <>
             <BigButton onClick={start} disabled={busy} data-testid="start-run">{busy ? 'Starting…' : 'Start run'}</BigButton>
-            <Muted>Customers get an &quot;on the way&quot; message with their delivery code.</Muted>
+            <Muted>Tap when you leave the kitchen.</Muted>
           </>
         )}
         {run.status === 'out' && allDone && <BigButton onClick={finish} disabled={busy} data-testid="finish-run">Finish run</BigButton>}
@@ -274,6 +319,7 @@ function RunList({ isOwner, onOpen }: { isOwner: boolean; onOpen: (id: string) =
 }
 
 function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
+  const changed = stop as RiderStop & { changed?: boolean; changed_at?: string | null };
   const diets = Object.entries(stop.diets ?? {}).map(([d, n]) => `${n} ${d === 'nonveg' ? 'non-veg' : d}`).join(', ');
   return (
     <li>
@@ -282,6 +328,12 @@ function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 font-bold text-brand-700">{stop.seq}</span>
         <span className="min-w-0 flex-1 space-y-0.5">
           <span className="block text-base font-semibold text-ink-900">{stop.office ? '🏢 ' : ''}{stop.name}</span>
+          {/* Wave 1 (rider_today.changed): added or changed after the run was built (late skip, new address, meal count). */}
+          {changed.changed && stop.status === 'pending' && (
+            <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" data-testid={`stop-changed-${stop.seq}`}>
+              Changed{changed.changed_at ? ` ${formatIstShort(changed.changed_at)}` : ''}: check meals and address
+            </span>
+          )}
           {stop.office && <span className="block text-xs font-medium text-brand-700">Office: hand all {plural(stop.meal_count, 'tiffin')} to reception</span>}
           <span className="block text-sm text-ink-600">{address(stop)}</span>
           <span className="block text-xs text-ink-500">
@@ -300,6 +352,7 @@ function StopRow({ stop, onOpen }: { stop: RiderStop; onOpen: () => void }) {
 }
 
 function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDone: () => void }) {
+  const rider = useRider();
   const [otp, setOtp] = useState('');
   const [tiffinsOut, setTiffinsOut] = useState<number | null>(null);
   const [tiffinsBack, setTiffinsBack] = useState<number | null>(null);
@@ -427,6 +480,12 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
         </div>
       </Panel>
 
+      {rider.attention.some((a) => a.op.stopId === stop.id) && (
+        <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800 ring-1 ring-red-200" data-testid="stop-attention">
+          ⚠ A saved action for this stop was not accepted: {friendlyErrorIn('rider', { message: rider.attention.find((a) => a.op.stopId === stop.id)!.reason })}. See the list on the stops page.
+        </p>
+      )}
+
       {stop.status !== 'pending' && (
         <Panel>
           <p className={`text-base font-semibold ${stop.status === 'delivered' ? 'text-green-700' : 'text-red-700'}`} data-testid="stop-status">
@@ -447,23 +506,28 @@ function StopView({ run, stop, onDone }: { run: RiderRun; stop: RiderStop; onDon
             <span className="text-sm font-medium text-ink-700">Cash collected (₹, optional)</span>
             <FieldInput value={cash} onChange={(e) => setCash(e.target.value)} inputMode="decimal" placeholder="0" data-testid="cash" />
           </label>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium text-ink-700">Delivery code from the customer</span>
-            <span className="block text-sm text-ink-500">
-              {stop.otp_sent ? 'The customer got a 4-digit code on WhatsApp.' : 'This customer did not get a code (no WhatsApp). Use a photo.'}
-            </span>
-            <FieldInput value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric"
-              autoComplete="one-time-code" maxLength={4} placeholder="0000" className="text-center text-2xl tracking-[0.5em]" data-testid="otp-input" />
-          </label>
           <ErrorText>{error}</ErrorText>
-          <BigButton onClick={() => deliver('otp')} disabled={busy || otp.trim().length !== 4} data-testid="confirm-otp">
-            {busy ? 'Saving…' : 'Confirm with code'}
-          </BigButton>
+          {/* Photo is the main proof: most Phase 1 customers get no WhatsApp code. */}
           <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden" data-testid="photo-input"
             onChange={(e) => void onPhoto(e.target.files?.[0])} />
-          <BigButton variant="secondary" onClick={() => photoInput.current?.click()} disabled={busy} data-testid="take-photo">📷 Take photo instead</BigButton>
+          <BigButton onClick={() => photoInput.current?.click()} disabled={busy} data-testid="take-photo">
+            {busy ? 'Saving…' : '📷 Delivered: take photo'}
+          </BigButton>
+          {stop.otp_sent && (
+            <div className="space-y-2 border-t border-ink-100 pt-3">
+              <label className="block space-y-1">
+                <span className="text-sm font-medium text-ink-700">Delivery code (optional)</span>
+                <span className="block text-sm text-ink-500">If the customer has a 4-digit delivery code on WhatsApp, you can enter it instead of a photo.</span>
+                <FieldInput value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric"
+                  autoComplete="one-time-code" maxLength={4} placeholder="0000" className="text-center text-2xl tracking-[0.5em]" data-testid="otp-input" />
+              </label>
+              <BigButton variant="secondary" onClick={() => deliver('otp')} disabled={busy || otp.trim().length !== 4} data-testid="confirm-otp">
+                Delivered: confirm code
+              </BigButton>
+            </div>
+          )}
           <button type="button" onClick={() => deliver('none')} disabled={busy} className="block w-full py-2 text-center text-sm text-ink-600 underline" data-testid="no-proof">
-            Deliver without proof
+            Delivered without photo
           </button>
           <button type="button" onClick={() => { setError(''); setFailing(true); }} className="block w-full py-2 text-center text-sm font-medium text-red-700 underline" data-testid="could-not-deliver">
             Could not deliver

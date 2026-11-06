@@ -5,7 +5,8 @@ create extension if not exists pgtap with schema extensions;
 select no_plan();
 
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
-update public.kitchens set accepts_platform_leads = false where id <> '10000000-0000-4000-a000-00000000000a';
+-- Only kitchen A takes platform leads here (kitchens opt in since D-119; others may be left by integration runs).
+update public.kitchens set accepts_platform_leads = (id = '10000000-0000-4000-a000-00000000000a');
 
 -- A Google Ads lead with a click id comes in, picks kitchen A and pays.
 create temp table t (k text primary key, v jsonb);

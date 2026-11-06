@@ -23,7 +23,11 @@ can start without installing anything from a store.
 The rider queue (`apps/web/src/lib/rider-store.ts`) is a port of the mobile one
 (`apps/mobile/src/lib/rider-store.ts`): every action carries a client op id (idempotent on the server)
 and the device time (`p_at`). Photos are kept as bytes in IndexedDB until uploaded (downscaled in the
-browser: 1280 px for proofs, 1600 px for bills). Log-out is blocked while actions are still queued.
+browser: 1280 px for proofs, 1600 px for bills). Temporary failures (no network, server busy, login to
+renew) stay queued and are retried with backoff; only the rider RPCs' business refusals move to a saved
+"Needs attention" list on the rider page, with their photo and cash, until the rider tries again or
+discards them (rules in `src/lib/rider-queue.ts`, the twin of the mobile one). The queue also syncs
+from dashboard pages for owners. Log-out is blocked while anything is queued or needs attention.
 
 ## Pieces
 

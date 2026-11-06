@@ -1,9 +1,10 @@
 // Drains notifications_outbox (WhatsApp). Triggered every minute by pg_cron (private.kick_outbox)
 // and after vendor actions. Free-form inside the 24h window; approved templates outside it, and
-// only to customers who opted in.
+// only to customers who opted in. Mock mode (local only) still records a send as 'sent': the
+// outbox status check has no 'mock' value yet, and adding one needs a migration.
 import { corsHeaders, json, rpc as callRpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { loadWaConfig, previewOf, sendWhatsApp } from '../_shared/whatsapp.ts';
+import { loadWaConfig, previewOf, sendWhatsApp, type WaConfig } from '../_shared/whatsapp.ts';
 import { renderOutbox } from '../_shared/templates.ts';
 import type { Lang } from '../_shared/bot-i18n.ts';
 
@@ -24,7 +25,14 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  const cfg = loadWaConfig((k) => Deno.env.get(k));
+  let cfg: WaConfig;
+  try {
+    cfg = loadWaConfig((k) => Deno.env.get(k));
+  } catch (e) {
+    // e.g. whatsapp_not_configured on a hosted project without a token: claim nothing, so no row is
+    // marked sent and messages wait until WhatsApp is set up.
+    return json({ error: String((e as Error).message).split(':')[0] }, 503);
+  }
   const counts = { sent: 0, skipped: 0, failed: 0 };
   for (let batch = 0; batch < 5; batch++) {
     const rows = await rpc<Row[]>('wa_claim_outbox', { p_limit: 25 });

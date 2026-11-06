@@ -2,9 +2,12 @@
 // private 'imports' bucket (imports/<kitchen_id>/...) and calls this function with its path.
 // Claude reads the rows (vision, structured output); _shared/notebook.ts validates them. It returns
 // a PREVIEW only: nothing is written. The owner confirms through the existing import_customers RPC.
-// Without ANTHROPIC_API_KEY (or with NOTEBOOK_IMPORT_MODE=mock) a fixture answer is used.
+// Without ANTHROPIC_API_KEY (or with NOTEBOOK_IMPORT_MODE=mock) a fixture answer is used, but only on a
+// local stack (PLATFORM_ENV, _shared/platform.ts); a hosted project refuses with ai_not_configured
+// instead of showing made-up customers.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
+import { mockAllowed } from '../_shared/platform.ts';
 import { buildPreview, MOCK_MODEL_OUTPUT, NOTEBOOK_SCHEMA, notebookPrompt, parseModelOutput } from '../_shared/notebook.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -55,6 +58,7 @@ Deno.serve(async (req) => {
   if (ctx.error || !ctx.data) return json({ error: ctx.error?.message ?? 'forbidden' }, 400);
 
   const mode = !env('ANTHROPIC_API_KEY') || env('NOTEBOOK_IMPORT_MODE') === 'mock' ? 'mock' : 'live';
+  if (mode === 'mock' && !mockAllowed(env)) return json({ error: 'ai_not_configured' }, 503);
   try {
     let output: string;
     if (mode === 'mock') {

@@ -26,7 +26,9 @@ export function SlotCard({ s, onPress }: { s: SlotSummary; onPress?: () => void 
         <Text style={[styles.badge, s.locked ? styles.final : styles.preview]}>{s.locked ? t('today.final') : t('today.preview')}</Text>
       </View>
       <Text style={styles.sub}>
-        {s.locked ? t('today.lockedAt', { time: formatIstShort(s.locked_at!) }) : t('today.closesAt', { time: formatIstShort(s.cutoff_at) })}
+        {s.closed
+          ? t('today.kitchenClosed') + (s.closure_reason ? ` · ${s.closure_reason}` : '')
+          : s.locked ? t('today.lockedAt', { time: formatIstShort(s.locked_at!) }) : t('today.closesAt', { time: formatIstShort(s.cutoff_at) })}
       </Text>
       <Text style={styles.big}>{totals.total_meals} <Text style={styles.sub}>{t('today.meals')}</Text></Text>
       <Text style={styles.sub}>

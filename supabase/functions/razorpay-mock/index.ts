@@ -1,7 +1,10 @@
 // LOCAL DEVELOPMENT ONLY. A stand-in for Razorpay's hosted payment page when RAZORPAY_MODE=mock:
 // GET shows a "Pay (test)" page for one of our payment rows; POST sends a correctly signed
-// payment_link.paid event through the real razorpay-webhook function.
-import { deliverMockEvent, loadConfig, mockEvent } from '../_shared/razorpay.ts';
+// payment_link.paid event through the real razorpay-webhook function, which credits meals.
+// Never deploy it to a hosted project (docs/OPERATIONS.md lists the functions to deploy). If it is
+// deployed anyway it answers 404 unless SUPABASE_URL is a local stack and PLATFORM_ENV allows mocks.
+import { isLocalSupabaseUrl, mockAllowed } from '../_shared/platform.ts';
+import { deliverMockEvent, loadConfig, mockEvent, type RazorpayConfig } from '../_shared/razorpay.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -21,9 +24,18 @@ const page = (title: string, body: string) =>
   new Response(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
 <body style="font-family:system-ui;max-width:420px;margin:40px auto;padding:0 16px">${body}</body>`, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
+const env = (k: string) => Deno.env.get(k);
+const notFound = () => new Response('not_found', { status: 404 });
+
 Deno.serve(async (req) => {
-  const cfg = loadConfig((k) => Deno.env.get(k));
-  if (cfg.mode !== 'mock') return new Response('not_found', { status: 404 });
+  if (!isLocalSupabaseUrl(SUPABASE_URL) || !mockAllowed(env)) return notFound();
+  let cfg: RazorpayConfig;
+  try {
+    cfg = loadConfig(env);
+  } catch {
+    return notFound();
+  }
+  if (cfg.mode !== 'mock') return notFound();
   const url = new URL(req.url);
   const payment = await loadPayment(url.searchParams.get('payment_id') ?? '');
   if (!payment) return page('Not found', '<h2>Payment not found</h2>');

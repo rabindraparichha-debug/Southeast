@@ -17,7 +17,9 @@ export function SlotCard({ s }: { s: SlotSummary }) {
             {formatServiceDate(s.service_date)} · {SLOT_LABEL[s.slot]}
           </div>
           <div className="mt-1 text-xs text-ink-500">
-            {s.weekly_off
+            {s.closed
+              ? `Kitchen closed${s.closure_reason ? ` · ${s.closure_reason}` : ''}`
+              : s.weekly_off
               ? 'Weekly off'
               : s.locked
                 ? `Locked ${formatIstShort(s.locked_at!)}`

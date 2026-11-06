@@ -23,6 +23,8 @@ export function AddressManager({ kitchenId, customerId, addresses, editable, cen
   const [pin, setPin] = useState<LatLng | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [defaulting, setDefaulting] = useState<string | null>(null);
+  const [done, setDone] = useState('');
   const set = (k: keyof typeof blank) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
   function open(a: Address | 'new') {
@@ -52,9 +54,19 @@ export function AddressManager({ kitchenId, customerId, addresses, editable, cen
     router.refresh();
   }
 
-  async function makeDefault(id: string) {
-    const { error } = await supabaseBrowser().from('addresses').update({ is_default: true }).eq('id', id);
+  // "Make default" alone does not move meals; the owner can apply it to every live subscription
+  // from today (a permanent address change, so meals and the rider's runs follow, D-124).
+  async function makeDefault(id: string, apply: boolean) {
+    setBusy(true);
+    setError('');
+    const { data, error } = await supabaseBrowser().rpc('set_default_address', { p_address: id, p_apply_to_subscriptions: apply });
+    setBusy(false);
     if (error) return setError(friendlyError(error));
+    const moved = (data as { subscriptions_moved?: number } | null)?.subscriptions_moved ?? 0;
+    setDefaulting(null);
+    setDone(apply
+      ? moved ? `Default changed. Meals go to this address from today (${moved} subscription${moved > 1 ? 's' : ''} moved).` : 'Default changed. There is no live subscription to move.'
+      : 'Default changed. Meals already planned keep their address.');
     router.refresh();
   }
 
@@ -64,17 +76,27 @@ export function AddressManager({ kitchenId, customerId, addresses, editable, cen
         <ul className="divide-y divide-ink-100">
           {addresses.map((a) => (
             <li key={a.id} className="flex items-start justify-between gap-3 py-3 text-sm">
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="font-medium">
                   {a.label || [a.line1, a.area].filter(Boolean).join(', ') || 'Address'} {a.is_default && <Badge tone="green">Default</Badge>}
                 </div>
                 <div className="text-ink-500">{[a.line1, a.landmark, a.area].filter(Boolean).join(', ')}</div>
                 {a.delivery_notes && <div className="text-ink-500">Note: {a.delivery_notes}</div>}
                 <div className="text-xs text-ink-400">{a.lat && a.lng ? '📍 Pin saved' : 'No map pin yet'}</div>
+                {defaulting === a.id && (
+                  <div className="mt-2 space-y-2 rounded-lg bg-ink-50 p-3 ring-1 ring-ink-200" data-testid="make-default">
+                    <p>Deliver this customer’s meals here from today?</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button className="px-3 py-1" disabled={busy} onClick={() => makeDefault(a.id, true)}>Yes, move meals here</Button>
+                      <Button variant="secondary" className="px-3 py-1" disabled={busy} onClick={() => makeDefault(a.id, false)}>Only mark as default</Button>
+                      <Button variant="ghost" className="px-3 py-1" onClick={() => setDefaulting(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
               </div>
               {editable && (
                 <div className="flex shrink-0 gap-1">
-                  {!a.is_default && <Button variant="ghost" onClick={() => makeDefault(a.id)}>Make default</Button>}
+                  {!a.is_default && <Button variant="ghost" onClick={() => { setDefaulting(a.id); setDone(''); setError(''); }}>Make default</Button>}
                   <Button variant="ghost" onClick={() => open(a)}>Edit</Button>
                 </div>
               )}
@@ -99,6 +121,7 @@ export function AddressManager({ kitchenId, customerId, addresses, editable, cen
           </div>
         </form>
       )}
+      {done && <div className="mt-2"><Alert tone="green">{done}</Alert></div>}
       <div className="mt-2"><Alert>{error}</Alert></div>
     </Card>
   );

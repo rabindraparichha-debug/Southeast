@@ -1,5 +1,7 @@
 // Database functions raise short codes; this turns them into vendor-facing English.
 // Wording here is a draft for the owner to review (docs/DECISIONS.md D-012).
+import { loginErrorKey, type LoginErrorKey } from '@tiffin/core';
+
 const MESSAGES: Record<string, string> = {
   forbidden: 'You do not have permission to do this.',
   not_authenticated: 'Please log in again.',
@@ -77,7 +79,7 @@ const MESSAGES: Record<string, string> = {
   otp_format: 'Enter the 4-digit code from the customer.',
   photo_failed: 'This photo could not be read. Take it again.',
   call_offline: 'Calling needs network. Try again when you are online.',
-  queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync before you log out.',
+  queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync (and deal with any that need attention in rider mode) before you log out.',
   pick_item: 'Choose an item first.',
   invalid_bill_amount: 'Enter the bill amount in rupees.',
   qty_invalid_count: 'Enter the counted quantity as a number (0 is fine).',
@@ -106,6 +108,17 @@ const MESSAGES: Record<string, string> = {
   unreadable_output: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   model_refused: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   ai_error: 'Reading the photo failed. Try again in a minute.',
+  // Hosted project without the provider keys (mock modes run only locally)
+  payments_not_configured: 'Online payments are not set up yet. Record cash or UPI meanwhile.',
+  whatsapp_not_configured: 'WhatsApp is not set up yet.',
+  ai_not_configured: 'Reading notebook photos is not set up yet. Use the Excel or CSV import instead.',
+  // Vendor-first wave 1: closures, undo, reactivation, late skips
+  slot_locked: 'That meal is past its cutoff and its count is frozen. Choose a later date or meal.',
+  cannot_revoke: 'Only a skip or a pause can be undone.',
+  already_revoked: 'This change was already undone.',
+  invalid_change_type: 'To undo a skip or pause, use Undo on it.',
+  not_cancelled: 'This subscription is not cancelled.',
+  plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
   // Vendor-first wave 2: billing mode, payments, shared phones, rider requests
   phone_in_use: 'Another customer already uses this phone number. Confirm that this is a different person sharing the number (for example a sibling).',
   invalid_paid_at: 'The payment date cannot be in the future or more than 400 days ago.',
@@ -129,7 +142,14 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   supplier: { already_exists: 'A supplier with this name already exists.' },
   dish: { already_exists: 'A dish with this name already exists.' },
   // Rider mode: a run the rider may no longer act on (reassigned, or a day old).
-  rider: { forbidden: 'This run is not assigned to you any more, or it is from an earlier day. Ask the kitchen.' },
+  rider: {
+    forbidden: 'This run is not assigned to you any more, or it is from an earlier day. Ask the kitchen.',
+    // Actions kept in "needs attention" and the sync banner
+    otp_wrong: 'Wrong delivery code. Deliver again with a photo.',
+    already_done: 'Someone else already marked this stop. Tell the kitchen about any cash you collected.',
+    not_authenticated: 'Waiting for the network to renew your login.',
+    network: 'No network. It is sent when you are back online.',
+  },
   stock_take: { reason_required: 'Some items are off by more than the allowed difference. Give a reason for each before closing.' },
   // Public website forms (customers and kitchen owners, not logged in).
   public: {
@@ -171,4 +191,25 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   if (error.code === '23505') return 'This already exists.';
   if (error.code === '42501') return MESSAGES.forbidden!;
   return msg || 'Something went wrong. Please try again.';
+}
+
+// Login by phone code (docs/LOGIN.md, D-126): Supabase Auth error codes and the auth-send-sms hook's
+// codes, normalised by loginErrorKey in @tiffin/core. Keep in step with apps/mobile/src/i18n/en.ts.
+const LOGIN_MESSAGES: Record<LoginErrorKey, string> = {
+  invalid_phone: 'Enter a valid 10-digit Indian mobile number.',
+  over_sms_send_rate_limit: 'Please wait a little before asking for another code.',
+  over_request_rate_limit: 'Too many tries. Please wait a few minutes and try again.',
+  sms_send_failed: 'We could not send the code. Try again in a minute.',
+  sms_not_configured: 'Login codes cannot be sent right now. Please try again later or contact Tiffin support.',
+  phone_not_allowed: 'Only Indian mobile numbers (+91) can log in.',
+  otp_expired: 'Code is wrong or expired.',
+  signup_disabled: 'This number is not registered yet. Ask your kitchen owner to add you, or contact Tiffin support.',
+  phone_provider_disabled: 'Phone login is switched off. Please contact Tiffin support.',
+  network: 'No network. Try again when you are online.',
+};
+
+/** Text for an error from signInWithOtp / verifyOtp. */
+export function loginErrorText(error: { code?: string; message?: string; status?: number } | null | undefined): string {
+  const key = loginErrorKey(error);
+  return key ? LOGIN_MESSAGES[key] : friendlyError(error);
 }

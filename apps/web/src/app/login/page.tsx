@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { parseLoginChannels, parseLoginDelivery } from '@tiffin/core';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Log in · Tiffin OS' };
@@ -14,7 +15,11 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-ink-500">Log in with your mobile number</p>
         </div>
         <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-ink-100">
-          <LoginForm showDevHint={process.env.NODE_ENV !== 'production'} />
+          <LoginForm
+            showDevHint={process.env.NODE_ENV !== 'production'}
+            channels={parseLoginChannels(process.env.NEXT_PUBLIC_LOGIN_CHANNELS)}
+            delivery={parseLoginDelivery(process.env.NEXT_PUBLIC_LOGIN_DELIVERY)}
+          />
         </div>
         <p className="mt-6 text-center text-xs text-ink-500">
           By logging in you agree to our <Link href="/terms" className="underline hover:text-ink-800">Terms of use</Link> and{' '}

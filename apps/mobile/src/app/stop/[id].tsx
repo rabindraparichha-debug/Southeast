@@ -7,6 +7,7 @@ import { rupeesToPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components/ui';
 import { QrScanner } from '@/components/qr-scanner';
 import { RiderRequestCard } from '@/components/rider-request';
+import { ChangedBadge } from '@/components/changed-badge';
 import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import { act, isNetworkError, keepPhoto, useRider, uuid } from '@/lib/rider-store';
@@ -78,6 +79,7 @@ export default function StopScreen() {
   const back = tiffinsBack ?? Math.min(stop.tiffins_with_customer, stop.meal_count);
   const canAct = stop.status === 'pending' && run.status !== 'done';
   const wrongScan = scan?.result === 'wrong';
+  const parked = rider.attention.filter((a) => a.op.stopId === stop.id);
 
   const onScanned = (data: string) => {
     setScanning(false);
@@ -160,6 +162,7 @@ export default function StopScreen() {
       <Stack.Screen options={{ title: `${stop.seq}. ${stop.name}` }} />
       {scanning && <QrScanner visible onScanned={onScanned} onClose={() => setScanning(false)} />}
       <Card>
+        <ChangedBadge stop={stop} detail />
         {stop.office && (
           <View style={styles.office}>
             <Text style={styles.officeTitle}>🏢 {t('rider.office', { name: stop.name })}</Text>
@@ -176,6 +179,13 @@ export default function StopScreen() {
           <View style={{ flex: 1 }}><Button title={t('rider.call')} variant="secondary" onPress={call} disabled={!canAct || run.status !== 'out'} /></View>
         </View>
       </Card>
+
+      {parked.length > 0 && (
+        <Card>
+          <Text style={[styles.status, { color: colors.danger }]}>⚠ {t('rider.attention.title', { n: parked.length })}</Text>
+          {parked.map((a) => <Muted key={a.op.op}>{friendlyError({ message: a.reason })}</Muted>)}
+        </Card>
+      )}
 
       {stop.status !== 'pending' && (
         <Card>
@@ -218,13 +228,18 @@ export default function StopScreen() {
           <Stepper label={t('rider.tiffinsReturned')} value={back} onChange={setTiffinsBack} />
           <Label>{t('rider.cash')}</Label>
           <Input value={cash} onChangeText={setCash} keyboardType="numeric" placeholder="0" />
-          <Label>{t('rider.otp')}</Label>
-          <Muted>{stop.otp_sent ? t('rider.otpHint') : t('rider.otpNotSent')}</Muted>
-          <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={4} placeholder="0000" />
           <ErrorText>{error}</ErrorText>
           {wrongScan && <ErrorText>{t('rider.scan.blocked')}</ErrorText>}
-          <Button title={t('rider.confirmOtp')} onPress={() => deliver('otp')} busy={busy} disabled={otp.trim().length !== 4 || wrongScan} />
-          <Button title={t('rider.photo')} variant="secondary" onPress={() => deliver('photo')} disabled={busy || wrongScan} />
+          {/* Photo is the main proof: most Phase 1 customers get no WhatsApp code. */}
+          <Button title={`📷 ${t('rider.photo')}`} onPress={() => deliver('photo')} busy={busy} disabled={wrongScan} />
+          {stop.otp_sent && (
+            <View style={styles.otp}>
+              <Label>{t('rider.otp')}</Label>
+              <Muted>{t('rider.otpHint')}</Muted>
+              <Input value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={4} placeholder="0000" />
+              <Button title={t('rider.confirmOtp')} variant="secondary" onPress={() => deliver('otp')} disabled={busy || otp.trim().length !== 4 || wrongScan} />
+            </View>
+          )}
           <Pressable onPress={() => deliver('none')} disabled={busy || wrongScan}><Text style={[styles.link, wrongScan && { opacity: 0.4 }]}>{t('rider.noProof')}</Text></Pressable>
           <Pressable onPress={() => setFailing(true)}><Text style={[styles.link, { color: colors.danger }]}>{t('rider.fail')}</Text></Pressable>
         </Card>
@@ -265,6 +280,7 @@ const styles = StyleSheet.create({
   wrong: { backgroundColor: '#FEE2E2', borderRadius: 10, padding: space(3), gap: space(1) },
   wrongTitle: { fontSize: 17, fontWeight: '700', color: colors.danger },
   wrongHint: { fontSize: 14, color: colors.inkSoft },
+  otp: { gap: space(2), paddingTop: space(2), borderTopWidth: 1, borderTopColor: colors.line },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: space(3) },
   stepLabel: { flex: 1, fontSize: 15, color: colors.inkSoft },
   stepBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },

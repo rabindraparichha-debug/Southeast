@@ -9,7 +9,7 @@
 --                 rider cash, approve rider requests, run delivery and stock, and gets owner alerts.
 --   * accountant = reads money only: payments, refunds, balances, dues, statements, reports,
 --                 supplier dues and costs. No writes at all. Phones are masked (last 4 digits),
---                 like staff (decision in docs/DECISIONS.md D-119).
+--                 like staff (decision in docs/DECISIONS.md D-136).
 --   * staff and rider are unchanged (staff: no money, no phones; riders: their own stops).
 --
 -- Also: claim_invites now also requires that the caller's session was signed in with a one-time

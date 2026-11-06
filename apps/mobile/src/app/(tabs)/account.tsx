@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAuth, useKitchen } from '@/lib/session';
-import { Button, Card, Chip, Label, Muted, Screen } from '@/components/ui';
+import { Button, Card, Chip, ErrorText, Label, Muted, Screen } from '@/components/ui';
 import { colors, space } from '@/components/theme';
 import { useRider } from '@/lib/rider-store';
 import { LegalLinks } from '@/components/legal-links';
@@ -9,7 +10,16 @@ import { t } from '@/i18n';
 export default function Account() {
   const { memberships, selectKitchen, signOut, session } = useAuth();
   const kitchen = useKitchen();
-  const { queue } = useRider();
+  const { queue, attention } = useRider();
+  const [blocked, setBlocked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const unsynced = queue.length + attention.length;
+  const logOut = async () => {
+    setBusy(true);
+    const done = await signOut();
+    setBusy(false);
+    setBlocked(!done);
+  };
   return (
     <Screen>
       <Card>
@@ -29,8 +39,9 @@ export default function Account() {
           </View>
         </Card>
       )}
-      {queue.length > 0 && <Muted>{t('account.unsynced', { n: queue.length })}</Muted>}
-      <Button title={t('account.signOut')} onPress={signOut} variant="secondary" disabled={queue.length > 0} />
+      {unsynced > 0 && <Muted>{t('account.unsynced', { n: unsynced })}</Muted>}
+      {blocked && unsynced > 0 && <ErrorText>{t('account.logoutBlocked')}</ErrorText>}
+      <Button title={t('account.signOut')} onPress={logOut} variant="secondary" disabled={unsynced > 0} busy={busy} />
       <LegalLinks />
     </Screen>
   );

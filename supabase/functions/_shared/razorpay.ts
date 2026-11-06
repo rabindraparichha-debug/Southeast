@@ -1,8 +1,12 @@
 // Razorpay helpers shared by the Edge Functions. No external imports (WebCrypto + fetch only),
 // so the same file runs in Deno and in the Node test suite.
 //
-// Modes (RAZORPAY_MODE): mock (local, no network), test (rzp_test_ keys), live (refused unless
-// RAZORPAY_ALLOW_LIVE=true, which only the product owner may approve).
+// Modes (RAZORPAY_MODE): mock (local only, no network), test (rzp_test_ keys), live (refused unless
+// RAZORPAY_ALLOW_LIVE=true, which only the product owner may approve). Mock is refused outside a
+// local stack (PLATFORM_ENV, _shared/platform.ts): a hosted project without keys answers
+// payments_not_configured instead of handing out mock payment pages.
+
+import { mockAllowed } from './platform.ts';
 
 export type RazorpayMode = 'mock' | 'test' | 'live';
 
@@ -28,6 +32,9 @@ export function loadConfig(env: (name: string) => string | undefined): RazorpayC
   }
   if (mode === 'test' && !keyId?.startsWith('rzp_test_')) throw new Error('Test mode needs an rzp_test_ key id');
   if (mode !== 'mock' && !env('RAZORPAY_KEY_SECRET')) throw new Error('RAZORPAY_KEY_SECRET is not set');
+  if (mode === 'mock' && !mockAllowed(env)) {
+    throw new Error('payments_not_configured: mock payments run only on a local stack (PLATFORM_ENV=local); set Razorpay test keys');
+  }
 
   return {
     mode,

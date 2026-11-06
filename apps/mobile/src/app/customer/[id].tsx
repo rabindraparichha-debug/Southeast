@@ -11,10 +11,15 @@ import { friendlyError } from '@/lib/errors';
 import { Button, Card, Chip, DIET_COLOR, DIET_LABEL, ErrorText, Label, Muted } from '@/components/ui';
 import { CustomerExtras } from '@/components/customer-extras';
 import { MoneyPanel } from '@/components/money-panel';
+import { SubscriptionsCard } from '@/components/subscriptions-card';
+import { LockedMealsCard } from '@/components/locked-meals';
+import { AddressCard } from '@/components/address-card';
+import { StaleScreen } from '@/components/offline-banner';
+import { failedLoad, type Stale } from '@/lib/cached-fetch';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
-type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; skip_reason: string | null; locked_at: string | null };
+type Meal = { id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string; charged: boolean; charge_waived?: boolean; skip_reason: string | null; locked_at: string | null };
 type Sub = { id: string; status: string; plan: { name: string; price_per_meal_paise: number } | null };
 type Pending = { label: string; type: ChangeType; subscriptionId: string; from: string; to?: string; slot?: MealSlot; preview: ChangeResult };
 type Sibling = { id: string; name: string };
@@ -22,7 +27,7 @@ type Sibling = { id: string; name: string };
 export default function CustomerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const kitchen = useKitchen();
-  const isOwner = isLead(kitchen.role); // owner or manager (D-119): customer changes, money, full phones
+  const isOwner = isLead(kitchen.role); // owner or manager (D-136): customer changes, money, full phones
   const accountant = kitchen.role === 'accountant'; // money only: no meals, addresses or notes
   const [c, setC] = useState<DbView<'customers_v'> | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -32,18 +37,20 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<Stale | null>(null); // e.g. opened offline from the saved list
   const today = istDate();
 
   const load = useCallback(async () => {
     const [cust, orders, s] = await Promise.all([
       supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
       accountant ? Promise.resolve({ data: [] }) :
-      supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
+      supabase.from('meal_orders').select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at')
         .eq('customer_id', id).gte('service_date', today).lte('service_date', addDays(today, 7)).order('service_date').order('slot'),
       isOwner ? supabase.from('subscriptions').select('id, status, plan:plans(name, price_per_meal_paise)').eq('customer_id', id).in('status', ['active', 'low_balance', 'paused', 'suspended', 'trial'])
               : Promise.resolve({ data: [] }),
     ]);
     setC(cust.data);
+    setFailed(failedLoad(cust.error));
     setMeals((orders.data ?? []) as Meal[]);
     setSubs((s.data ?? []) as Sub[]);
     // D-118: other customers on the same phone (siblings, a family phone). Full numbers: owner and manager.
@@ -84,7 +91,7 @@ export default function CustomerDetail() {
     await load();
   }
 
-  if (!c) return null;
+  if (!c) return failed ? <StaleScreen stale={failed} onRetry={load} /> : null;
   const canCall = isOwner && c.phone && !c.phone.includes('•');
 
   return (
@@ -105,6 +112,8 @@ export default function CustomerDetail() {
         )}
         {canCall && <Button title={`📞 ${t('customer.call')}`} onPress={() => Linking.openURL(`tel:${c.phone}`)} variant="secondary" />}
       </Card>
+      {/* Status badges, upcoming holds with Undo, cancel and reactivate (reloads with the meals below). */}
+      {isOwner && <SubscriptionsCard customerId={id} kitchenId={kitchen.kitchenId} version={meals} onChanged={load} />}
 
       {canReadMoney(kitchen.role) && c.billing_mode && (
         <MoneyPanel
@@ -160,6 +169,7 @@ export default function CustomerDetail() {
       })}
       {saved ? <Text style={styles.saved}>✓ {saved}</Text> : null}
       <ErrorText>{error}</ErrorText>
+      {isOwner && <LockedMealsCard customerId={id} version={meals} onChanged={load} />}
 
       {!accountant && <Card>
         <Label>{t('meals.title')}</Label>
@@ -167,14 +177,16 @@ export default function CustomerDetail() {
         {meals.map((m) => (
           <View key={m.id} style={styles.meal}>
             <Text style={styles.mealDate}>{formatServiceDate(m.service_date)} · {SLOT_LABEL[m.slot]}{m.qty > 1 ? ` ×${m.qty}` : ''}</Text>
-            <Text style={[styles.mealStatus, m.status === 'skipped' && { color: m.charged ? '#B45309' : colors.muted }]}>
+            <Text style={[styles.mealStatus, m.status === 'skipped' && { color: m.charged && !m.charge_waived ? '#B45309' : colors.muted }]}>
               {m.status === 'skipped'
-                ? m.charged ? t('meals.lateSkip') : m.skip_reason === 'pause' ? t('meals.paused') : t('meals.skipped')
+                ? m.charged ? (m.charge_waived ? t('meals.lateSkipWaived') : t('meals.lateSkip')) : m.skip_reason === 'pause' ? t('meals.paused') : t('meals.skipped')
                 : m.locked_at ? t('meals.locked') : t('meals.scheduled')}
             </Text>
           </View>
         ))}
       </Card>}
+
+      {kitchen.role !== 'rider' && !accountant && <AddressCard customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} version={meals} onChanged={load} />}
 
       {kitchen.role !== 'rider' && !accountant && <CustomerExtras customerId={id} kitchenId={kitchen.kitchenId} isOwner={isOwner} />}
 

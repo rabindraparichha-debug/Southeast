@@ -12,7 +12,7 @@ type Festival = { id: string; name: string; starts_on: string; ends_on: string }
 
 export function SpecialForm({ kitchenId, today, festivals }: { kitchenId: string; today: string; festivals: Festival[] }) {
   const router = useRouter();
-  const blank = { date: festivals[0]?.starts_on && festivals[0].starts_on >= today ? festivals[0].starts_on : today, slot: 'lunch' as MealSlot, name: '', price: '', description: '', notify: true };
+  const blank = { date: festivals[0]?.starts_on && festivals[0].starts_on >= today ? festivals[0].starts_on : today, slot: 'lunch' as MealSlot, name: '', price: '', description: '', notify: false };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +32,7 @@ export function SpecialForm({ kitchenId, today, festivals }: { kitchenId: string
     setBusy(false);
     if (error) return setMsg({ tone: 'red', text: friendlyErrorIn('special', error) });
     const n = (data as { notified?: number } | null)?.notified ?? 0;
-    setMsg({ tone: 'green', text: f.notify ? `Saved. ${n} customer${n === 1 ? '' : 's'} will be told on WhatsApp.` : 'Saved.' });
+    setMsg({ tone: 'green', text: f.notify && n > 0 ? `Saved. WhatsApp message queued for ${n} customer${n === 1 ? '' : 's'}.` : 'Saved.' });
     setF({ ...blank, date: f.date, slot: f.slot });
     router.refresh();
   }
@@ -70,7 +70,7 @@ export function SpecialForm({ kitchenId, today, festivals }: { kitchenId: string
         </Field>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={f.notify} onChange={(e) => setF({ ...f, notify: e.target.checked })} />
-          <span>Notify customers on WhatsApp (those with this meal in their plan who get WhatsApp updates)</span>
+          <span>Also queue a WhatsApp message for customers who get WhatsApp updates (sent only once WhatsApp is set up for the platform)</span>
         </label>
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" disabled={busy || !f.name.trim()}>{busy ? 'Saving…' : 'Add special'}</Button>

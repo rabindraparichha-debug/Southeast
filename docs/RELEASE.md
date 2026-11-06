@@ -41,7 +41,7 @@ npx eas-cli@latest submit --platform android --profile production   # internal t
 
 Then promote internal → closed testing (pilot vendors) → production in the Play Console.
 
-**JavaScript-only fixes** can go out without a store release: `npx eas-cli@latest update --channel production`. The runtime version follows the app version, so bump `version` in `app.json` whenever native code or permissions change.
+**JavaScript-only fixes** can go out without a store release: `npx eas-cli@latest update --channel production --environment production` (`--environment` picks the EAS environment variables, so the update talks to the production backend). The runtime version follows the app version, so bump `version` in `app.json` whenever native code or permissions change.
 
 ## Store listing checklist
 
@@ -119,7 +119,7 @@ on 2026-10-30.
    key: it cannot create signing certificates.
 5. **Expo**: create an account at expo.dev (free plan works; it has a monthly iOS build allowance) and an
    access token (Account settings → Access tokens). Use **the same Expo account** for everything below.
-6. **One interactive command, on any computer** (needs Git, Node 20+, pnpm 10). EAS never creates the
+6. **One interactive command, on any computer** (needs Git, Node 22.13+, pnpm 10). EAS never creates the
    iOS distribution certificate in an automated run, so this is required once (and again when the
    certificate expires, about yearly):
 

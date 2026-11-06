@@ -20,7 +20,7 @@ export function SignOutButton({ className, formClassName }: { className?: string
     setBusy(true);
     try {
       if ((await queuedCount()) > 0) {
-        await syncQueue(); // one last try
+        await syncQueue({ force: true }); // one last try
         if ((await queuedCount()) > 0) {
           setError(friendlyError({ message: 'queued_logout' }));
           return;

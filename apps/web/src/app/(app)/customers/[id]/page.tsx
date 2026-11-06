@@ -16,6 +16,8 @@ import { WhatsAppCard } from './whatsapp-card';
 import { FamilyCard } from './family-card';
 import { FoodHealthCard } from './food-health-card';
 import { ReferralCard } from './referral-card';
+import { UpcomingHolds } from './upcoming-holds';
+import { ReactivateSubscription } from './reactivate-subscription';
 import type { CustomerScore } from '@/lib/p5';
 
 const formatDate = (d: string) =>
@@ -27,7 +29,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const supabase = await createClient();
   const { data: c } = await supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle();
   if (!c) notFound();
-  // Owner and manager: everything (the manager is the owner's deputy, D-119). Accountant: money,
+  // Owner and manager: everything (the manager is the owner's deputy, D-136). Accountant: money,
   // read-only, with a masked phone and no addresses or meals. Staff: packing details only.
   const isOwner = isLead(kitchen.role);
   const money = canReadMoney(kitchen.role);
@@ -43,7 +45,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const today = istDate();
   const { data: meals } = accountant ? { data: null } : await supabase
     .from('meal_orders')
-    .select('id, subscription_id, service_date, slot, qty, status, charged, skip_reason, locked_at')
+    .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at')
     .eq('customer_id', id)
     .gte('service_date', addDays(today, -3))
     .lte('service_date', addDays(today, 7))
@@ -157,7 +159,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                     <div>
                       {SLOT_LABEL[m.slot]}{m.qty > 1 ? ` ×${m.qty}` : ''} ·{' '}
                       {m.status === 'skipped'
-                        ? m.charged ? 'Late skip (charged)' : m.skip_reason === 'pause' ? 'Paused' : 'Skipped'
+                        ? m.charged ? (m.charge_waived ? 'Late skip (not charged)' : 'Late skip (charged)') : m.skip_reason === 'pause' ? 'Paused' : 'Skipped'
                         : m.locked_at ? 'Locked' : 'Scheduled'}
                     </div>
                   </div>
@@ -168,6 +170,8 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             <p className="text-sm text-ink-500">No meals in the last 3 or next 7 days.</p>
           )}
         </Card>}
+
+        {!accountant && <UpcomingHolds customerId={c.id!} isOwner={isOwner} />}
 
         {!accountant && <FoodHealthCard
           customerId={c.id!}
@@ -277,6 +281,16 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                         nextMeal={(meals ?? []).find((m) => m.subscription_id === s.id && m.status === 'scheduled' && !m.locked_at) ?? null}
                         today={today}
                         noticeDays={settings?.notice_days ?? 1}
+                      />
+                    </div>
+                  )}
+                  {s.status === 'cancelled' && (
+                    <div className="w-full">
+                      <ReactivateSubscription
+                        subscriptionId={s.id}
+                        today={today}
+                        plan={{ planName: s.plan?.name ?? 'Plan', qty: s.qty }}
+                        live={(subscriptions ?? []).filter((x) => x.status !== 'cancelled').map((x) => ({ planName: x.plan?.name ?? 'Plan', qty: x.qty }))}
                       />
                     </div>
                   )}

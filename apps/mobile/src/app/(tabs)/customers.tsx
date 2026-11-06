@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
 import { isLead } from '@/lib/roles';
 import { DIET_COLOR, DIET_LABEL, Input } from '@/components/ui';
+import { StaleBanner } from '@/components/offline-banner';
+import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
+import { CUSTOMER_LIST_LIMIT, filterCachedCustomers, offlineSearchPartial } from '@/lib/screen-cache';
 import { colors, radius, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -18,13 +21,26 @@ export default function Customers() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const scope = useCacheScope();
+  const [stale, setStale] = useState<Stale | null>(null); // showing the copy saved on this phone
+  const [partial, setPartial] = useState(false); // offline search over a saved list cut at the limit
 
   const load = useCallback(async (query: string) => {
     setLoading(true);
-    const { data } = await supabase.rpc('search_customers', { p_kitchen: kitchen.kitchenId, p_q: query, p_limit: 200 });
-    setRows(data ?? []);
+    // The full list is saved on the phone (no phone numbers for staff); offline, a search filters that copy.
+    const res = await cachedFetch<Row[]>({
+      scope, screen: 'customers', save: query === '',
+      fetch: async () => {
+        const { data, error } = await supabase.rpc('search_customers', { p_kitchen: kitchen.kitchenId, p_q: query, p_limit: CUSTOMER_LIST_LIMIT });
+        return { data: data ?? [], error };
+      },
+      onCached: query === '' ? (d, savedAt) => { setRows(d); setStale({ savedAt, offline: false, error: '', updating: true }); } : undefined,
+    });
+    setRows(res.stale ? filterCachedCustomers(res.data ?? [], query) : res.data ?? []);
+    setStale(res.stale);
+    setPartial(res.stale ? offlineSearchPartial(res.data?.length ?? 0, query) : false);
     setLoading(false);
-  }, [kitchen.kitchenId]);
+  }, [kitchen.kitchenId, scope]);
 
   // Debounced search as the vendor types.
   useEffect(() => {
@@ -45,6 +61,12 @@ export default function Customers() {
           </Link>
         )}
       </View>
+      {stale && (
+        <View style={styles.banner}>
+          <StaleBanner stale={stale} />
+          {partial && <Text style={styles.partial}>{t('customers.offlinePartial', { n: CUSTOMER_LIST_LIMIT })}</Text>}
+        </View>
+      )}
       <FlatList
         data={rows}
         keyExtractor={(c) => c.id!}
@@ -52,7 +74,7 @@ export default function Customers() {
         ItemSeparatorComponent={() => <View style={styles.sep} />}
         // D-118: a full number lists every customer on it (siblings, a family phone).
         ListHeaderComponent={isOwner && rows.length > 1 && normalizePhone(q) ? <Text style={styles.shared}>{t('customers.sharedPhone', { n: rows.length })}</Text> : undefined}
-        ListEmptyComponent={!loading ? <Text style={styles.empty}>{q ? t('customers.noMatch') : t('customers.empty')}</Text> : undefined}
+        ListEmptyComponent={!loading && (!stale || stale.savedAt) ? <Text style={styles.empty}>{q ? t('customers.noMatch') : t('customers.empty')}</Text> : undefined}
         renderItem={({ item }) => (
           <Link href={{ pathname: '/customer/[id]', params: { id: item.id! } }} asChild>
             <Pressable style={styles.item}>
@@ -78,6 +100,8 @@ const styles = StyleSheet.create({
   platform: { fontSize: 12, fontWeight: '600', color: colors.brand },
   wrap: { flex: 1, backgroundColor: colors.bg },
   searchRow: { flexDirection: 'row', gap: space(2), padding: space(3) },
+  banner: { paddingHorizontal: space(3), paddingBottom: space(2), gap: space(1) },
+  partial: { fontSize: 13, color: colors.inkSoft },
   add: { backgroundColor: colors.brand, borderRadius: radius, paddingHorizontal: space(4), justifyContent: 'center' },
   addText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   item: { flexDirection: 'row', gap: space(3), paddingHorizontal: space(4), paddingVertical: space(3), backgroundColor: colors.card },

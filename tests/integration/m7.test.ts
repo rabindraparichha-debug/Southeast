@@ -49,7 +49,7 @@ describe('M7: acquisition over the API', () => {
     expect(error).toBeNull();
     kitchenId = (kitchen as { id: string }).id;
     const upd = await owner.client.from('kitchens')
-      .update({ lat: 20.358, lng: 85.821, fssai_no: `12026001${String(Date.now()).slice(-6)}` }).eq('id', kitchenId);
+      .update({ lat: 20.358, lng: 85.821, fssai_no: `12026001${String(Date.now()).slice(-6)}`, accepts_platform_leads: true }).eq('id', kitchenId);
     expect(upd.error).toBeNull();
     const plan = await owner.client.from('plans').insert({ kitchen_id: kitchenId, name: 'IT Veg Lunch', slots: ['lunch'], diet: 'veg', price_per_meal_paise: 7000 });
     expect(plan.error).toBeNull();

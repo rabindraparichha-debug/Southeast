@@ -20,7 +20,9 @@ from (values
 insert into public.kitchens (id, name, slug, owner_id, lat, lng, weekly_off, fssai_no) values
   ('e6100000-0000-4000-e000-000000000001', 'Switch From', 'switch-from', 'e6000000-0000-4000-e000-000000000001', 20.3553, 85.8197, '{7}', '12026001009991'),
   ('e6100000-0000-4000-e000-000000000002', 'Switch To', 'switch-to', 'e6000000-0000-4000-e000-000000000002', 20.3560, 85.8205, '{7}', '12026001009992');
-update public.kitchens set status = 'active' where id in ('e6100000-0000-4000-e000-000000000001', 'e6100000-0000-4000-e000-000000000002');
+-- Both take platform leads (kitchens opt in since D-119); the switch options depend on it.
+update public.kitchens set status = 'active', accepts_platform_leads = true
+where id in ('e6100000-0000-4000-e000-000000000001', 'e6100000-0000-4000-e000-000000000002');
 insert into public.kitchen_settings (kitchen_id) values ('e6100000-0000-4000-e000-000000000001'), ('e6100000-0000-4000-e000-000000000002');
 insert into public.kitchen_payout_accounts (kitchen_id, razorpay_linked_account_id, kyc_status) values
   ('e6100000-0000-4000-e000-000000000001', 'acc_TestSwitchFrom1', 'verified'),
@@ -51,7 +53,7 @@ begin
                          'budget_per_meal_paise', 7000), true, true);
     v_conv := private.convert_lead(v_lead, 'e6100000-0000-4000-e000-000000000001', 'e6200000-0000-4000-e000-000000000001', 'web');
     insert into public.payments (kitchen_id, customer_id, method, status, amount_paise, meals, paid_at, created_at)
-    values ('e6100000-0000-4000-e000-000000000001', (v_conv ->> 'customer_id')::uuid, 'cash', 'paid', 35000, 5, now(), now())
+    values ('e6100000-0000-4000-e000-000000000001', (v_conv ->> 'customer_id')::uuid, 'cash', 'paid', 35000, 5, private.now(), private.now())
     returning id into v_pay;
     perform private.post_recharge(v_pay);
     insert into ids values (r.k, (v_conv ->> 'customer_id')::uuid);
@@ -309,9 +311,9 @@ select is((select count(*) from public.balance_entries where ref_type = 'deliver
 select is((select count(*) from public.balance_entries where ref_type = 'delivery_stop_order' and customer_id = (select v from ids where k = 'mgr')),
   0::bigint, 'not the manager');
 -- Finished runs feed separate rider-pay reports per kitchen.
-update public.delivery_stops set status = 'delivered', proof_type = 'none', done_at = now()
+update public.delivery_stops set status = 'delivered', proof_type = 'none', done_at = private.now()
 where run_id in (select id from public.delivery_runs where rider_id = 'e6000000-0000-4000-e000-000000000004') and status = 'pending';
-update public.delivery_runs set status = 'done', started_at = now(), finished_at = now() where rider_id = 'e6000000-0000-4000-e000-000000000004';
+update public.delivery_runs set status = 'done', started_at = private.now(), finished_at = private.now() where rider_id = 'e6000000-0000-4000-e000-000000000004';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"e6000000-0000-4000-e000-000000000002","role":"authenticated"}', true);
 select is((select stops_delivered from public.rider_stats('e6100000-0000-4000-e000-000000000002', '2026-11-01')), 1,

@@ -1,6 +1,6 @@
 import type { MemberRole } from '@tiffin/db';
 
-// Who sees what on the web dashboard (D-117, D-119). The database is the real gate (RLS and
+// Who sees what on the web dashboard (D-117, D-136). The database is the real gate (RLS and
 // private.require_role); these lists only decide which pages and buttons are shown.
 //
 // - Manager = the owner's deputy: everything the owner sees, except the owner-only areas
