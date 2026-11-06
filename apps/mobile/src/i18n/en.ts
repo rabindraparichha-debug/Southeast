@@ -355,7 +355,7 @@ export const en = {
   'errors.plan_inactive': 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
   'errors.date_required': 'Choose a date.',
   'errors.range_too_long': 'That date range is too long or too far ahead.',
-  // Phase 2 hardening (D-126..D-132)
+  // Phase 2 hardening (D-146..D-152)
   'errors.referral_other_kitchen': 'This code belongs to another kitchen. Ask your friend for their link to this kitchen.',
   'errors.invalid_name': 'Enter a name (up to 80 letters).',
   'errors.invalid_date': 'Choose a start date within the next 30 days.',

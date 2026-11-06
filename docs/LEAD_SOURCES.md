@@ -82,7 +82,7 @@ live run uploads them too; to send them at once, press "queue them now" on Admin
 Conversions (`admin_requeue_mock_conversions`). In mock mode every row is kept as `mock`, even for a
 stage with no conversion action id yet. In live mode a stage without an action id is marked
 skipped; after adding the id, "queue them now" sends those too. Google accepts clicks up to 90 days
-old (D-131, D-135).
+old (D-151, D-155).
 
 Privacy: only the click id, the time and the value are sent; never a name or phone number.
 
@@ -101,7 +101,7 @@ GET or form POST with their usual fields (`leadid`, `prefix`, `name`, `mobile`, 
 so this is the one place a key goes in the URL, and it is a **separate** key: set it with
 `supabase secrets set JUSTDIAL_LEAD_KEY=<32+ random chars>`. A leaked access-log line then lets
 someone post Justdial leads and nothing else. (If Justdial can send a header, use
-`X-Lead-Key: <LEAD_INTAKE_KEY>` without `&key=` instead.) Any other `?key=` is refused (D-130).
+`X-Lead-Key: <LEAD_INTAKE_KEY>` without `&key=` instead.) Any other `?key=` is refused (D-150).
 
 **Option B, email forwarding.** Forward the Justdial enquiry emails to the inbound address in
 section 4. The sender `@justdial.com` marks them as Justdial leads.
@@ -140,7 +140,7 @@ https://<project>.functions.supabase.co/lead-email
 The key goes in the header `X-Lead-Key: <LEAD_INTAKE_KEY>`, or, for services that cannot set
 headers, as the password of HTTP Basic auth in the webhook URL:
 `https://leads:<LEAD_INTAKE_KEY>@<project>.functions.supabase.co/lead-email` (it arrives as an
-`Authorization` header, not in the logged URL). `?key=` is refused (D-130).
+`Authorization` header, not in the logged URL). `?key=` is refused (D-150).
 
 It accepts our JSON `{from, subject, text, messageId}`, Postmark inbound JSON, and SendGrid or
 Mailgun inbound form posts. Pick one:

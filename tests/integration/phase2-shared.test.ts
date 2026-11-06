@@ -1,5 +1,5 @@
 // Unit tests for the Phase 2 hardening helpers (no network, no DB): the AI budget and Claude call
-// (D-128), payment links that fail (D-129), lead-intake keys (D-130). Database sides are in
+// (D-148), payment links that fail (D-149), lead-intake keys (D-150). Database sides are in
 // supabase/tests/15_phase2_hardening.test.sql.
 import { describe, expect, it, vi } from 'vitest';
 import { askAi, type AiResult } from '../../supabase/functions/_shared/ai.ts';
@@ -180,7 +180,7 @@ describe('payment link failures', () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a failed attach and keeps the row once it works (D-135)', async () => {
+  it('retries a failed attach and keeps the row once it works (D-155)', async () => {
     const cancel = vi.fn(async () => true);
     let n = 0;
     const attach = vi.fn(async () => { if (++n < 3) throw new Error('rest_503'); });

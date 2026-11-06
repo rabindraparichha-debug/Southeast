@@ -1,4 +1,4 @@
-// Phase 2 hardening over the API (D-126..D-132): what callers really get through PostgREST and the
+// Phase 2 hardening over the API (D-146..D-152): what callers really get through PostgREST and the
 // lead-intake function. Timing and money rules are in supabase/tests/15_phase2_hardening.test.sql.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { anonClient, env, loginAs, type Client } from './helpers';

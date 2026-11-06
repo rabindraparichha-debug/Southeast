@@ -1,7 +1,7 @@
 // Inbound lead emails → leads. For directories without a lead API (Sulekha) and as a fallback for
 // Justdial: forward their enquiry emails to an address handled by an inbound-email service, which
 // posts here with the header X-Lead-Key: LEAD_INTAKE_KEY, or Basic auth with the key as password
-// (https://leads:<KEY>@<project>.functions.supabase.co/lead-email). ?key= is refused (D-130). Accepts:
+// (https://leads:<KEY>@<project>.functions.supabase.co/lead-email). ?key= is refused (D-150). Accepts:
 //   - JSON {from, subject, text, message_id}   (our Cloudflare Email Routing worker, see docs/LEAD_SOURCES.md)
 //   - Postmark inbound JSON {From, Subject, TextBody, MessageID}
 //   - SendGrid Inbound Parse / Mailgun routes (multipart or urlencoded form: from|sender, subject, text|body-plain)

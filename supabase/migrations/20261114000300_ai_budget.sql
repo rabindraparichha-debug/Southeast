@@ -1,5 +1,5 @@
 -- Phase 2 hardening, step 3: a budget for the AI chat fallback (docs/VENDOR_FIRST_AUDIT.md, Phase 2
--- step 5, "the AI fallback has no cost cap"; D-128).
+-- step 5, "the AI fallback has no cost cap"; D-148).
 --
 -- One row per IST day and conversation counts the model calls the webhook made. wa_ai_take() is
 -- asked before every call and either takes one unit (true) or refuses (false) when the conversation

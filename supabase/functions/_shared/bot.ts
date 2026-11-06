@@ -22,7 +22,7 @@ export interface BotDeps {
   paymentLink(meals: number): Promise<{ url: string; amountPaise: number; meals: number }>;
   addLocation(lat: number, lng: number, label?: string): Promise<void>;
   complete?: Complete;
-  /** Takes one unit of the AI budget (per conversation and per day, D-128); false = answer from the rules. */
+  /** Takes one unit of the AI budget (per conversation and per day, D-148); false = answer from the rules. */
   aiBudget?: () => Promise<boolean>;
 }
 

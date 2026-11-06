@@ -281,7 +281,7 @@ select is(public.complete_stop((select id from st where seq = 2), 'photo',
   'the same queued action sent twice is accepted once...');
 select is(public.complete_stop((select id from st where seq = 2), 'none', p_client_op => 'c0000000-0000-4000-f000-000000000099') ->> 'conflict',
   'true', '...a different action on a finished stop is reported as a conflict');
--- An offline OTP can't be checked on the phone: a wrong one is not delivered (D-126); the queue parks
+-- An offline OTP can't be checked on the phone: a wrong one is not delivered (D-146); the queue parks
 -- it in "needs attention" and the rider sends it again without the code.
 select is(public.complete_stop((select id from st where seq = 3), 'otp', p_otp => '0000x', p_at => '2026-11-03 12:50:00+05:30',
   p_client_op => 'c0000000-0000-4000-f000-000000000003', p_offline => true) ->> 'otp_ok', 'false', 'a wrong offline code is refused');

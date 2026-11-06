@@ -56,7 +56,7 @@ export type KitchenProfile = {
   reviews: { rating: number; comment: string | null; name: string; date: string }[];
 };
 
-/** The kitchen-scoped referral join page (referral_invite, D-127). */
+/** The kitchen-scoped referral join page (referral_invite, D-147). */
 export type ReferralInvite = {
   code_status: 'ok' | 'other_kitchen' | 'invalid';
   code: string | null;

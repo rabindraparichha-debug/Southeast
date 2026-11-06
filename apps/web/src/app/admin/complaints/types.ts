@@ -1,4 +1,4 @@
-// Shapes of the admin escalation RPCs (D-132).
+// Shapes of the admin escalation RPCs (D-152).
 export type EscalationStatus = 'escalated' | 'open' | 'resolved';
 
 export type TeamMember = { id: string; name: string; me: boolean };

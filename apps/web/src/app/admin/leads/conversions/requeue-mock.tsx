@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 
-// After switching GOOGLE_ADS_MODE to live: queue every mock-handled conversion for upload (D-131).
+// After switching GOOGLE_ADS_MODE to live: queue every mock-handled conversion for upload (D-151).
 export function RequeueMock() {
   const router = useRouter();
   const [state, setState] = useState<string | null>(null);

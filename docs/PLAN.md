@@ -346,24 +346,24 @@ Still to build on screens (apps): an Undo list on the customer page (web and mob
 
 ## Phase 2 hardening (2026-11-06)
 
-From docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1–6 (the parts that do not depend on the running waves). Defaults: D-126 – D-135.
+From docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1–6 (the parts that do not depend on the running waves). Defaults: D-146 – D-155.
 Migrations `20261114000100` – `20261114000700`; pgTAP `15_phase2_hardening.test.sql`; unit tests `phase2-shared.test.ts`, `template-pack.test.ts`.
 
 | Item | Scope | Status | Where |
 |---|---|---|---|
-| 1 | Delivery OTP: lockout sticks, offline wrong code not delivered, codes out of audit log / outbox / message log | ✅ | `private.do_complete_stop`, `private.audit_redacted_columns`, triggers `notifications_outbox_scrub_codes`, `messages_mask_codes` (D-126) |
-| 2 | Referral links to the kitchen's own join page; other-kitchen codes named; no card at reward 0 | ✅ SQL + web | `referral_invite`, `referral_join`, `/k/[slug]/join`, `private.portal_extras`, `private.link_referral` (D-127) |
-| 3 | AI fallback caps (per conversation, per day), chat model env, SDK failure hand-off, timeout | ✅ | `ai_usage`, `wa_ai_take`, `_shared/ai-claude.ts` (D-128) |
-| 4 | Failed payment links cancel their row (owner, page, payer, bot) | ✅ | `cancel_payment_link_record`, `_shared/payment-link.ts` (D-129) |
-| 5 | Lead-intake keys in headers only (Justdial's own URL key), example keys refused on hosted | ✅ | `_shared/leads.ts` `checkLeadKey` (D-130) |
-| 6 | Google Ads mock conversions stored as `mock`, uploaded after going live | ✅ | `ads_claim_conversions(p_include_mock)`, `ads_complete_conversion(p_mock)`, `admin_requeue_mock_conversions` (D-131) |
-| 7 | Admin escalation queue: context, logged reveal, assign / reassign, note, resolve | ✅ SQL + web | `admin_escalations`, `admin_complaint_detail`, `admin_reveal_complaint_phone`, `admin_assign_complaint`, `admin_note_complaint`, `admin_resolve_complaint`, `/admin/complaints` (D-132) |
-| 8 | `/find` and `/vendors` WhatsApp boxes start unticked | ✅ | (D-133) |
-| 9 | WhatsApp template pack: docs and code in sync, CSV for Meta/Twilio | ✅ | `docs/whatsapp-templates.csv`, `_shared/template-pack.ts` (D-134) |
+| 1 | Delivery OTP: lockout sticks, offline wrong code not delivered, codes out of audit log / outbox / message log | ✅ | `private.do_complete_stop`, `private.audit_redacted_columns`, triggers `notifications_outbox_scrub_codes`, `messages_mask_codes` (D-146) |
+| 2 | Referral links to the kitchen's own join page; other-kitchen codes named; no card at reward 0 | ✅ SQL + web | `referral_invite`, `referral_join`, `/k/[slug]/join`, `private.portal_extras`, `private.link_referral` (D-147) |
+| 3 | AI fallback caps (per conversation, per day), chat model env, SDK failure hand-off, timeout | ✅ | `ai_usage`, `wa_ai_take`, `_shared/ai-claude.ts` (D-148) |
+| 4 | Failed payment links cancel their row (owner, page, payer, bot) | ✅ | `cancel_payment_link_record`, `_shared/payment-link.ts` (D-149) |
+| 5 | Lead-intake keys in headers only (Justdial's own URL key), example keys refused on hosted | ✅ | `_shared/leads.ts` `checkLeadKey` (D-150) |
+| 6 | Google Ads mock conversions stored as `mock`, uploaded after going live | ✅ | `ads_claim_conversions(p_include_mock)`, `ads_complete_conversion(p_mock)`, `admin_requeue_mock_conversions` (D-151) |
+| 7 | Admin escalation queue: context, logged reveal, assign / reassign, note, resolve | ✅ SQL + web | `admin_escalations`, `admin_complaint_detail`, `admin_reveal_complaint_phone`, `admin_assign_complaint`, `admin_note_complaint`, `admin_resolve_complaint`, `/admin/complaints` (D-152) |
+| 8 | `/find` and `/vendors` WhatsApp boxes start unticked | ✅ | (D-153) |
+| 9 | WhatsApp template pack: docs and code in sync, CSV for Meta/Twilio | ✅ | `docs/whatsapp-templates.csv`, `_shared/template-pack.ts` (D-154) |
 
 Not done here: Turnstile / IP limits on the new join form (wave 3 owns public-form protection), a "too many wrong codes" message on the 5th wrong code in the rider apps (the 6th try already shows `otp_locked`), and logging the team's complaint actions in wave 4's `admin_actions`.
 
-### Review fixes (D-135)
+### Review fixes (D-155)
 Migration `20261114000700_phase2_review_fixes.sql`.
 
 | Fix | Status | Where |
@@ -378,7 +378,7 @@ Migration `20261114000700_phase2_review_fixes.sql`.
 | `trial_followup_v1`, `lead_reminder_v1` listed as marketing; login template `tiffin_login_code` | ✅ | `templates.ts`, `template-pack.ts`, CSV |
 | Functions `.env.example`: comments on their own lines | ✅ | `supabase/functions/.env.example` |
 
-Still open: Turnstile / IP limits on the join form (wave 3's public-forms function at merge), logging the team's complaint actions in wave 4's `admin_actions`, renumbering D-126 – D-135 at merge, and adding samples for the other branches' new templates to the pack.
+Still open: Turnstile / IP limits on the join form (wave 3's public-forms function at merge), logging the team's complaint actions in wave 4's `admin_actions`, renumbering D-146 – D-155 at merge, and adding samples for the other branches' new templates to the pack.
 
 ## Things to start outside code now
 These have external lead times:

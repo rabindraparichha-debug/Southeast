@@ -614,7 +614,7 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 - Every customer has an 8-character code for their kitchen, shown on their page.
 - **Linking a new customer:** the owner (`apply_referral_code`, right after adding them), the customer on their page before their first payment, or a lead whose campaign is `ref-<CODE>` (the website `?ref=` link or "Hi TIFFIN ref-CODE" on WhatsApp) once they pick that same kitchen. Codes from another kitchen are ignored.
 - **Reward:** after the referee's first paid recharge (cash counts), both get N free meals. N is the kitchen setting `referral_reward_meals`, **default 0 (off)** because it is the vendor's money. Once per referral.
-- Since D-127 the customer page shares the kitchen's own join page (`/k/<slug>/join?ref=`), not `/find?ref=`; the `ref-<CODE>` lead path remains for WhatsApp.
+- Since D-147 the customer page shares the kitchen's own join page (`/k/<slug>/join?ref=`), not `/find?ref=`; the `ref-<CODE>` lead path remains for WhatsApp.
 
 ### D-104 Prepared to delivered
 - A run is "prepared" at its dispatch photo (its own, else the slot's), else when it started. Every 5 minutes, runs with stops still pending that long after alert the owner **once per run** (`late_delivery_v1`).
@@ -734,7 +734,7 @@ Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14�
 
 Implementation choices for docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1–6 that do not depend on the running waves. Migrations `20261114000100`–`20261114000600`; tests `supabase/tests/15_phase2_hardening.test.sql`, `tests/integration/phase2-shared.test.ts`, `tests/integration/template-pack.test.ts`.
 
-### D-126 Delivery codes: a lockout that sticks, no offline delivery on a wrong code, nothing left readable
+### D-146 Delivery codes: a lockout that sticks, no offline delivery on a wrong code, nothing left readable
 - A wrong code is **answered, not raised**: `complete_stop` returns `status 'pending'`, `otp_ok false`, `otp_attempts_left` and `locked`, so the attempt counter is saved (a raised error rolled it back, so the lockout never stuck). After 5 wrong codes any OTP proof for the stop is refused with `otp_locked`, even the right code; the rider delivers with a photo or "Delivered".
 - **Offline** submits get the same answer: a wrong code never records `delivered`, no cash is booked, and the attempt counts. The rider queue already parks a `pending / otp_ok false` answer in "needs attention" (`otp_wrong`) with its photo and cash amount (`judgeResult`), so no app change was needed.
 - **Where codes could be read:**
@@ -742,45 +742,45 @@ Implementation choices for docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1–6 that d
   - `notifications_outbox.payload.otp` is removed as soon as the row is not `pending`/`sending` (sent, failed, cancelled, expired; also a row stored cancelled at insert). Pending rows keep it: the code is needed to send.
   - The conversation log copy of a sent `on_the_way` message has the code replaced by `••••`.
 
-### D-127 Referral links stay with the kitchen
+### D-147 Referral links stay with the kitchen
 - The customer page shares `<web>/k/<slug>/join?ref=<CODE>`. That page shows **only** that kitchen (`referral_invite`); a code from another kitchen is named as such (`other_kitchen`), and a kitchen that is not listed (draft) is visible only through one of its own codes.
-- `referral_join`: the friend becomes that kitchen's **own** customer (`source 'web'`, **not** platform-sourced, so no commission) with a `trial` subscription from tomorrow at the earliest (meals start once the trial is paid, D-033), the referral is recorded (`source 'link'`) and the owners get `referral_customer_v1`. The answer is identical whether or not the number was already a customer and carries no customer-page link, so the page cannot be used to test who a kitchen serves. At most **5 attempts per code and 30 per kitchen in 24 hours** (D-135). WhatsApp opt-in is not recorded from this page (D-135).
+- `referral_join`: the friend becomes that kitchen's **own** customer (`source 'web'`, **not** platform-sourced, so no commission) with a `trial` subscription from tomorrow at the earliest (meals start once the trial is paid, D-033), the referral is recorded (`source 'link'`) and the owners get `referral_customer_v1`. The answer is identical whether or not the number was already a customer and carries no customer-page link, so the page cannot be used to test who a kitchen serves. At most **5 attempts per code and 30 per kitchen in 24 hours** (D-155). WhatsApp opt-in is not recorded from this page (D-155).
 - Codes typed anywhere (owner, customer page, join page) from another kitchen fail with `referral_other_kitchen` instead of the generic `invalid_referral_code`.
 - The customer page omits the referral card while `referral_reward_meals` is 0 (the default).
 - Both public functions sit behind the platform flag `customer_portal` (off), because the link only exists on the customer page. Turnstile and IP limits on public forms are wave 3's; the join form should get the same check (open issue).
 
-### D-128 AI chat fallback: caps, model and failures ⏳ model choice still yours (D-058)
+### D-148 AI chat fallback: caps, model and failures ⏳ model choice still yours (D-058)
 - **Caps:** `AI_CONVERSATION_DAILY_CAP` (default **5** model calls per conversation per IST day) and `AI_DAILY_CAP` (default **300** for the platform), counted in `ai_usage` by `wa_ai_take` (service role, atomic). Over a cap, or if the budget cannot be checked, the free rule-based answers (cutoff, FSSAI, price) are used and everything else goes to the kitchen.
 - **Model:** `ANTHROPIC_CHAT_MODEL`, else `ANTHROPIC_MODEL`, else `claude-opus-5-5`. The default is unchanged because D-058 leaves the cost/quality choice to you; `claude-haiku-5-5` is the cheap candidate for this job and needs only the secret. The refusal fallback (`fallbacks: "default"`) is sent only to models that support it (not Haiku).
 - **Failures:** if the SDK cannot be loaded the call is skipped for 10 minutes (one error report) and the chat is handed off; a call slower than `AI_TIMEOUT_MS` (default 8 s) is abandoned and handed off.
 
-### D-129 A payment link Razorpay never created is cancelled
+### D-149 A payment link Razorpay never created is cancelled
 - Every path (owner, customer page, payer for a dependent, WhatsApp bot) now cancels our `created` row when the Razorpay call fails: `cancel_payment_link_record` (service role) sets it to `failed` with the reason in `note`. Only a `created` Razorpay row **without** a link is touched.
-- If Razorpay **did** create the link and only attaching it to our row failed, see D-135: attaching is retried, then the link is cancelled at Razorpay before our row is marked failed; if that cancel fails too, our row stays `created`.
+- If Razorpay **did** create the link and only attaching it to our row failed, see D-155: attaching is retried, then the link is cancelled at Razorpay before our row is marked failed; if that cancel fails too, our row stays `created`.
 
-### D-130 Lead-intake keys travel in headers
+### D-150 Lead-intake keys travel in headers
 - `LEAD_INTAKE_KEY` is accepted only in `X-Lead-Key` or as the password of HTTP Basic auth (for inbound-email services that cannot set headers: `https://leads:<KEY>@…`). A `?key=` in the URL is refused with `key_in_url` (URLs end up in access logs).
 - The one exception is Justdial's push API, which can only call a URL: `?source=justdial&key=` must match a **separate** key, `JUSTDIAL_LEAD_KEY`, so a leaked log line can post Justdial leads and nothing else. Justdial can also use the header.
 - Outside a local stack, keys equal to the `.env.example` values (`local-dev-*`) or shorter than 24 characters are refused (`intake_not_configured`, 503). This also covers `GOOGLE_ADS_LEAD_KEY`.
 - `lead-email` was already on the `--no-verify-jwt` deploy list (wave 1).
 
-### D-131 Google Ads conversions in mock mode are not "sent"
+### D-151 Google Ads conversions in mock mode are not "sent"
 - In mock mode a conversion becomes `status 'mock'` (no `sent_at`, attempts reset). In live mode the `ads-conversions` function also claims `mock` rows, so they are uploaded on its first live run; `admin_requeue_mock_conversions()` (and the button on Admin → Leads → Conversions) puts them back to `pending` at once.
 
-### D-132 The platform team acts on escalated complaints
+### D-152 The platform team acts on escalated complaints
 - Admin → Complaints: the queue (escalated, all open, resolved in 30 days) with kitchen and customer context and masked phones; a detail page with the customer's plans, balance, complaint history, the last 20 messages and the team log.
 - Actions: reveal the customer's or the owner's number (logged in `audit_log` and the complaint's team log), take it or hand it to another team member, add a note, resolve with a note (the customer sees it on their page like a kitchen's resolution). The team never credits meals: that is the kitchen's money (`resolve_complaint` stays owner-only).
-- `complaint_admin_events` is the team's log: no updates except the erasure scrub (D-135); rows go with their complaint.
+- `complaint_admin_events` is the team's log: no updates except the erasure scrub (D-155); rows go with their complaint.
 
-### D-133 WhatsApp boxes start unticked
+### D-153 WhatsApp boxes start unticked
 - "Send me updates on WhatsApp" on `/find`, "Send me setup help on WhatsApp" on `/vendors` and the new join page start unticked: opting in must be a choice (DPDP, Meta opt-in rules). D-081 (lead consent rules) stays open for the bot.
 
-### D-134 WhatsApp template pack
+### D-154 WhatsApp template pack
 - `docs/whatsapp-templates.csv` is generated from `templates.ts` plus sample payloads (`_shared/template-pack.ts`): one row per template and language, category (utility / marketing / authentication), audience, body, variable count, a sample for each variable, quick replies and a `checks` column (Meta guideline warnings such as a body that starts or ends with a variable). A test keeps the CSV and `docs/WHATSAPP_TEMPLATES.md` in step with the code.
 - The login code template (`tiffin_login_code`, authentication, the name docs/LOGIN.md uses) is listed too; it is sent by `auth-send-sms` through Twilio, not the outbox.
-- New templates: `referral_customer_v1` (owner, D-127), `referral_existing_v1` (owner, D-135).
+- New templates: `referral_customer_v1` (owner, D-147), `referral_existing_v1` (owner, D-155).
 
-### D-135 Phase 2 review fixes
+### D-155 Phase 2 review fixes
 Migration `20261114000700_phase2_review_fixes.sql`; tests in `15_phase2_hardening.test.sql`, `phase2-shared.test.ts`, `lead-channels.test.ts`, `template-pack.test.ts`.
 - **Resent wrong codes count once.** `delivery_stops.otp_last_op` keeps the `p_client_op` of the last wrong code; the same op sent again (its answer was lost) gets the same `pending` answer without another attempt. A new op is a new attempt.
 - **Join page limits are not an oracle.** Every accepted attempt (valid code and plan) is stored in `referral_join_attempts` (kitchen, referrer, time; no phone or name; admins read it, nobody writes it directly; rows older than 2 days are deleted on the next attempt) **before** the number is looked at. 5 per code and 30 per kitchen in 24 h; over the limit every number gets `too_many_requests`.

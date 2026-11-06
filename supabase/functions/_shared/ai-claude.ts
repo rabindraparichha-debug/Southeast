@@ -1,4 +1,4 @@
-// The Claude call behind the chat fallback (D-058, D-128). No external imports: the SDK is passed in
+// The Claude call behind the chat fallback (D-058, D-148). No external imports: the SDK is passed in
 // as an importer by whatsapp-webhook/index.ts (a Deno `npm:` import), so this file is unit-tested
 // from Node with a fake SDK.
 //

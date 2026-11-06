@@ -1,6 +1,6 @@
 -- Phase 2 hardening, step 4: a payment link that Razorpay never created leaves no live row behind
 -- (docs/VENDOR_FIRST_AUDIT.md, Phase 2 step 5, "If the Razorpay call fails, a 'created' payment row
--- with no link is left behind"; D-129).
+-- with no link is left behind"; D-149).
 --
 -- Every path (owner, customer page, payer for a dependent, WhatsApp bot) creates our 'created' row
 -- first, then calls Razorpay, then attaches the link. When the Razorpay call (or attaching the link)

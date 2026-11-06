@@ -1,4 +1,4 @@
-// The WhatsApp template pack (D-134): templates.ts, docs/WHATSAPP_TEMPLATES.md and
+// The WhatsApp template pack (D-154): templates.ts, docs/WHATSAPP_TEMPLATES.md and
 // docs/whatsapp-templates.csv stay in sync. Run with UPDATE_TEMPLATE_PACK=1 to rewrite the CSV.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';

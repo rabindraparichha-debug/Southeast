@@ -91,7 +91,7 @@ export type UploadResult = { id: string; ok: boolean; skip?: boolean; mock?: boo
 /**
  * Uploads; returns per-row outcome. Mock mode calls nothing and reports EVERY row as mock (not ok),
  * whether or not its stage has a conversion action id yet (usually none before go-live): stored with
- * status 'mock', never 'sent' or 'skipped', so it is uploaded after going live (D-131, D-135). Only
+ * status 'mock', never 'sent' or 'skipped', so it is uploaded after going live (D-151, D-155). Only
  * live mode skips a row whose stage has no action id.
  */
 export async function uploadConversions(cfg: AdsConfig, rows: PendingConversion[], fetchFn: typeof fetch = fetch):

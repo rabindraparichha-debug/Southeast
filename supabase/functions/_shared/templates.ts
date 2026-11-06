@@ -143,7 +143,7 @@ export const TEMPLATES: Record<string, Def> = {
     },
     params: (p, k) => [k, p.slot === 'dinner' ? 'dinner' : 'lunch', day(p.service_date), String(p.meals ?? 1)],
   },
-  // Asks for a purchase, so Meta classes it as marketing (D-135).
+  // Asks for a purchase, so Meta classes it as marketing (D-155).
   trial_followup: {
     name: 'trial_followup_v1', category: 'MARKETING',
     text: {
@@ -258,7 +258,7 @@ export const TEMPLATES: Record<string, Def> = {
     params: (p) => [String(p.name ?? 'there')],
     quickReplies: () => [{ payload: 'lead_start', title: { en: 'Find my tiffin', hi: 'टिफिन ढूँढें', or: 'ଟିଫିନ୍ ଖୋଜନ୍ତୁ' } }],
   },
-  // Re-engagement, so Meta classes it as marketing (D-135).
+  // Re-engagement, so Meta classes it as marketing (D-155).
   lead_reminder: {
     name: 'lead_reminder_v1', category: 'MARKETING',
     text: {
@@ -293,14 +293,14 @@ export const TEMPLATES: Record<string, Def> = {
     text: { en: '{{1}}: new customer from Tiffin platform: {{2}} ({{3}}), {{4}}, trial of {{5}} meals. They are in Customers in the app.' },
     params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.plan_name ?? ''), String(p.trial_meals ?? '')],
   },
-  // A friend joined through a customer's invite link (referral_join, D-127).
+  // A friend joined through a customer's invite link (referral_join, D-147).
   referral_customer: {
     name: 'referral_customer_v1', category: 'UTILITY',
     text: { en: '{{1}}: {{2}} ({{3}}) joined with the invite of {{4}}: {{5}}, trial of {{6}} meals from {{7}}. Please call them to confirm.' },
     params: (p, k) => [k, String(p.customer_name ?? 'A customer'), String(p.area ?? '—'), String(p.referrer_name ?? 'a customer'),
       String(p.plan_name ?? ''), String(p.trial_meals ?? ''), day(p.start_date)],
   },
-  // Someone used an invite with a number the kitchen already has (referral_join, D-135): nothing was
+  // Someone used an invite with a number the kitchen already has (referral_join, D-155): nothing was
   // added, the owner calls them (a lapsed customer coming back, or a family member on a shared number).
   referral_existing: {
     name: 'referral_existing_v1', category: 'UTILITY',

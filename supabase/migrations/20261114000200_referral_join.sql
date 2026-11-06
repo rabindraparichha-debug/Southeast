@@ -1,5 +1,5 @@
 -- Phase 2 hardening, step 2: referral links that stay with the kitchen (docs/VENDOR_FIRST_AUDIT.md,
--- Phase 2 step 1 "Referral links do not work"; D-127).
+-- Phase 2 step 1 "Referral links do not work"; D-147).
 --
 --   * The customer page shares <web>/k/<kitchen slug>/join?ref=<CODE> (it shared /find?ref=, which
 --     ignored the code and matched the friend across every kitchen).

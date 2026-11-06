@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
   if (error || !rec) return json({ error: error?.message ?? 'failed' }, 400);
 
   // Step 2: Razorpay (or mock). Step 3, as the service role: attach the link to our row. If Razorpay
-  // fails, the row is cancelled; if only attaching fails, the link is cancelled at Razorpay first (D-129, D-135).
+  // fails, the row is cancelled; if only attaching fails, the link is cancelled at Razorpay first (D-149, D-155).
   try {
     const link = await createLinkOrCancel(rec.payment_id, {
       create: () => createPaymentLink(cfg, {

@@ -65,7 +65,7 @@ describe('Google Ads', () => {
   it('mock mode accepts without calling Google; live mode reads partial failures', async () => {
     const mock = await uploadConversions(cfg, rows, (async () => { throw new Error('no network in mock mode'); }) as unknown as typeof fetch);
     // Mock mode sends nothing: every row comes back as mock, also one whose stage has no action id
-    // yet (stored 'mock', never 'sent' or 'skipped', D-131, D-135).
+    // yet (stored 'mock', never 'sent' or 'skipped', D-151, D-155).
     expect(mock.filter((r) => r.ok || r.skip)).toEqual([]);
     expect(mock.filter((r) => r.mock).map((r) => r.id)).toEqual(['a', 'b', 'c']);
     // The usual pre-launch setup: no conversion action ids at all.

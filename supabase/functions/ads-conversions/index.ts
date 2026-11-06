@@ -1,7 +1,7 @@
 // Uploads queued offline conversions (paid trial, plan, renewal of Google Ads leads) to Google
 // Ads. Started every 15 minutes by pg_cron (private.kick_ad_conversions) with the service role.
 // GOOGLE_ADS_MODE=mock (default) calls nothing and marks them 'mock' (not sent); the first live run
-// also uploads every 'mock' row (D-131).
+// also uploads every 'mock' row (D-151).
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadAdsConfig, uploadConversions, type PendingConversion, type UploadResult } from '../_shared/google-ads.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';

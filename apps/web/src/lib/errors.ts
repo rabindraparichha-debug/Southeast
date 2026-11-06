@@ -117,7 +117,7 @@ const MESSAGES: Record<string, string> = {
   invalid_change_type: 'To undo a skip or pause, use Undo on it.',
   not_cancelled: 'This subscription is not cancelled.',
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
-  // Phase 2 hardening (D-126..D-132)
+  // Phase 2 hardening (D-146..D-152)
   referral_other_kitchen: 'This code belongs to another kitchen. Ask your friend for their link to this kitchen.',
   invalid_name: 'Enter a name (up to 80 letters).',
   invalid_date: 'Choose a start date within the next 30 days.',

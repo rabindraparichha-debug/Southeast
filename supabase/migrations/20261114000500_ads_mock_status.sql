@@ -1,5 +1,5 @@
 -- Phase 2 hardening, step 5: Google Ads conversions handled in mock mode are not "sent"
--- (docs/VENDOR_FIRST_AUDIT.md, Phase 2 step 1; D-131).
+-- (docs/VENDOR_FIRST_AUDIT.md, Phase 2 step 1; D-151).
 --
 -- In mock mode (GOOGLE_ADS_MODE unset or mock) the ads-conversions function used to mark rows 'sent'
 -- although nothing left the server, so they were never uploaded after going live and the admin page

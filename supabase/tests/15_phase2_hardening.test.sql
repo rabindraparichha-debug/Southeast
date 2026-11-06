@@ -1,4 +1,4 @@
--- Phase 2 hardening (docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1-6; D-126..D-132): delivery codes
+-- Phase 2 hardening (docs/VENDOR_FIRST_AUDIT.md Phase 2 steps 1-6; D-146..D-152): delivery codes
 -- (lockout sticks, offline wrong code not delivered, codes not kept in audit_log / outbox / message
 -- log), kitchen-scoped referral links, the AI budget, cancelled payment links, Google Ads mock
 -- status, and the admin escalation queue. Roles: owner, staff, rider, another kitchen's owner, admin,
@@ -103,7 +103,7 @@ select is(public.complete_stop('95400000-0000-4000-f000-000000000002', 'otp', p_
   p_client_op => '95500000-0000-4000-f000-000000000002', p_offline => true) ->> 'otp_ok', 'true', 'an offline right code delivers');
 reset role;
 
--- A wrong-code submit resent with the same op id (its answer was lost) is not counted twice (D-135).
+-- A wrong-code submit resent with the same op id (its answer was lost) is not counted twice (D-155).
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
 select is(public.complete_stop('95400000-0000-4000-f000-000000000003', 'otp', p_otp => '0000',
@@ -259,7 +259,7 @@ select is((select count(*) from public.customers where kitchen_id = '95000000-00
 select is((select name from public.customers where id = (select v from ids where k = 'p2')), 'Phase p2', 'the existing customer is untouched');
 select is((select string_agg(payload ->> 'existing_name' || '<-' || (payload ->> 'customer_name'), ',' order by payload ->> 'existing_name')
            from public.notifications_outbox where template = 'referral_existing' and recipient_id = 'f5000000-0000-4000-f000-000000000001'),
-  'Friend One<-Somebody,Phase p2<-Somebody', 'but the owner is told each time, to call them back (D-135)');
+  'Friend One<-Somebody,Phase p2<-Somebody', 'but the owner is told each time, to call them back (D-155)');
 
 -- 5 attempts per code per day, whatever the number (3 used above).
 set local role anon;
@@ -270,7 +270,7 @@ select throws_ok($$ select public.referral_join('phase-two-kitchen', (select v f
   '95100000-0000-4000-f000-000000000001', 'House 6', p_consent => true) $$, '22023', 'too_many_requests', 'a sixth attempt on one code in a day is refused');
 select throws_ok($$ select public.referral_join('phase-two-kitchen', (select v from vals where k = 'code_p1'), 'Somebody', '+919555100002',
   '95100000-0000-4000-f000-000000000001', 'House 6', p_consent => true) $$, '22023', 'too_many_requests',
-  '...and so is an existing customer''s number: the limit tells nothing about who is a customer (D-135)');
+  '...and so is an existing customer''s number: the limit tells nothing about who is a customer (D-155)');
 reset role;
 select is((select count(*) from public.referral_join_attempts where kitchen_id = '95000000-0000-4000-f000-000000000001'), 5::bigint,
   'refused attempts are not stored');
@@ -396,7 +396,7 @@ select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-0000000
 select throws_ok($$ select public.admin_requeue_mock_conversions() $$, '42501', 'forbidden', 'owners cannot requeue');
 select throws_ok($$ select public.ads_claim_conversions(10) $$, '42501', null, 'users cannot claim uploads');
 reset role;
--- A row with no conversion action id for its stage (usual before go-live) is not lost (D-135).
+-- A row with no conversion action id for its stage (usual before go-live) is not lost (D-155).
 insert into public.leads (id, source, gclid) values ('95800000-0000-4000-f000-000000000003', 'google_ads', 'gclid-phase2-0003');
 insert into public.ad_conversions (id, lead_id, gclid, stage, value_paise, occurred_at, status, last_error) values
   ('95900000-0000-4000-f000-000000000003', '95800000-0000-4000-f000-000000000003', 'gclid-phase2-0003', 'renewal', 14000,
@@ -478,7 +478,7 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select throws_ok($$ select public.admin_escalations() $$, '42501', null, 'anon cannot');
 reset role;
 
--- Erasing the customer blanks the team's notes on their complaints; the log rows stay (D-135).
+-- Erasing the customer blanks the team's notes on their complaints; the log rows stay (D-155).
 update public.customers set deleted_at = private.now() where id = (select v from ids where k = 'p1');
 select is((select count(*) || '/' || count(note) from public.complaint_admin_events where complaint_id = '95a00000-0000-4000-f000-000000000001'),
   '6/0', 'an erased customer''s complaint keeps its team log, without the notes');

@@ -172,7 +172,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
 
-**Phase 2 hardening (D-126 – D-135)**
+**Phase 2 hardening (D-146 – D-155)**
 - **Delivery codes:** never raise after counting a code attempt (the raise rolls the counter back): answer `status 'pending'`, `otp_ok false`. A wrong code is counted once per `p_client_op` (`delivery_stops.otp_last_op`). `otp` is a redacted audit column (`private.audit_redacted_columns`); outbox payloads lose `otp` once not pending/sending; never copy a code anywhere else.
 - **Referrals:** the share link is `/k/<slug>/join?ref=<CODE>` (`referral_invite`, `referral_join`, flag `customer_portal`). A join creates the kitchen's own customer (`source 'web'`, never platform-sourced) and records the referral; codes from another kitchen raise `referral_other_kitchen`. Count the attempt (`referral_join_attempts`) before looking at the number, give an existing number the same answer (the owner gets `referral_existing`), and never record WhatsApp opt-in from a public form that cannot prove who holds the phone.
 - **AI fallback:** every model call takes a unit of the budget first (`BotDeps.aiBudget` → `wa_ai_take`; caps `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`). Build the Claude call only with `makeClaudeComplete` (`_shared/ai-claude.ts`); the model comes from `ANTHROPIC_CHAT_MODEL` / `ANTHROPIC_MODEL`.
@@ -232,11 +232,11 @@ WhatsApp and AI Edge Function secrets (same file):
 | `WHATSAPP_VERIFY_TOKEN` | Webhook subscription handshake |
 | `PUBLIC_WEB_URL` | Base URL for customer page links |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Optional AI fallback |
-| `ANTHROPIC_CHAT_MODEL`, `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`, `AI_TIMEOUT_MS` | Chat model override and caps (D-128) |
+| `ANTHROPIC_CHAT_MODEL`, `AI_CONVERSATION_DAILY_CAP`, `AI_DAILY_CAP`, `AI_TIMEOUT_MS` | Chat model override and caps (D-148) |
 
 Web: `NEXT_PUBLIC_WHATSAPP_NUMBER` (platform number for invites) and `NEXT_PUBLIC_GRIEVANCE_CONTACT`.
 
-Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (generic JSON and `lead-email`, header `X-Lead-Key` or Basic auth), `JUSTDIAL_LEAD_KEY` (Justdial push, the only key allowed in a URL) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Hosted projects refuse the `local-dev-*` examples and keys under 24 characters (D-130). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
+Lead intake Edge Function secrets (same file): `LEAD_INTAKE_KEY` (generic JSON and `lead-email`, header `X-Lead-Key` or Basic auth), `JUSTDIAL_LEAD_KEY` (Justdial push, the only key allowed in a URL) and `GOOGLE_ADS_LEAD_KEY` (must match the key set in the Google Ads lead form). Hosted projects refuse the `local-dev-*` examples and keys under 24 characters (D-150). Endpoints: `https://<project>.functions.supabase.co/lead-intake?source=google_ads|justdial|instagram|website|referral|other`.
 
 Vault also needs `public_web_url` (links in messages, e.g. `https://app.example.in`).
 

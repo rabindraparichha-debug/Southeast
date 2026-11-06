@@ -20,7 +20,7 @@ const load = cache(async (slug: string, code: string): Promise<Loaded> => {
   return { invite: data as unknown as ReferralInvite };
 });
 
-// A customer's share link (D-127): only this kitchen, never others. The friend joins this kitchen
+// A customer's share link (D-147): only this kitchen, never others. The friend joins this kitchen
 // with a trial; the kitchen calls to confirm.
 export default async function JoinPage({ params, searchParams }: PageProps<'/k/[slug]/join'>) {
   const [{ slug }, sp] = await Promise.all([params, searchParams]);

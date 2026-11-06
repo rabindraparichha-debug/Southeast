@@ -1,5 +1,5 @@
 -- Phase 2 hardening, step 1: delivery codes (docs/VENDOR_FIRST_AUDIT.md, Phase 2 step 5, "the
--- delivery OTP is weak"; D-126).
+-- delivery OTP is weak"; D-146).
 --
 --   (a) The wrong-code lockout sticks. A raised exception rolled back the attempt counter, so the 5th
 --       wrong code never locked anything. A wrong code now RETURNS (status 'pending', otp_ok false,

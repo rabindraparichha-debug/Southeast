@@ -1,5 +1,5 @@
 // Step 2 of every payment link (owner, customer page, payer, WhatsApp bot): ask Razorpay for the link
-// and attach it to our 'created' payment row (D-129, D-135).
+// and attach it to our 'created' payment row (D-149, D-155).
 //   * Razorpay did not create a link: the row is cancelled (cancel_payment_link_record, service role),
 //     so no unpaid, link-less row is left behind.
 //   * Razorpay created a link but attaching it failed: attaching is retried; if it still fails, the

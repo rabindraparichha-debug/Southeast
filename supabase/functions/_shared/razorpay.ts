@@ -139,7 +139,7 @@ export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): 
 
 /**
  * Cancels a Payment Link at Razorpay (used when the link was created but could not be attached to our
- * payment row, D-135). Mock links need nothing. Razorpay then sends payment_link.cancelled.
+ * payment row, D-155). Mock links need nothing. Razorpay then sends payment_link.cancelled.
  */
 export async function cancelPaymentLink(cfg: RazorpayConfig, linkId: string): Promise<void> {
   if (cfg.mode === 'mock' || linkId.startsWith('plink_mock_')) return;

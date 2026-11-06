@@ -14,7 +14,7 @@ const TABS: { value: EscalationStatus; label: string }[] = [
   { value: 'resolved', label: 'Resolved (30 days)' },
 ];
 
-// The Terms promise: if the kitchen does not reply within 2 hours, our team steps in (D-132).
+// The Terms promise: if the kitchen does not reply within 2 hours, our team steps in (D-152).
 export default async function EscalationsPage({ searchParams }: PageProps<'/admin/complaints'>) {
   await requireAdmin();
   const sp = await searchParams;

@@ -1,6 +1,6 @@
 -- Phase 2 hardening, step 6: the platform team can act on escalated complaints
 -- (docs/VENDOR_FIRST_AUDIT.md, Phase 2 step 6, "Escalated complaints go to a read-only admin list";
--- the Terms promise "if they don't reply within 2 hours, our team steps in"; D-132).
+-- the Terms promise "if they don't reply within 2 hours, our team steps in"; D-152).
 --
 --   * admin_escalations(status): the queue (escalated, or every open one, or recently resolved) with
 --     kitchen and customer context, masked phones, who on the team has it, and the team's members.

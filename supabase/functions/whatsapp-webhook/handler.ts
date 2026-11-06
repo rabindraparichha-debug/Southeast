@@ -15,7 +15,7 @@ export type WebhookDeps = {
   /** Creates a Razorpay link for a payment row; returns the short URL. */
   createLink: (record: Json) => Promise<string>;
   complete?: Complete;
-  /** Daily AI caps (D-128); with complete set, every model call first takes a unit through wa_ai_take. */
+  /** Daily AI caps (D-148); with complete set, every model call first takes a unit through wa_ai_take. */
   aiCaps?: { conversationCap: number; dayCap: number };
   /** Error reporting (monitoring); optional. Gets only the error code. */
   report?: (e: unknown, code: string) => void;

@@ -21,7 +21,7 @@ const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
 // Claude fallback (only when ANTHROPIC_API_KEY is set; otherwise the rule-based fallback is used).
 // The SDK is loaded lazily, so the webhook never depends on fetching it when AI is off; if it cannot
-// be loaded the chat is handed to the kitchen (D-128). Caps: AI_CONVERSATION_DAILY_CAP, AI_DAILY_CAP.
+// be loaded the chat is handed to the kitchen (D-148). Caps: AI_CONVERSATION_DAILY_CAP, AI_DAILY_CAP.
 const ai = loadAiConfig(env);
 const complete = ai.apiKey
   ? makeClaudeComplete({
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     report: (e, code) => void reportError(monitor, e, { fn: 'whatsapp-webhook', tags: { code } }),
     send: (to, out) => sendWhatsApp(cfg, to, out),
     // A failed Razorpay call cancels the 'created' row; a failed attach cancels the link at Razorpay
-    // first (D-129, D-135).
+    // first (D-149, D-155).
     createLink: async (record) => {
       // Loaded inside create(), so a missing key (payments_not_configured) also cancels the row.
       let rz: ReturnType<typeof loadRazorpay> | undefined;

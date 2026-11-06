@@ -10,7 +10,7 @@ import type { TeamMember } from '../types';
 
 type Result = PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
 
-// Take, hand on, note or resolve an escalated complaint (D-132). Every action is logged.
+// Take, hand on, note or resolve an escalated complaint (D-152). Every action is logged.
 export function ComplaintActions({ complaintId, resolved, assignedTo, team }: {
   complaintId: string; resolved: boolean; assignedTo: string | null; team: TeamMember[];
 }) {

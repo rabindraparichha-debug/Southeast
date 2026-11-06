@@ -1,9 +1,9 @@
--- Phase 2 hardening, review fixes (D-135).
+-- Phase 2 hardening, review fixes (D-155).
 --
 --   (1) Delivery codes: a resent wrong-code submit (same p_client_op, e.g. the answer was lost on a
 --       flaky network) gets the same 'pending' answer and is not counted again. The op id of the
 --       last wrong code is kept on the stop (delivery_stops.otp_last_op).
---   (2) Referral join (D-127):
+--   (2) Referral join (D-147):
 --       * every accepted join attempt is counted (referral_join_attempts) BEFORE we look at whether
 --         the number is already a customer, and the 5-per-code / 30-per-kitchen limits apply to all
 --         of them. Over the limit every number gets too_many_requests, so the limit no longer tells
@@ -14,10 +14,10 @@
 --       * the page cannot prove who holds the phone, so it no longer records WhatsApp opt-in or a
 --         'whatsapp' consent. The wish goes to the owner (notes and message); the customer turns
 --         updates on by sending "updates" to the platform number (the bot's opt-in, from that phone).
---   (3) Google Ads (D-131): rows earlier stored 'skipped' (no conversion action id set, usual before
+--   (3) Google Ads (D-151): rows earlier stored 'skipped' (no conversion action id set, usual before
 --       go-live) or 'sent' by the old mock become 'mock', so the first live run uploads them;
 --       admin_requeue_mock_conversions() also requeues 'skipped' rows (after adding an action id).
---   (4) complaint_admin_events (D-132): erasing a customer (customers.deleted_at set) blanks the team's
+--   (4) complaint_admin_events (D-152): erasing a customer (customers.deleted_at set) blanks the team's
 --       notes on that customer's complaints. The log stays append-only otherwise: the only update
 --       allowed is that scrub (note to null, nothing else), with tiffin.audit_scrub on.
 
