@@ -9,6 +9,9 @@ import { Card, Muted, Title } from '@/components/ui';
 import { SlotCard } from '@/components/slot-card';
 import { DispatchPhotoCard } from '@/components/dispatch-photo';
 import { AtRiskCard, SpecialsCard } from '@/components/insights';
+import { LeadCards } from '@/components/lead-cards';
+import { MoneyOverview } from '@/components/money-overview';
+import { isLead } from '@/lib/roles';
 import { colors, space } from '@/components/theme';
 import { t } from '@/i18n';
 
@@ -26,6 +29,7 @@ export default function Today() {
   const load = useCallback(async () => {
     if (kitchen.role === 'rider') return;
     setVersion((v) => v + 1);
+    if (kitchen.role === 'accountant') return; // money home: no counts or kitchen orders
     const today = istDate();
     const wanted: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];
     const [results, feed] = await Promise.all([
@@ -44,6 +48,14 @@ export default function Today() {
   useFocusEffect(useCallback(() => void load(), [load]));
 
   if (kitchen.role === 'rider') return <Redirect href="/rider" />;
+  if (kitchen.role === 'accountant') {
+    return (
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
+        <Title>{kitchen.kitchenName}</Title>
+        <MoneyOverview kitchenId={kitchen.kitchenId} role={kitchen.role} version={version} />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -58,14 +70,15 @@ export default function Today() {
           <Muted>{t('checklist.web')}</Muted>
         </Card>
       )}
-      <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={kitchen.role === 'owner'} version={version} />
+      {isLead(kitchen.role) && <LeadCards kitchenId={kitchen.kitchenId} version={version} />}
+      <SpecialsCard kitchenId={kitchen.kitchenId} isOwner={isLead(kitchen.role)} version={version} />
       <View style={styles.grid}>
         {slots.map((s) => (
           <SlotCard key={`${s.service_date}-${s.slot}`} s={s} onPress={() => router.push({ pathname: '/sheet', params: { date: s.service_date, slot: s.slot } })} />
         ))}
       </View>
       <DispatchPhotoCard kitchenId={kitchen.kitchenId} version={version} />
-      {kitchen.role === 'owner' && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
+      {isLead(kitchen.role) && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>
         <Text style={styles.cardTitle}>{t('today.changes')}</Text>
         {changes.length === 0 && <Muted>{t('today.noChanges')}</Muted>}

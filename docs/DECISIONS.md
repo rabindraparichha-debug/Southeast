@@ -721,4 +721,12 @@ Decisions taken in code; each can be changed. Migrations `20261108000100`–`202
 - Every outbox row expires 48 hours after it is due (or queued, if later); the worker cancels expired rows (`expired`) instead of sending them.
 - Crons: `tiffin-growth` and `tiffin-ad-conversions` need `growth`; `tiffin-tomorrow-nudge` needs `customer_whatsapp`; `tiffin-escalate-complaints` needs `customer_whatsapp` or `customer_portal`; the weather job still alerts owners, and tells customers only with `customer_whatsapp`.
 
+**Mobile app (branch `wave2/mobile`)**
+- Accountants get no Today tab: their home tab is Money (this month's collections, rider cash waiting, who owes). They see customers without meals, addresses, notes or food/health details, and every money screen read-only. Managers get the owner's tabs except Inbox, plus Deliver.
+- Rider change requests are sent straight to the server with one idempotency key per form (kept after a network error, so a resend counts once), not through the rider offline queue (`rider-store.ts` `act()`, which wave 1 was rewriting). Moving them into the queue as their own action kind is a follow-up.
+- An address request is approved on the phone by picking one of the customer's saved addresses or saving the rider's words as a new (non-default) address first.
+- A payment backdated to an earlier day is stored at noon IST of that day (same as the web). Today's payments use the server time.
+- The bill sent on WhatsApp from the phone is a text summary of the month (meals, charged, paid, due) from `customer_statement`; the printable statement stays on the web.
+- Opening balances on Add customer go through `add_balance_entry` (`adjust`, reason "Opening balance"): rupees owed or paid in advance for monthly customers, meals for prepaid.
+
 **Test logins:** +91 90000 00110 (manager) and 00111 (accountant) of kitchen A; 00112–00119 are spare (00113–00115 are used by `tests/integration/wave2.test.ts`).
