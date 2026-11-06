@@ -21,8 +21,11 @@ from (values
 insert into public.kitchens (id, name, slug, owner_id, lat, lng, weekly_off) values
   ('e5100000-0000-4000-e000-000000000001', 'Payer Kitchen', 'payer-kitchen', 'e5000000-0000-4000-e000-000000000001',
    20.3553, 85.8197, '{7}');
--- The first-complaint credit is opt-in since D-119; this kitchen turns it on.
-insert into public.kitchen_settings (kitchen_id, auto_credit_first_complaint) values ('e5100000-0000-4000-e000-000000000001', true);
+-- Prepaid billing (the P5 rules this suite was written for), customer WhatsApp switched on (Phase 2 flag),
+-- and the first-complaint credit (opt-in since D-119) turned on.
+insert into public.kitchen_settings (kitchen_id, default_billing_mode, auto_credit_first_complaint)
+values ('e5100000-0000-4000-e000-000000000001', 'prepaid', true);
+update public.platform_settings set enabled = true where key = 'customer_whatsapp';
 insert into public.kitchen_payout_accounts (kitchen_id, razorpay_linked_account_id, kyc_status)
 values ('e5100000-0000-4000-e000-000000000001', 'acc_TestPayerKitchen1', 'verified');
 insert into public.members (kitchen_id, user_id, role, display_name) values

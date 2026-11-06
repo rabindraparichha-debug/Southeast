@@ -25,8 +25,11 @@ insert into public.kitchens (id, name, slug, owner_id, lat, lng, weekly_off) val
   ('84000000-0000-4000-f000-000000000002', 'Wave Two', 'wave-two', 'f4000000-0000-4000-f000-000000000001', 20.3553, 85.8197, '{7}'),
   ('84000000-0000-4000-f000-000000000003', 'Wave Three', 'wave-three', 'f4000000-0000-4000-f000-000000000001', 20.3553, 85.8197, '{7}'),
   ('84000000-0000-4000-f000-000000000004', 'Wave Four', 'wave-four', 'f4000000-0000-4000-f000-000000000001', 20.3553, 85.8197, '{7}');
-insert into public.kitchen_settings (kitchen_id, credit_limit_meals)
-select id, 10 from public.kitchens where id::text like '84000000-%';
+-- Prepaid billing (the balance rules this suite was written for, D-115) and customer WhatsApp
+-- switched on (the Phase 2 outbox gate, item 13), as in 04_money and 11_p5.
+insert into public.kitchen_settings (kitchen_id, credit_limit_meals, default_billing_mode)
+select id, 10, 'prepaid' from public.kitchens where id::text like '84000000-%';
+update public.platform_settings set enabled = true where key = 'customer_whatsapp';
 insert into public.members (kitchen_id, user_id, role, display_name) values
   ('84000000-0000-4000-f000-000000000001', 'f4000000-0000-4000-f000-000000000001', 'owner', 'Owner V'),
   ('84000000-0000-4000-f000-000000000001', 'f4000000-0000-4000-f000-000000000002', 'staff', 'Staff V'),

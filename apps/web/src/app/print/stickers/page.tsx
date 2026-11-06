@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { SLOT_LABEL, addDays, formatServiceDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { currentDeliverySlot } from '@/lib/delivery';
@@ -17,7 +18,7 @@ const DIET_SHORT: Record<string, string> = { veg: 'Veg', nonveg: 'Non-veg', jain
 // scans it before handing over the tiffin (complete_stop refuses a wrong one). Owner + staff: the
 // sheet carries no phone numbers and no money.
 export default async function StickersPage({ searchParams }: PageProps<'/print/stickers'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const sp = await searchParams;
   const now = currentDeliverySlot();
   const date = isIsoDate(sp.date) ? sp.date : now.date;

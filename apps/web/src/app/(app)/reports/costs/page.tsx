@@ -1,5 +1,6 @@
 import { formatPaise, istDate, isIsoDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { MONEY_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, type CostReport } from '@/lib/inventory';
@@ -11,10 +12,10 @@ const isDate = isIsoDate;
 // by_day ingredients_paise arrives unrounded (fractional paise) from cost_report; round before formatting.
 const money = (p: number | null | undefined) => (p == null ? '—' : formatPaise(Math.round(Number(p))));
 
-// Cost per meal and margin (owner only): ingredients consumed at lock + waste + stock-take
+// Cost per meal and margin (owner, manager; accountant reads; settings stay the owner's): ingredients consumed at lock + waste + stock-take
 // losses + gas and packaging per meal, against revenue from counted meals.
 export default async function CostsPage({ searchParams }: PageProps<'/reports/costs'>) {
-  const { kitchen } = await requireKitchen(['owner']);
+  const { kitchen } = await requireKitchen(MONEY_ROLES);
   const sp = await searchParams;
   const today = istDate();
   const from = isDate(sp.from) ? sp.from : `${today.slice(0, 8)}01`;
@@ -95,7 +96,7 @@ export default async function CostsPage({ searchParams }: PageProps<'/reports/co
           </div>
         </>
       )}
-      {settings && (
+      {settings && kitchen.role === 'owner' && (
         <div className="mt-6 print:hidden">
           <CostSettings
             kitchenId={kitchen.kitchenId}

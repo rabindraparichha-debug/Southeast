@@ -13,6 +13,7 @@ A free operating system for small tiffin vendors (home cooks, tiffin services, m
 - **Many customers will never use anything digital at first.** Every customer action (pause, skip, pay cash, change address) must also be doable by the vendor in two taps. Counts, balances and dues must stay correct for offline customers.
 - **We never hold customer money.** Razorpay settles directly to each vendor's linked account (Razorpay Route linked accounts / sub-merchants). There is no pooled account in our name.
 - **The "wallet" is a prepaid meal balance per customer per vendor, usable only with that vendor.** No cross-vendor wallet; it may need RBI authorisation, so it's out of scope until legal clears it.
+- **Billing mode per customer (D-115):** monthly pay-later (the default: meals go on the customer's khata at each meal's own price, the vendor collects at month end, nothing is suspended) or prepaid (the meal balance above, with low-balance and suspend rules).
 - **Delivery uses the vendor's own riders** in a rider mode of the same mobile app. We don't employ riders in v1.
 - **Inventory is Petpooja-style but simpler:** purchases, recipes, auto-deduction from the locked daily count, stock-take, alerts, cost per meal.
 - **One platform WhatsApp number** for all vendors. The bot answers first, AI covers free text, and anything else hands off to the vendor's in-app inbox. Vendors' personal numbers stay private.
@@ -22,14 +23,16 @@ A free operating system for small tiffin vendors (home cooks, tiffin services, m
 |---|---|---|---|
 | Vendor app (mobile) | Owner, staff | Expo / React Native, Android first | Today's count, change feed, collections, menu, inventory entry, inbox |
 | Rider mode (same app) | Vendor's riders | Expo, rider role, offline cache | Ordered stop list, navigation, OTP or photo proof, failed-delivery reason, tiffin returns, cash collected |
-| Vendor dashboard (web) | Owner, accountant | Next.js + Tailwind | Customers, plans, ledgers, reports, bulk import, settings |
+| Vendor dashboard (web) | Owner, manager, accountant | Next.js + Tailwind | Customers, plans, ledgers, reports, bulk import, settings |
 | Customer page + WhatsApp | Subscribers | Next.js mobile pages + WhatsApp Cloud API | Pay, pause or skip, menu, balance, complaint |
 | Admin console (web) | Our team | Next.js | Vendor onboarding and KYC, lead routing, funnel, support, audit |
 
 **Roles:**
 - **Owner:** everything for their kitchen.
+- **Manager** (D-117): the owner's deputy. Customer changes, new customers, cash and payments (record, void), confirming rider cash, approving riders' change requests, delivery and stock; receives owner alerts. Not: inbox, settings, team and invites, payouts, commission statement, audit log (owner only).
+- **Accountant** (D-117): reads money (payments, dues, statements, exports, reports, supplier dues and costs). No writes. Phone numbers masked.
 - **Staff:** counts, production and inventory only. No money, no customer phone numbers.
-- **Rider:** today's assigned stops only, with masked phone numbers.
+- **Rider:** today's assigned stops only, with masked phone numbers. Can record a customer's change request at the door; an owner or manager approves it.
 - **Customer:** their own data.
 - **Platform admin:** all kitchens, every access logged.
 

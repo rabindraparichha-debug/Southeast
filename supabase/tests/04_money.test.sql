@@ -19,9 +19,10 @@ insert into public.kitchens (id, name, slug, owner_id, weekly_off) values
   ('60000000-0000-4000-e000-0000000000a2', 'States Kitchen', 'states-kitchen', 'e0000000-0000-4000-e000-000000000001', '{7}'),
   ('60000000-0000-4000-e000-0000000000a3', 'Dues Kitchen', 'dues-kitchen', 'e0000000-0000-4000-e000-000000000001', '{7}'),
   ('60000000-0000-4000-e000-0000000000a4', 'Unverified Kitchen', 'unverified-kitchen', 'e0000000-0000-4000-e000-000000000001', '{7}');
-insert into public.kitchen_settings (kitchen_id, credit_limit_meals) values
-  ('60000000-0000-4000-e000-0000000000a1', 0), ('60000000-0000-4000-e000-0000000000a2', 0),
-  ('60000000-0000-4000-e000-0000000000a3', 2), ('60000000-0000-4000-e000-0000000000a4', 0);
+-- These kitchens bill prepaid (the M3 rules this suite was written for); monthly billing: 14_billing.
+insert into public.kitchen_settings (kitchen_id, credit_limit_meals, default_billing_mode) values
+  ('60000000-0000-4000-e000-0000000000a1', 0, 'prepaid'), ('60000000-0000-4000-e000-0000000000a2', 0, 'prepaid'),
+  ('60000000-0000-4000-e000-0000000000a3', 2, 'prepaid'), ('60000000-0000-4000-e000-0000000000a4', 0, 'prepaid');
 insert into public.kitchen_payout_accounts (kitchen_id, razorpay_linked_account_id, kyc_status) values
   ('60000000-0000-4000-e000-0000000000a1', 'acc_TestMoney001', 'verified'),
   ('60000000-0000-4000-e000-0000000000a2', null, 'not_started'),
@@ -255,13 +256,13 @@ select ok((select count(*) from public.notifications_outbox where template = 'lo
 -- Hari: 10 meals at ₹60 then 10 at ₹80; 7 meals eaten (oldest lot first) -> 3 at ₹60 + 10 at ₹80 left.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"e0000000-0000-4000-e000-000000000001","role":"authenticated"}', true);
-select is(public.unused_meals_value((select cust from cx where name = 'Hari')), '{"meals": 13, "amount_paise": 98000}'::jsonb,
+select is(public.unused_meals_value((select cust from cx where name = 'Hari')) - 'billing_mode' - 'balance_paise', '{"meals": 13, "amount_paise": 98000}'::jsonb,
   'FIFO: 13 unused meals worth ₹980 (3×₹60 + 10×₹80)');
 select lives_ok($$select public.refund_unused_meals((select cust from cx where name = 'Hari'), 3, 'Customer asked')$$,
   'partial refund of 3 meals');
 select is((select amount_paise from public.refunds where customer_id = (select cust from cx where name = 'Hari')), 18000,
   'partial refund takes the oldest remaining meals (3×₹60)');
-select is(public.unused_meals_value((select cust from cx where name = 'Hari')), '{"meals": 10, "amount_paise": 80000}'::jsonb,
+select is(public.unused_meals_value((select cust from cx where name = 'Hari')) - 'billing_mode' - 'balance_paise', '{"meals": 10, "amount_paise": 80000}'::jsonb,
   'remaining 10 meals still valued at ₹80');
 select throws_ok($$select public.refund_unused_meals((select cust from cx where name = 'Hari'), 11)$$,
   '22023', 'refund_exceeds_balance', 'cannot refund more meals than are left');

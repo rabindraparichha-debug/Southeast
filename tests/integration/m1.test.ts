@@ -99,7 +99,8 @@ describe('M1 test 2: importing 50 customers with 3 bad rows', () => {
       const phone = `97${suffix}${String(i).padStart(5, '0')}`;
       if (i === 7) return { name: 'Bad Phone', phone: '98765' };
       if (i === 21) return { name: '', phone: `96${suffix}${String(i).padStart(5, '0')}` };
-      if (i === 33) return { name: 'Duplicate', phone: `97${suffix}00001` };
+      // Same name and phone as row 1 (a different name on the same phone is a shared phone, D-118).
+      if (i === 33) return { name: 'customer 1', phone: `97${suffix}00001` };
       return { name: `Customer ${i}`, phone, area: 'Nayapalli', plan: i % 2 ? 'Veg Lunch' : '', start_date: i % 2 ? '2026-11-02' : '' };
     });
 

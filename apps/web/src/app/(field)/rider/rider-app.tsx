@@ -166,7 +166,7 @@ function SyncBanners() {
   );
 }
 
-const KIND_LABEL = { start: 'Start run', complete: 'Delivered', fail: 'Not delivered', finish: 'Finish run' } as const;
+const KIND_LABEL = { start: 'Start run', complete: 'Delivered', fail: 'Not delivered', finish: 'Finish run', request: 'Customer request' } as const;
 
 /** Actions the server refused: kept on this device with photo and cash until retried or discarded. */
 function NeedsAttention({ items, runs }: { items: AttentionItem[]; runs: RiderRun[] }) {

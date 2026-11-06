@@ -3,7 +3,9 @@
 // The web app has the same rules in apps/web/src/lib/rider-queue.ts: keep the two in step (the test
 // runs the same cases against both).
 
-type Kind = 'start' | 'complete' | 'fail' | 'finish';
+// 'request': a customer's skip / pause / new address written down at the door (rider_request_change;
+// mobile only so far).
+type Kind = 'start' | 'complete' | 'fail' | 'finish' | 'request';
 
 /**
  * One rider action waiting to be sent. Saved as JSON on the phone, so every field added later must
@@ -110,6 +112,8 @@ export const FINAL_ERRORS: readonly string[] = [
   'forbidden', // not this rider's run any more, or a run older than yesterday
   'wrong_tiffin', 'invalid_client_op', 'proof_required', 'photo_required', 'invalid_photo', 'invalid_amount',
   'otp_locked', 'reason_required', 'note_required', 'stops_pending',
+  // rider_request_change
+  'invalid_type', 'date_required', 'date_in_past', 'invalid_range', 'range_too_long',
 ];
 const FINAL = new Set(FINAL_ERRORS);
 

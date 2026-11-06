@@ -422,12 +422,11 @@ select set_config('app.now', '2026-11-12 00:10:00+05:30', true);
 select is(private.apply_plan_prices(), 1, 'the daily job moves one plan to its new price');
 select is((select price_per_meal_paise from public.plans where id = '85600000-0000-4000-f000-000000000001'), 8000, 'the plan now shows ₹80');
 select is(private.apply_plan_prices(), 0, 'running it again changes nothing');
--- Dues for meals already eaten should keep their own prices once the new price starts: 2 customers
--- owe Tue + Wed at ₹70 and Thu at ₹80. On this base private.dues values every owed meal at today's
--- plan price; wave 2's ledger-valued private.dues fixes it (merge prerequisite, D-144).
+-- Dues for meals already eaten keep their own prices once the new price starts: 2 customers owe
+-- Tue + Wed at ₹70 and Thu at ₹80. Wave 2's ledger-valued private.dues (rupee ledger for monthly
+-- customers, owed meals at their own price for prepaid ones) makes this true since the merge (D-144).
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000011","role":"authenticated","amr":[{"method":"otp","timestamp":0}]}', true);
-select todo('dues use today''s plan price until wave 2''s private.dues lands (D-144)', 1);
 select is((select sum(amount_owed_paise) from public.dues_list('85500000-0000-4000-f000-000000000001')),
   (2 * 2 * 7000 + 2 * 8000)::bigint, 'after the new price starts, dues for meals already eaten keep their prices');
 reset role;

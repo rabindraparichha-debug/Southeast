@@ -10,6 +10,7 @@ import { LanguagePicker } from '@/components/language-picker';
 import { getTranslator } from '@/lib/i18n/server';
 import { translateNav } from '@/lib/i18n/translate';
 import { SupportLink } from '@/components/support-link';
+import { canReadMoney, isLead } from '@/lib/roles';
 
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
@@ -18,10 +19,20 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
 
-  const items: NavItem[] = [{ href: '/', label: 'Today', icon: '📋' }];
-  if (role === 'owner' || role === 'staff') {
-    items.push({ href: '/customers', label: 'Customers', icon: '👥' });
-    if (role === 'owner') items.push({ href: '/desk', label: 'Phone desk', icon: '📞' });
+  // D-117/D-146: managers get every owner page except the owner-only ones (inbox, settings, team);
+  // accountants get the money pages, read-only.
+  const lead = isLead(role);
+  const supabase = await createClient();
+  const items: NavItem[] = [];
+  if (role !== 'accountant') items.push({ href: '/', label: 'Today', icon: '📋' });
+  items.push({ href: '/customers', label: 'Customers', icon: '👥' });
+  if (lead) {
+    const { count: requests } = await supabase.from('change_requests').select('id', { count: 'exact', head: true })
+      .eq('kitchen_id', session.kitchen.kitchenId).eq('status', 'pending');
+    items.push({ href: '/requests', label: requests ? `Rider requests (${requests})` : 'Rider requests', icon: '📨' });
+  }
+  if (role === 'owner' || role === 'manager' || role === 'staff') {
+    if (lead) items.push({ href: '/desk', label: 'Phone desk', icon: '📞' });
     items.push({ href: '/sheet', label: 'Kitchen sheet', icon: '🧾' });
     items.push({ href: '/delivery', label: 'Delivery', icon: '🛵' });
     if (role === 'owner') items.push({ href: '/rider', label: 'Deliver', icon: '📍' });
@@ -30,14 +41,20 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
     items.push({ href: '/stock-entry', label: 'Stock entry', icon: '📝' });
   }
   if (role === 'owner') {
-    const supabase = await createClient();
     const { count: needsReply } = await supabase.from('conversations').select('id', { count: 'exact', head: true })
       .eq('kitchen_id', session.kitchen.kitchenId).or('unread_count.gt.0,handoff_open.eq.true');
     items.push({ href: '/inbox', label: needsReply ? `Inbox (${needsReply})` : 'Inbox', icon: '💬' });
+  }
+  if (canReadMoney(role)) {
     items.push({ href: '/money', label: 'Money', icon: '💰' });
+    items.push({ href: '/money/bills', label: 'Bills', icon: '🧮' });
     items.push({ href: '/reports/costs', label: 'Costs', icon: '📊' });
+  }
+  if (lead) {
     items.push({ href: '/insights', label: 'Insights', icon: '💡' });
     items.push({ href: '/plans', label: 'Plans', icon: '🍛' });
+  }
+  if (role === 'owner') {
     items.push({ href: '/settings', label: 'Kitchen settings', icon: '⚙️' });
     items.push({ href: '/team', label: 'Team', icon: '🧑‍🍳' });
   }

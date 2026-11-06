@@ -35,9 +35,11 @@ export async function loginAs(phone: string): Promise<{ client: Client; accessTo
   for (let attempt = 0; ; attempt++) {
     const { error } = await client.auth.signInWithOtp({ phone });
     if (!error) break;
-    // GoTrue enforces a short gap between OTP requests for the same phone.
-    if (attempt < 3 && /after \d+ seconds|rate limit/i.test(error.message)) {
-      await new Promise((r) => setTimeout(r, 6000));
+    // GoTrue enforces a short gap between OTP requests for the same phone (several suites log in
+    // the same seed users at once): wait as long as it asks, a few times.
+    const wait = /after (\d+) seconds/i.exec(error.message);
+    if (attempt < 8 && (wait || /rate limit/i.test(error.message))) {
+      await new Promise((r) => setTimeout(r, (wait ? Number(wait[1]) + 1 : 6) * 1000));
       continue;
     }
     throw error;
@@ -62,4 +64,16 @@ export async function rest(path: string, accessToken: string, init: RequestInit 
   });
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null };
+}
+
+/**
+ * Customer WhatsApp is a Phase 2 flag (customer_whatsapp, off by default): while it is off the
+ * webhook sends no bot replies and the outbox worker sends nothing to customers or leads. Suites
+ * that drive the bot switch it on (several may run at once, so nobody switches it off mid-run);
+ * global-setup.ts switches it off again after the whole run.
+ */
+export async function setCustomerWhatsapp(enabled: boolean): Promise<void> {
+  const admin = await loginAs('+919000000099');
+  const { error } = await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: enabled });
+  if (error) throw error;
 }

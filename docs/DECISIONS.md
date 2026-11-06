@@ -51,6 +51,7 @@ Defaults chosen during the build, and questions still open for the product owner
 
 | D-131 – D-138 | Wave 4 defaults (approval gate, non-Latin kitchen names, admin actions log, phone change / ownership / admins, dated plan prices, phoned-in complaints, export and close requests, support contact) | Decided | Wave 4 |
 | D-139 – D-145 | Wave 4 review fixes (proven phone, owner basis in good standing, pending phone changes, exact owner, approval-aware vendor messages, dues todo, logged signup switch) | Decided | Wave 4 |
+| D-146 | Vendor-first wave 2 defaults (manager and accountant roles, monthly rupee ledger and billing-mode switch, payment void/backdate/idempotency, shared phones, rider change requests, outbox expiry and phase flags) | Decided | Wave 2 |
 
 ---
 
@@ -182,6 +183,7 @@ M1 creates the tenancy, customer, plan, import and audit tables. Each later mile
 ### D-022 Staff and rider visibility
 - Staff can see customer names, addresses, diet and notes (needed for packing), but not phone numbers, plans, prices or subscriptions.
 - Riders see nothing about customers until M5 gives them today's stops.
+- Managers and accountants (D-117, D-119): managers see what owners see except the owner-only areas; accountants see customer names with masked phones, plans, subscriptions and money, nothing else.
 
 ### D-023 Data erasure
 - `erase_customer()` scrubs name, phone, notes and address details. It keeps the row so payment records (M3) stay consistent.
@@ -755,7 +757,7 @@ The rest of this entry is how I built that; the signup policy is a separate, ope
   - `NEXT_PUBLIC_LOGIN_CHANNELS` / `EXPO_PUBLIC_LOGIN_CHANNELS` (default `sms`) decide which channels are offered; `…_LOGIN_DELIVERY` (`channel` or `hook`) says who picks.
   - "Get code on WhatsApp" is the default, with "Send code by SMS instead" after a 30 s countdown (or at once if sending failed).
   - Both channels verify as type `sms`.
-- **Hosted auth settings:** "Confirm phone" on. With it off, a phone + password signup is confirmed without a code and the SMS rate limit is skipped. The code-side guard (`claim_invites` accepts only a session signed in with a code, JWT `amr` `otp`) comes with the wave 2 database work; `invite_member`'s direct add of an existing account still relies on this setting.
+- **Hosted auth settings:** "Confirm phone" on. With it off, a phone + password signup is confirmed without a code and the SMS rate limit is skipped. The code-side guards come with the wave 2 database work: `claim_invites` accepts only a session signed in with a code (JWT `amr` `otp`), and `invite_member` never adds an existing account directly (always a pending invite, D-146). An account a stranger pre-registers with a password is still stopped only by this setting (GoTrue gives code-only accounts a random password too, so the database cannot tell them apart): a launch blocker.
   - Geo permissions are set to India only.
   - Test numbers are removed at launch, except D-114's.
 - Setup steps for Twilio WhatsApp, Twilio SMS + DLT and Telnyx are in docs/LOGIN.md.
@@ -866,9 +868,68 @@ Migration `20261113000700_onboarding_review_fixes.sql`; tests in `15_onboarding.
 - The migration approves applications already in `onboarding` or `live` (`approved_at` = their last update, `approved_by` empty); `new` and `contacted` ones wait for the founder.
 
 ### D-144 Dues after a price change
-- On this base `private.dues` values every owed meal at today's plan price, so dues for meals eaten before a price change move when the new price starts. Wave 2's ledger-valued `private.dues` fixes it and is a merge prerequisite; `15_onboarding` holds the check as a pgTAP `todo` that passes once wave 2 is merged.
+- On this base `private.dues` values every owed meal at today's plan price, so dues for meals eaten before a price change move when the new price starts. Wave 2's ledger-valued `private.dues` fixes it and is a merge prerequisite; `15_onboarding` holds the check as a pgTAP `todo` that passes once wave 2 is merged. **Resolved by the wave 2 merge (D-146):** dues come from each meal's own amount (monthly: the rupee ledger; prepaid: owed meals at their own price), and the `15_onboarding` check is a plain test (no `todo`), with a prepaid case in `17_merge_wave2`.
 - `set_plan_price` returns `charged_slots`: the plan's slots on the start date already counted at the old price; the Plans editor says so.
 
 ### D-145 The vendor signup switch is logged
 - `open_vendor_signup` changes only through `admin_set_vendor_signup(open, reason)` (reason required, `admin_actions` `vendor_signup_opened` / `vendor_signup_closed`); `admin_set_platform_flag` refuses that key (`use_vendor_signup`).
 - `onboarding_status.apply_open` is the `growth` switch when a branch adds it (open when the key does not exist): "Apply here" shows only when the form is on; otherwise the screen asks the vendor to message the team.
+
+## Vendor-first wave 2 (2026-11-06)
+
+### D-146 Vendor-first wave 2: defaults chosen while building D-115..D-118 (numbered D-119 on branch `wave2/db`, D-136 on `wave2/integrated`)
+Numbered D-146 when merged into `m9-p5-p6` (D-119..D-125 wave 1, D-126/D-127 login, D-128..D-130 held-back apps, D-131..D-145 wave 4).
+Decisions taken in code; each can be changed. Migrations `20261108000100`–`20261108000800`.
+
+**Roles (D-117)**
+- **Manager = the owner's deputy.** Every `'{owner}'` check also accepts a manager (`private.expand_roles`), except the owner-only areas, which use `p_exact => true` (`private.require_role(k, '{owner}', true)`, `private.kitchen_ids('{owner}', true)`): inbox (D-060: conversations, messages, reply, close, mark read), broadcasts, settings (kitchen and kitchen settings updates, listing photos), members and invites (invite, revoke, change role, remove), the payout account, the commission statement and commission tables, and the audit log. So a manager also sees full phone numbers (and can reveal one, logged), handles refunds, edits plans and prices, pays suppliers and sees costs (the owner is away most days; someone must pay the vegetable seller), and can erase a customer (DPDP request). **New `'{owner}'` checks include managers by default**; mark owner-only ones with `true`.
+- **Accountant = reads money, writes nothing.** Customers (names; **phones masked**, like staff, no reveal and no full-number search), plans, subscriptions, the ledger, payments, refunds, receipts photos, dues, statements, bills, CSV exports, the register, the money report, refund preview, office statements, supplier dues / payments / purchases / items and the cost report. Not: addresses, kitchen orders, inbox, audit log, commission, any write.
+- **Owner alerts go to managers too:** `notify_owners`, stock alerts and the 22:00 summary; the production sheet (`private.lock_slot`) and the new-platform-customer alert (`private.convert_lead`) are copied to every manager at insert (`private.copy_owner_alert_to_managers`, an outbox trigger that never raises), so neither function had to be redefined.
+- **Invites:** owners can invite managers and accountants. `invite_member` always creates a pending invite, even when an account already exists for the number (it used to add that account directly). `claim_invites` now also requires that the session was signed in with a one-time code (JWT `amr` method `otp`); `phone_confirmed_at` alone is set by a phone + password sign-up when confirmations are off.
+- **Rider requests:** a rider records skip / pause / resume / cancel / address (address: the new address in the note) on one of their own stops (`rider_request_change`, today's or yesterday's run, idempotent on `p_client_op`). Nothing changes until an owner or manager approves (`approve_change_request`, preview with `p_dry_run`), which runs `private.apply_change` with channel `rider`: lateness is judged at approval time by the slot cutoff. The subscription is the customer's only live one, else the one on the stop, else the approver picks. No WhatsApp alert for a new request (it would need a Meta-approved template); the owner sees pending requests in `change_requests_list`.
+
+**Billing (D-115)**
+- `kitchen_settings.default_billing_mode` defaults to `monthly`; new customers take it unless the vendor picks one. Platform-sourced customers (Phase 2 trial flow) default to `prepaid`. Customers that existed before the migration stay `prepaid`.
+- **Monthly ledger:** the rupee balance is Σ `amount_paise`. Meals are charged at their own price (frozen at the lock). Monthly payments carry **0 meals** (also rider cash and a confirmed payment, even if meals are typed). A free-meal credit for a monthly customer is worth that meal's price (the meal it refers to, else the price per meal). Adjustments are in rupees (`add_balance_entry(..., p_amount_paise)`: minus = owed, plus = advance).
+- **Dues:** monthly = −rupee balance; prepaid = −meal balance, valued at the newest owed meals' own prices. Dues reminders on day 1, 3 and 7 are for prepaid customers only (monthly customers settle at month end with a statement). Churn "balance out" is prepaid-only.
+- **Price per meal** (only to turn rupees into meals): the meal-weighted average of the customer's live plans (lunch ₹60 + dinner ₹40 → ₹50), else their latest plan.
+- **Switching mode** (`set_billing_mode`, owner or manager): monthly → prepaid turns the advance into whole meals at the price per meal (an amount under one meal stays only in rupees) and keeps its rupee value for FIFO refunds; prepaid → monthly values unused meals at what was paid (free meals at the price per meal) or the owed meals at their own prices. Dues switched to prepaid keep their rupee value on the conversion row, so switching back gives exactly the same dues.
+- **Refunds:** prepaid unchanged (FIFO meals). Monthly refunds part or all of the advance in rupees (`refund_unused_meals(..., p_amount_paise)`). The automatic refund on cancellation stays prepaid-only and has no setting: `private.unused_value` is 0 for monthly customers, so `private.refund_on_cancel` (not redefined) never refunds them.
+- **Statement month:** a meal belongs to the month of its service date (a 1st-of-month lunch is locked the evening before); every other ledger row to its IST date.
+- **Import:** optional `billing` (monthly / prepaid; pay later, postpaid, khata, advance) and `dues` (rupees, monthly only; negative = advance). A meals `balance` on a monthly row becomes a rupee advance at the plan price.
+
+**Payments (item 22)**
+- `p_client_op` is unique per kitchen; a retry returns the first payment, a key reused for another customer is refused (`invalid_client_op`). Same for purchases (per kitchen) and waste (per item).
+- Backdating: not in the future (10 minutes of clock skew allowed), at most 400 days back.
+- Void: only a `paid` cash / UPI / bank payment; online payments are refunded instead. One reversal row (`adjust`, `ref_type = payment_void`); the payment keeps `void_reason`, `voided_by`, `voided_at` (the audit row carries them). A void does not undo a referral reward or a lead-funnel stage that the payment triggered. A prepaid customer's payment from before a billing-mode switch cannot be voided (`billing_mode_changed`): the switch already turned it into a meal lot, so the owner posts an adjustment. Bills and statements show payments net of voids.
+
+**Shared phones (D-118)**
+- The same phone **and** the same name (case and spaces ignored) is the same person (`already_exists`, `duplicate_in_file`). A different name on a used phone needs the vendor's confirmation (`create_customer(..., p_allow_shared_phone)`, `update_customer` key `allow_shared_phone`), else `phone_in_use`. Import accepts it when the names differ.
+- WhatsApp keeps one conversation per kitchen and phone, linked to the **oldest** customer on that phone (deterministic); a sibling's customer page shares it but shows the sibling's own data; messages to any of them use that phone's 24-hour window. Choosing which sibling a WhatsApp chat is about is a Phase 2 item.
+- `convert_lead` is unchanged: a phone already in the chosen kitchen is `already_customer`, so the platform never claims a vendor's own customer.
+
+**Outbox and phase flags (item 13)**
+- Platform flags, all off: `customer_whatsapp`, `customer_portal`, `online_payments`, `marketplace`, `growth`, `extras`. Only `customer_whatsapp` (the outbox gate) and the crons check them so far; screens and RPCs follow in item 27.
+- While `customer_whatsapp` is off, messages to customers, leads and vendor applicants are stored as `cancelled` / `customer_messages_off`, rows queued earlier are cancelled when the worker runs, and the WhatsApp webhook stores inbound messages for the owner's inbox but sends no bot or AI reply (`wa_receive` returns `customer_messages`). Member alerts are not affected.
+- Every outbox row expires 48 hours after it is due (or queued, if later); the worker cancels expired rows (`expired`) instead of sending them.
+- Crons: `tiffin-growth` and `tiffin-ad-conversions` need `growth`; `tiffin-tomorrow-nudge` needs `customer_whatsapp`; `tiffin-escalate-complaints` needs `customer_whatsapp` or `customer_portal`; the weather job still alerts owners, and tells customers only with `customer_whatsapp`.
+
+**Mobile app (branch `wave2/mobile`)**
+- Accountants get no Today tab: their home tab is Money (this month's collections, rider cash waiting, who owes). They see customers without meals, addresses, notes or food/health details, and every money screen read-only. Managers get the owner's tabs except Inbox, plus Deliver.
+- Rider change requests go through the rider offline queue (`act()`, kind `request`): saved on the phone at once, sent when there is internet, never counted twice (the queue's client id is `p_client_op`); refusals go to "needs attention". Riders may request skip, pause, resume, cancel or a new address (`invalid_type` otherwise).
+- An address request is approved on the phone by picking one of the customer's saved addresses or saving the rider's words as a new (non-default) address first.
+- A payment backdated to an earlier day is stored at noon IST of that day (same as the web). Today's payments use the server time.
+- The bill sent on WhatsApp from the phone is a text summary of the month (meals, charged, paid, due) from `customer_statement`; the printable statement stays on the web.
+- Opening balances on Add customer go through `add_balance_entry` (`adjust`, reason "Opening balance"): rupees owed or paid in advance for monthly customers, meals for prepaid.
+
+**Review fixes (migration `20261108000900`, after merging wave 1, login and screens)**
+- **Owed meals** are valued newest first at their own price: meals at their frozen price, adjustments that removed meals at their own amount (or the price per meal when they carry none), and any meals owed beyond those at the price per meal (`private.recent_meals_value`, used by dues, statements and the mode switch).
+- **Nightly** is wave 1's error-isolated job (D-123) with the D-115 rule: only prepaid subscriptions are auto-cancelled. `private.dues` runs in one pass (window functions).
+- **Import:** a monthly row with opening meals but no plan is refused (`balance_needs_plan`; put the amount in `dues` instead).
+- **Accountants** get no addresses from `search_customers` or `register_sheet` (they run as definer, so the addresses RLS did not apply).
+- **Conversations** follow phone changes and erasures (`private.relink_conversations`): re-linked to the oldest customer still on that phone, else unlinked; `wa_receive` repairs a stale link.
+- **Managers** do not read inbox replies, broadcasts or inbox alerts in `notifications_outbox` (D-060).
+- **Rider requests:** the approver (owner or manager), not the rider, is the actor of the applied change and of any "don't charge" credit.
+- Redefined here: `private.recent_meals_value`, `private.convert_billing`, `public.void_payment`, `private.nightly` (from wave 1), `private.dues`, `public.customer_statement`, `public.monthly_bills`, `public.import_customers`, `public.invite_member`, `public.wa_claim_outbox`, `public.wa_receive`, `public.search_customers`, `public.register_sheet`, `public.rider_request_change`, `public.approve_change_request`, policy `notifications_outbox_select`. New: triggers `customers_relink_conversations`, `notifications_outbox_copy_to_managers`.
+
+**Test logins:** +91 90000 00110 (manager) and 00111 (accountant) of kitchen A; 00112–00119 are spare (00113–00115 are used by `tests/integration/wave2.test.ts`).

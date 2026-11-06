@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { SLOT_LABEL, addDays, formatServiceDate, istDate, isIsoDate } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatQty, formatQtySmart, type DishCost, type ProductionPlan } from '@/lib/inventory';
@@ -13,8 +14,8 @@ import { RecipeEditor } from './recipe-editor';
 // Recipes per portion and the production plan for a slot. Cost per portion is owner-only
 // (staff: no money), so it is stripped before reaching the browser.
 export default async function RecipesPage({ searchParams }: PageProps<'/inventory/recipes'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const sp = await searchParams;
   // Same default as /sheet: tomorrow's lunch.
   const date = isIsoDate(sp.date) ? sp.date : addDays(istDate(), 1);

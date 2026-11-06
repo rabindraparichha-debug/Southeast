@@ -7,7 +7,7 @@ const MESSAGES: Record<string, string> = {
   not_authenticated: 'Please log in again.',
   not_found: 'This record no longer exists.',
   invalid_phone: 'Enter a valid 10-digit Indian mobile number.',
-  already_exists: 'A customer with this phone number already exists in your kitchen.',
+  already_exists: 'A customer with this name and phone number already exists in your kitchen.',
   already_member: 'This person is already in your team.',
   consent_required: 'Please confirm the customer agreed to be contacted.',
   name_required: 'Name is required.',
@@ -128,7 +128,6 @@ const MESSAGES: Record<string, string> = {
   application_rejected: 'This application was rejected. Change its status first.',
   reason_too_long: 'Keep the reason under 500 characters.',
   same_phone: 'That is already their number.',
-  phone_in_use: 'Another account already uses that number.',
   phone_not_changed: 'The number was not changed. Try again.',
   auth_update_failed: 'The login service did not accept the change. Try again in a minute.',
   not_recorded: 'The number was changed but the log entry failed. Tell the developer.',
@@ -142,6 +141,17 @@ const MESSAGES: Record<string, string> = {
   invalid_category: 'Choose what the complaint is about.',
   invalid_subscription: 'Choose one of this customer’s subscriptions.',
   invalid_part: 'Unknown export part.',
+  // Vendor-first wave 2: billing mode, payments, shared phones, rider requests
+  phone_in_use: 'Another customer already uses this phone number. Confirm that this is a different person sharing the number (for example a sibling).',
+  invalid_paid_at: 'The payment date cannot be in the future or more than 400 days ago.',
+  not_voidable: 'Only a paid cash, UPI or bank payment can be voided. Online payments are refunded instead.',
+  invalid_billing_mode: 'Choose monthly (pay later) or prepaid billing.',
+  subscription_required: 'This customer has more than one plan. Choose which plan the request is for.',
+  invalid_billing: 'Billing must be monthly (pay later) or prepaid.',
+  invalid_dues: 'Opening dues must be an amount in rupees, up to ₹1,00,000.',
+  dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees. Give prepaid customers an opening balance in meals.',
+  balance_needs_plan: 'Opening meals for a monthly (pay later) customer need a plan, so they can be priced. Add the plan, or put the amount in the dues column (minus for an advance).',
+  billing_mode_changed: 'This customer’s billing changed after the payment, so it cannot be voided. Record a correction (adjustment) instead.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -192,6 +202,12 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
     otp_locked: 'Too many wrong delivery codes for this stop.',
     stops_pending: 'The run could not be finished: some stops were still pending.',
   },
+  // Vendor-first wave 2: retried saves (offline queue / double taps) that reuse a key for something else.
+  payment: { invalid_client_op: 'This payment was already saved for another customer. Refresh and try again.' },
+  stock: { invalid_client_op: 'This entry was already saved for another item. Refresh and try again.' },
+  rider_request: { invalid_client_op: 'This request was already saved for another stop. Refresh and try again.' },
+  // Wave 4 admin phone change (login numbers, not customers).
+  member_phone: { phone_in_use: 'Another account already uses that number.' },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */

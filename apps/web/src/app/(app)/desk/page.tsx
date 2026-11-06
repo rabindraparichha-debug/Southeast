@@ -49,7 +49,7 @@ function cellFor(meal: Meal | undefined, opts: {
 }
 
 export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
-  const { kitchen } = await requireKitchen(['owner']);
+  const { kitchen } = await requireKitchen(['owner', 'manager']);
   const sp = await searchParams;
   const q = String(sp.q ?? '').trim();
   const supabase = await createClient();

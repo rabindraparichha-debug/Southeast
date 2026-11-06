@@ -361,7 +361,7 @@ Known gaps:
 - **Translations are drafts**: written without a native speaker. A reviewer must check the ~470 mobile strings (rider, Today and phone desk first) before any pilot vendor sees them; the rest of the web app is still English.
 - Rider sync reports are best effort, but log-out now sends waiting reports first and is refused while any are left (both apps), so a discarded refused action's report is not wiped with the phone.
 - Review fixes (2026-11-06): a report naming the old run of a stop the owner moved (`move_stop`) is accepted (it used to be refused and dropped); a report that arrives after the same action synced is stored closed and never reopens; reports keep `customer_id`.
-- On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)`; renumber D-128 – D-130 into the global sequence (the migration headers cite the decision by title, not number).
+- On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)` (done in the wave 2 merge, also the web Delivery list); renumber D-128 – D-130 into the global sequence (the migration headers cite the decision by title, not number).
 
 ## Vendor-first wave 4: onboarding and founder support (2026-11-06)
 
@@ -382,10 +382,72 @@ Review fixes (`20261113000700`, D-139 – D-145): proven phone (OTP session) for
 
 Known gaps:
 - Mobile has no "Log complaint" form yet (web only).
-- Wave 2 already lets managers into `'{owner}'` checks. Wave 4's owner-only areas (export, close requests, admin_actions) check the exact owner (D-142); `log_complaint` and plan prices follow `'{owner}'` (so managers too). `plan_prices_select` should become `'{owner,accountant}'` when merged with wave 2 (accountants read plans there); the accountant must never get `export_kitchen`. pgTAP manager/accountant cases need wave 2's roles.
-- Dues are valued at today's plan price until wave 2's ledger-valued `private.dues` lands (D-144, pgTAP `todo`).
+- Wave 2 already lets managers into `'{owner}'` checks. Wave 4's owner-only areas (export, close requests, admin_actions) check the exact owner (D-142); `log_complaint` and plan prices follow `'{owner}'` (so managers too). Since the wave 2 merge `plan_prices_select` is `'{owner,accountant}'` (accountants read plans there) and the accountant never gets `export_kitchen`; pgTAP manager/accountant cases are in `17_merge_wave2.test.sql`.
+- ~~Dues valued at today's plan price~~: fixed by wave 2's ledger-valued `private.dues` since the merge (D-144; the `15_onboarding` check is a real test now).
 - On merge with wave 3/ops: add `tiffin-plan-prices` to `private.engine_jobs` and run it through `private.run_job`. With wave 5: its complaint support RPCs should also write `admin_actions`.
 - Meta must approve `vendor_welcome_v2` before deploy.
+
+## Vendor-first wave 2: money, roles, shared phones, phase flags (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md "Recommended work order", with the owner's decisions D-115..D-118.
+Defaults chosen while building are in D-146. Built in parallel with wave 1 (items 2, 7, 8, 11, 12,
+14–19 and the app work), on branch `wave2/db`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 20 | Billing mode per customer with a rupee ledger: monthly pay-later by default, prepaid keeps the M3 rules; dues from each meal's own price; payments, rider cash, credits, refunds and import in rupees for monthly customers; mode switch with a one-time conversion | ✅ | `20261108000300_billing_mode.sql`, `…0500_shared_phones_customer_billing.sql`, `set_billing_mode`, seed (monthly zero-balance customers) |
+| 21 | Customer statement (by service date, reconciles with the ledger), bills for the month, CSV exports (payments, dues aging, rider cash), register built on the server | ✅ DB + register page | `…0600_statements_exports_register.sql`, `apps/web/src/app/print/register/page.tsx` |
+| 22 | Payments: idempotency key, backdating, void with reason (append-only reversal); idempotent purchases and waste | ✅ | `…0400_payment_void_backdate_idempotency.sql` |
+| 23 | Manager and accountant roles; owner-only areas; invites for the new roles; claim needs a code sign-in; rider change requests approved by owner or manager; owner alerts to managers | ✅ | `…0100_wave2_enum_values.sql`, `…0200_manager_accountant_roles.sql`, `…0700_rider_change_requests.sql` |
+| D-118 | Shared phones: no unique phone per kitchen; every phone lookup checked | ✅ | `…0500_shared_phones_customer_billing.sql` |
+| 13 | Outbox expiry, customer-message gate, phase-flag keys, flag-checked crons | ✅ | `…0800_outbox_expiry_phase_flags.sql` |
+
+Tests: `supabase/tests/14_billing.test.sql`, `15_roles_requests_phones_flags.test.sql`, manager and
+accountant sections in `01_rls_isolation` and `02_rpcs_and_guards`; `tests/integration/wave2.test.ts`;
+core import validation (`packages/core`).
+
+Web (branch `wave2/web`, apps/web only):
+- Roles: `apps/web/src/lib/roles.ts` decides pages and buttons. Managers get the owner's pages except
+  inbox, kitchen settings and team; accountants get Customers (masked phones, no addresses or meals),
+  Money, Bills, Costs, statements and the register, all read-only. Team invites managers and accountants.
+- Billing: the kitchen default in Settings, the choice on Add customer, a badge on lists and customer
+  pages, rupee dues on Money and the customer Money card (monthly), switching from the Money card.
+- Payments: payment date (backdating), note and an idempotency key on every save; Void with a reason;
+  monthly credits, adjustments and refunds in rupees. Purchases and waste pass `p_client_op` too.
+- Statement `/print/statement/[id]?month=YYYY-MM` (print, WhatsApp share from the vendor's phone),
+  "Bills for this month" on Money and `/money/bills`, CSV downloads (payments, dues aging, rider cash).
+- Rider requests: `/requests` (preview, don't-charge toggle, plan or address choice, approve or reject).
+- Shared phones: the confirm step on Add customer and edit, "shares this phone with" on the customer
+  page, a warning on phone search. Import shows the billing and dues columns.
+
+Mobile (branch `wave2/mobile`, apps/mobile only):
+- Roles: `apps/mobile/src/lib/roles.ts` (same lists as the web). Managers get the owner's tabs except
+  Inbox, and the Deliver tab; accountants get a Money home tab, Customers (masked phones, no meals,
+  addresses or notes) and Account, all read-only. Today shows owners and managers a card with rider
+  requests waiting and rider cash / dues, opening `/requests` and `/money`.
+- Billing: the choice on Add customer (kitchen default preselected), with food type, an address and an
+  opening balance (rupees owed or advance for monthly, meals for prepaid); a badge, the balance
+  (rupees for monthly) and this month's statement line on the customer Money card; switching mode.
+- Payments: any amount by cash, UPI or bank, a payment date (backdating), a note and one idempotency
+  key per form; Void with a reason; confirm or reject rider cash on the customer page and on Money.
+  Purchases and waste pass `p_client_op`. Monthly bills can be sent on WhatsApp as a text summary.
+- Rider requests: a card at the bottom of the stop screen (skip, pause, new address; one key per
+  form, kept for a resend after a network error) and `/requests` for owners and managers (preview,
+  don't-charge toggle, plan choice, pick or save the new address, approve or reject).
+- Shared phones: the confirm step on Add customer (lists who has the number), "Same phone" links on
+  the customer page, a count on a full-number search.
+
+Still to do (UI agents): item 27 hides Phase 2 screens behind the flags.
+
+Merged with wave 1, login and screens on branch `wave2/integrated`; review fixes in
+`20261108000900_wave2_review_fixes.sql` (D-146 "Review fixes"; tests `16_wave2_review.test.sql`).
+
+Known gaps:
+- A rider request raises no WhatsApp alert (would need a Meta template); owners see the list.
+- WhatsApp from a shared phone always talks about the oldest customer on it (Phase 2).
+- The customer page and bot still show prepaid meal balances for monthly customers (Phase 2 screens; the context now carries `billing_mode` and `balance_paise`).
+
+Merged into `m9-p5-p6` (after held-back apps and wave 4) with `20261130000100_merge_wave2.sql`: union bodies for the functions both wave 2 and a later or earlier migration define (see the migration header), plan prices readable by accountants, production sheet to managers.
 
 ## Things to start outside code now
 These have external lead times:

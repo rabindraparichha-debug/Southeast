@@ -11,6 +11,8 @@ export type DietType = Database['public']['Enums']['diet_type'];
 export type LanguageCode = Database['public']['Enums']['language_code'];
 export type SubscriptionStatus = Database['public']['Enums']['subscription_status'];
 export type KitchenStatus = Database['public']['Enums']['kitchen_status'];
+export type BillingMode = Database['public']['Enums']['billing_mode'];
+export type PaymentStatus = Database['public']['Enums']['payment_status'];
 
 export type ImportResult = {
   batch_id: string;

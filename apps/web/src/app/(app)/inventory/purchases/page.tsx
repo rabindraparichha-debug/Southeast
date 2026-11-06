@@ -1,5 +1,6 @@
 import { formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatDay, formatQty } from '@/lib/inventory';
@@ -10,8 +11,8 @@ import { PurchaseForm } from './purchase-form';
 // Supplier bills. Staff record bills too (they enter the amounts), so totals show for both roles;
 // paying the supplier with the bill is owner-only.
 export default async function PurchasesPage() {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const supabase = await createClient();
   const [{ data: purchases, error }, { data: items }, { data: suppliers }] = await Promise.all([
     supabase.from('purchases')

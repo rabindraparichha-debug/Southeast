@@ -1,6 +1,9 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SLOT_LABEL, addDays, formatPaise, formatPhone, formatServiceDate, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { CUSTOMER_ROLES, canReadMoney, isLead } from '@/lib/roles';
+import { BILLING_LABEL, BILLING_TONE } from '@/lib/money';
 import { createClient } from '@/lib/supabase/server';
 import { Badge, Card, DIET_LABEL, DIET_TONE, LANGUAGE_LABEL, PageHeader, STATUS_LABEL, STATUS_TONE } from '@/components/ui';
 import { AddressManager } from './address-manager';
@@ -23,11 +26,16 @@ const formatDate = (d: string) =>
 
 export default async function CustomerPage({ params }: PageProps<'/customers/[id]'>) {
   const { id } = await params;
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(CUSTOMER_ROLES);
   const supabase = await createClient();
   const { data: c } = await supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle();
   if (!c) notFound();
-  const isOwner = kitchen.role === 'owner';
+  // Owner and manager: everything (the manager is the owner's deputy, D-146). Accountant: money,
+  // read-only, with a masked phone and no addresses or meals. Staff: packing details only.
+  const isOwner = isLead(kitchen.role);
+  const money = canReadMoney(kitchen.role);
+  const accountant = kitchen.role === 'accountant';
+  const billing = c.billing_mode ?? 'monthly';
 
   const { data: addresses } = await supabase
     .from('addresses')
@@ -36,7 +44,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
     .order('is_default', { ascending: false });
 
   const today = istDate();
-  const { data: meals } = await supabase
+  const { data: meals } = accountant ? { data: null } : await supabase
     .from('meal_orders')
     .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at')
     .eq('customer_id', id)
@@ -45,15 +53,15 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
     .order('service_date')
     .order('slot');
 
-  const [{ data: subscriptions }, { data: plans }, { data: k }, { data: balance }, { data: entries }, { data: settings }, { data: payments }, { data: refunds }, { data: payout }, { data: value }] = isOwner
+  const [{ data: subscriptions }, { data: plans }, { data: k }, { data: balance }, { data: entries }, { data: settings }, { data: payments }, { data: refunds }, { data: payout }, { data: value }] = money
     ? await Promise.all([
         supabase.from('subscriptions').select('id, status, qty, start_date, end_date, plan:plans(name, slots, price_per_meal_paise)').eq('customer_id', id).order('created_at', { ascending: false }),
         supabase.from('plans').select('id, name, price_per_meal_paise, slots, diet').eq('kitchen_id', kitchen.kitchenId).eq('active', true).order('name'),
         supabase.from('kitchens').select('lat, lng').eq('id', kitchen.kitchenId).single(),
         supabase.from('customer_balances').select('meals, amount_paise').eq('customer_id', id).maybeSingle(),
-        supabase.from('balance_entries').select('id, type, meals, amount_paise, note, created_at, ref_id').eq('customer_id', id).order('created_at', { ascending: false }).limit(8),
+        supabase.from('balance_entries').select('id, type, meals, amount_paise, note, created_at, ref_id, ref_type').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
         supabase.from('kitchen_settings').select('notice_days').eq('kitchen_id', kitchen.kitchenId).single(),
-        supabase.from('payments').select('id, method, status, amount_paise, meals, short_url, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('payments').select('id, method, status, amount_paise, meals, short_url, created_at, paid_at, note, void_reason').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
         supabase.from('refunds').select('id, meals, amount_paise, status, method, payment_id, created_at').eq('customer_id', id).order('created_at', { ascending: false }),
         supabase.from('kitchen_payout_accounts').select('kyc_status, razorpay_linked_account_id').eq('kitchen_id', kitchen.kitchenId).maybeSingle(),
         supabase.rpc('unused_meals_value', { p_customer: id }),
@@ -67,11 +75,18 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
       ])
     : [{ data: null }, { data: null }, { data: null }];
   // P5/P6: food calendar opt-ins and health tags (owner + staff); payer, office, referral (owner).
-  const [{ data: extra }, { data: ks }, { data: health }] = await Promise.all([
-    supabase.from('customers').select('payer_customer_id, observes_veg_days, observes_kartika, referral_code, office_id').eq('id', id).single(),
-    supabase.from('kitchen_settings').select('veg_days, veg_days_enabled, kartika_veg_mode, referral_reward_meals').eq('kitchen_id', kitchen.kitchenId).single(),
-    supabase.from('customer_health').select('tags, consent_at, consent_basis').eq('customer_id', id).maybeSingle(),
-  ]);
+  const [{ data: extra }, { data: ks }, { data: health }] = accountant
+    ? [{ data: null }, { data: null }, { data: null }]
+    : await Promise.all([
+        supabase.from('customers').select('payer_customer_id, observes_veg_days, observes_kartika, referral_code, office_id').eq('id', id).single(),
+        supabase.from('kitchen_settings').select('veg_days, veg_days_enabled, kartika_veg_mode, referral_reward_meals').eq('kitchen_id', kitchen.kitchenId).single(),
+        supabase.from('customer_health').select('tags, consent_at, consent_basis').eq('customer_id', id).maybeSingle(),
+      ]);
+  // D-118: other customers on the same phone (siblings, a family phone). Owner and manager only.
+  const { data: samePhone } = isOwner && c.phone
+    ? await supabase.rpc('search_customers', { p_kitchen: kitchen.kitchenId, p_q: c.phone, p_limit: 20 })
+    : { data: null };
+  const siblings = (samePhone ?? []).filter((s) => s.id !== c.id);
   const [{ data: everyone }, { data: offices }, { data: referral }, { data: score }, { count: recharges }] = isOwner
     ? await Promise.all([
         supabase.from('customers').select('id, name, payer_customer_id').eq('kitchen_id', kitchen.kitchenId).is('deleted_at', null).order('name'),
@@ -98,28 +113,40 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             {c.preferred_language && <Badge>{LANGUAGE_LABEL[c.preferred_language]}</Badge>}
             {c.platform_sourced && <Badge tone="blue">Platform customer</Badge>}
             {officeRow && <Badge>Office: {officeRow.name}</Badge>}
+            {money && <Badge tone={BILLING_TONE[billing]}>{BILLING_LABEL[billing]}</Badge>}
           </span>
         }
       />
+      {siblings.length > 0 && (
+        <p className="-mt-4 mb-4 text-sm text-ink-600" data-testid="shared-phone">
+          Shares this phone with{' '}
+          {siblings.map((s, i) => (
+            <span key={s.id}>{i > 0 && ', '}<Link href={`/customers/${s.id}`} className="font-medium text-brand-700 hover:underline">{s.name}</Link></span>
+          ))}
+          .
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {isOwner ? (
           <EditCustomer customer={{ id: c.id!, name: c.name!, phone: c.phone ?? '', diet: c.diet!, preferred_language: c.preferred_language!, notes: c.notes ?? '' }} />
-        ) : (
+        ) : !accountant && (
           <Card title="Details">
             <p className="text-sm text-ink-600">{c.notes || 'No notes.'}</p>
           </Card>
         )}
 
-        <AddressManager
-          kitchenId={kitchen.kitchenId}
-          customerId={c.id!}
-          addresses={addresses ?? []}
-          editable={isOwner}
-          center={k?.lat && k?.lng ? { lat: k.lat, lng: k.lng } : null}
-        />
+        {!accountant && (
+          <AddressManager
+            kitchenId={kitchen.kitchenId}
+            customerId={c.id!}
+            addresses={addresses ?? []}
+            editable={isOwner}
+            center={k?.lat && k?.lng ? { lat: k.lat, lng: k.lng } : null}
+          />
+        )}
 
-        <Card title="Meals" className="lg:col-span-2">
+        {!accountant && <Card title="Meals" className="lg:col-span-2">
           {meals && meals.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {meals.map((m) => {
@@ -143,18 +170,18 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           ) : (
             <p className="text-sm text-ink-500">No meals in the last 3 or next 7 days.</p>
           )}
-        </Card>
+        </Card>}
 
-        <UpcomingHolds customerId={c.id!} isOwner={isOwner} />
+        {!accountant && <UpcomingHolds customerId={c.id!} isOwner={isOwner} />}
 
-        <FoodHealthCard
+        {!accountant && <FoodHealthCard
           customerId={c.id!}
           editable={isOwner}
           vegDays={Boolean(extra?.observes_veg_days)}
           kartika={Boolean(extra?.observes_kartika)}
           kitchen={{ vegDaysEnabled: Boolean(ks?.veg_days_enabled), vegDays: ks?.veg_days ?? [], kartikaMode: Boolean(ks?.kartika_veg_mode) }}
           health={{ tags: health?.tags ?? [], consentAt: health?.consent_at ?? null, basis: health?.consent_basis ?? null }}
-        />
+        />}
 
         {isOwner && (
           <FamilyCard
@@ -178,19 +205,24 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
           />
         )}
 
-        {isOwner && (
+        {money && (
           <MoneyPanel
             kitchenId={kitchen.kitchenId}
             kitchenName={kitchen.kitchenName}
             customerId={c.id!}
             customerName={c.name!}
             customerPhone={c.phone}
+            billingMode={billing}
             balanceMeals={balance?.meals ?? 0}
+            balancePaise={balance?.amount_paise ?? 0}
             valuePaise={(value as { amount_paise?: number } | null)?.amount_paise ?? 0}
             unitPricePaise={livePlan?.price_per_meal_paise ?? null}
             onlineEnabled={payout?.kyc_status === 'verified' && Boolean(payout?.razorpay_linked_account_id)}
             payments={payments ?? []}
             refunds={refunds ?? []}
+            canWrite={isOwner}
+            today={today}
+            statementHref={`/print/statement/${c.id}?month=${today.slice(0, 7)}`}
           />
         )}
 
@@ -199,13 +231,13 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
             kitchenSlug={kslug?.slug ?? ''} optedIn={Boolean(optin?.whatsapp_opt_in)} conversationId={conv?.id ?? null} />
         )}
 
-        {isOwner && (
-          <Card title="Balance history">
+        {money && (
+          <Card title="Balance history" actions={<Link href={`/print/statement/${c.id}?month=${today.slice(0, 7)}`} className="text-sm text-brand-700 hover:underline">Full statement</Link>}>
             <ul className="divide-y divide-ink-100 text-sm">
               {(entries ?? []).map((e) => (
                 <li key={e.id} className="flex justify-between gap-3 py-1.5">
                   <span>
-                    {e.type === 'meal' ? 'Meal' : e.type === 'recharge' ? 'Payment' : e.type === 'refund' ? 'Refund' : e.note ?? e.type}{' '}
+                    {e.type === 'meal' ? 'Meal' : e.type === 'recharge' ? 'Payment' : e.type === 'refund' ? 'Refund' : e.ref_type === 'payment_void' ? 'Payment voided' : e.note ?? e.type}{' '}
                     <span className="text-ink-500">
                       {(() => {
                         const m = e.type === 'meal' ? meals?.find((x) => x.id === e.ref_id) : undefined;
@@ -215,14 +247,18 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                       })()}
                     </span>
                   </span>
-                  <span className={e.meals < 0 ? 'text-ink-700' : 'text-green-700'}>{e.meals > 0 ? '+' : ''}{e.meals}</span>
+                  {billing === 'monthly' ? (
+                    <span className={e.amount_paise < 0 ? 'text-ink-700' : 'text-green-700'}>{e.amount_paise > 0 ? '+' : ''}{formatPaise(e.amount_paise)}</span>
+                  ) : (
+                    <span className={e.meals < 0 ? 'text-ink-700' : 'text-green-700'}>{e.meals > 0 ? '+' : ''}{e.meals}</span>
+                  )}
                 </li>
               ))}
             </ul>
           </Card>
         )}
 
-        {isOwner && (
+        {money && (
           <Card title="Subscriptions" className="lg:col-span-2">
             <ul className="mb-4 divide-y divide-ink-100">
               {(subscriptions ?? []).map((s) => (
@@ -237,7 +273,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                     </div>
                   </div>
                   <Badge tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Badge>
-                  {s.status !== 'cancelled' && s.status !== 'trial' && (
+                  {isOwner && s.status !== 'cancelled' && s.status !== 'trial' && (
                     <div className="w-full">
                       <SubscriptionActions
                         subscriptionId={s.id}
@@ -263,8 +299,12 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
               ))}
               {subscriptions?.length === 0 && <li className="py-3 text-sm text-ink-500">No subscriptions yet.</li>}
             </ul>
-            <AddSubscription kitchenId={kitchen.kitchenId} customerId={c.id!} diet={c.diet!} plans={plans ?? []} addresses={addresses ?? []} />
-            <p className="mt-3 text-xs text-ink-500">Trial subscriptions get meals once the customer pays. Suspended ones restart when the balance is recharged.</p>
+            {isOwner && <AddSubscription kitchenId={kitchen.kitchenId} customerId={c.id!} diet={c.diet!} plans={plans ?? []} addresses={addresses ?? []} />}
+            <p className="mt-3 text-xs text-ink-500">
+              {billing === 'monthly'
+                ? 'Monthly customers keep getting meals whatever the balance; dues are collected at month end.'
+                : 'Trial subscriptions get meals once the customer pays. Suspended ones restart when the balance is recharged.'}
+            </p>
           </Card>
         )}
 

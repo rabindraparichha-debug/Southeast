@@ -4,8 +4,14 @@
 -- Logins (OTP is always 123456 locally, see supabase/config.toml [auth.sms.test_otp]):
 --   Kitchen A "Maa Tarini Tiffin" (Patia):      owner +919000000001, staff +919000000002, rider +919000000003
 --   Kitchen B "Saheed Nagar Mess" (Saheed Nagar): owner +919000000011, staff +919000000012, rider +919000000013
+--   Kitchen A manager +919000000110, accountant +919000000111 (D-117)
 --   Platform admin: +919000000099
 --   Spare numbers for sign-up / invite tests: +919000000100 (pending rider invite to A), +919000000101, +919000000102
+--
+-- Billing (D-115): kitchens default to monthly pay-later. Most seed customers are prepaid with a
+-- 40-meal opening balance (the older demo); A's customers 9–12 and B's 7–9 are monthly with a zero
+-- opening balance, so the week below shows real Phase 1 behaviour: they keep eating, the meals go
+-- on their khata, and nothing is suspended. B's "Tanmay Sethi" shares his brother's phone (D-118).
 
 -- Dev-only keys. Production keys are created once per project (see CLAUDE.md > Secrets).
 select vault.create_secret('local-dev-phone-encryption-key-NOT-FOR-PRODUCTION', 'phone_encryption_key');
@@ -27,6 +33,8 @@ from (values
   ('00000000-0000-4000-a000-000000000011'::uuid, '919000000011', 'Pradeep Sahu'),
   ('00000000-0000-4000-a000-000000000012'::uuid, '919000000012', 'Mamata Das'),
   ('00000000-0000-4000-a000-000000000013'::uuid, '919000000013', 'Raju Nayak'),
+  ('00000000-0000-4000-a000-000000000110'::uuid, '919000000110', 'Sanjay Panda'),
+  ('00000000-0000-4000-a000-000000000111'::uuid, '919000000111', 'Meera Rath'),
   ('00000000-0000-4000-a000-000000000099'::uuid, '919000000099', 'Platform Admin')
 ) as u(id, phone, name);
 
@@ -55,6 +63,8 @@ insert into public.members (kitchen_id, user_id, role, display_name) values
   ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-000000000001', 'owner', 'Sunita Mohanty'),
   ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-000000000002', 'staff', 'Rina Behera'),
   ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-000000000003', 'rider', 'Bapi Rout'),
+  ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-000000000110', 'manager', 'Sanjay Panda'),
+  ('10000000-0000-4000-a000-00000000000a', '00000000-0000-4000-a000-000000000111', 'accountant', 'Meera Rath'),
   ('10000000-0000-4000-a000-00000000000b', '00000000-0000-4000-a000-000000000011', 'owner', 'Pradeep Sahu'),
   ('10000000-0000-4000-a000-00000000000b', '00000000-0000-4000-a000-000000000012', 'staff', 'Mamata Das'),
   ('10000000-0000-4000-a000-00000000000b', '00000000-0000-4000-a000-000000000013', 'rider', 'Raju Nayak');
@@ -99,43 +109,45 @@ begin
   for r in
     select * from (values
       -- kitchen, n, name, phone, diet, lang, area, landmark, lat, lng, plan, status
-      ('a', 1, 'Subhashree Mohanty', '9861000001', 'veg', 'or', 'KIIT Square', 'Near Campus 6 gate', 20.3540, 85.8180, 'a1', 'active'),
-      ('a', 2, 'Ankit Das', '9861000002', 'veg', 'en', 'Infocity', 'Behind TCS gate 2', 20.3480, 85.8100, 'a1', 'active'),
-      ('a', 3, 'Priyanka Sahoo', '9861000003', 'veg', 'or', 'Patia Chhak', 'Opposite Big Bazaar', 20.3550, 85.8220, 'a1', 'active'),
-      ('a', 4, 'Rakesh Nayak', '9861000004', 'veg', 'or', 'Damana', 'Near Damana Square', 20.3330, 85.8150, 'a1', 'active'),
-      ('a', 5, 'Smruti Patnaik', '9861000005', 'veg', 'or', 'Chandrasekharpur', 'Sailashree Vihar, lane 3', 20.3260, 85.8180, 'a1', 'active'),
-      ('a', 6, 'Debasish Mishra', '9861000006', 'veg', 'hi', 'Patia', 'Near Patia Station', 20.3600, 85.8250, 'a1', 'active'),
-      ('a', 7, 'Lipsa Rout', '9861000007', 'veg', 'or', 'KIIT Square', 'Ladies hostel QC-4', 20.3560, 85.8160, 'a1', 'active'),
-      ('a', 8, 'Sambit Behera', '9861000008', 'veg', 'en', 'Infocity', 'Infosys back gate', 20.3460, 85.8070, 'a1', 'active'),
-      ('a', 9, 'Ipsita Panda', '9861000009', 'veg', 'or', 'Raghunathpur', 'Near Raghunathpur temple', 20.3650, 85.8200, 'a1', 'active'),
-      ('a', 10, 'Abinash Jena', '9861000010', 'veg', 'or', 'Patia', 'DLF Cybercity tower B', 20.3500, 85.8060, 'a1', 'active'),
-      ('a', 11, 'Sonali Swain', '9861000011', 'veg', 'or', 'Nandankanan Road', 'Opposite Kalinga Hospital', 20.3300, 85.8230, 'a1', 'active'),
-      ('a', 12, 'Biswajit Pradhan', '9861000012', 'veg', 'en', 'Patia', 'Near Kanan Vihar phase 2', 20.3580, 85.8300, 'a1', 'active'),
-      ('a', 13, 'Pooja Mohapatra', '9861000013', 'veg', 'or', 'Chandrasekharpur', 'Niladri Vihar, near park', 20.3230, 85.8210, 'a2', 'active'),
-      ('a', 14, 'Satyajit Barik', '9861000014', 'veg', 'hi', 'Damana', 'Behind Damana post office', 20.3350, 85.8120, 'a2', 'active'),
-      ('a', 15, 'Ananya Tripathy', '9861000015', 'veg', 'or', 'KIIT Square', 'KIIT road, Sai mandir lane', 20.3530, 85.8200, 'a2', 'active'),
-      ('a', 16, 'Chinmay Dash', '9861000016', 'veg', 'en', 'Infocity', 'Wipro gate, PG house', 20.3470, 85.8090, 'a2', 'active'),
-      ('a', 17, 'Riya Senapati', '9861000017', 'veg', 'or', 'Patia', 'Patia Big Bazaar lane', 20.3545, 85.8235, 'a2', 'active'),
-      ('a', 18, 'Manas Parida', '9861000018', 'nonveg', 'or', 'Raghunathpur', 'Near Gangapada road', 20.3670, 85.8180, 'a3', 'active'),
-      ('a', 19, 'Swati Samal', '9861000019', 'nonveg', 'or', 'Patia', 'Kalinga Vihar, block C', 20.3610, 85.8270, 'a3', 'active'),
-      ('a', 20, 'Kunal Biswal', '9861000020', 'veg', 'en', 'KIIT Square', 'Near KIMS hospital', 20.3520, 85.8140, 'a1', 'trial'),
-      ('b', 1, 'Gyana Ranjan Sethi', '9862000001', 'veg', 'or', 'Saheed Nagar', 'Near Ram Mandir', 20.2890, 85.8440, 'b1', 'active'),
-      ('b', 2, 'Madhusmita Nanda', '9862000002', 'veg', 'or', 'Bapuji Nagar', 'Behind Bapuji Nagar market', 20.2560, 85.8330, 'b1', 'active'),
-      ('b', 3, 'Prateek Agarwal', '9862000003', 'jain', 'hi', 'Saheed Nagar', 'Esplanade One road', 20.2950, 85.8480, 'b2', 'active'),
-      ('b', 4, 'Bhagyashree Rath', '9862000004', 'veg', 'or', 'Satya Nagar', 'Near Satya Nagar petrol pump', 20.2830, 85.8410, 'b1', 'active'),
-      ('b', 5, 'Saroj Kumar Lenka', '9862000005', 'veg', 'or', 'Unit 4', 'MLA colony gate', 20.2810, 85.8300, 'b3', 'active'),
-      ('b', 6, 'Neha Jain', '9862000006', 'jain', 'hi', 'Saheed Nagar', 'Jain mandir lane', 20.2910, 85.8460, 'b2', 'active'),
-      ('b', 7, 'Tapas Acharya', '9862000007', 'veg', 'or', 'Saheed Nagar', 'Maharishi College road', 20.2930, 85.8420, 'b1', 'active'),
-      ('b', 8, 'Itishree Dalai', '9862000008', 'veg', 'or', 'Bapuji Nagar', 'Near BJB college', 20.2600, 85.8350, 'b3', 'active'),
-      ('b', 9, 'Rohit Choudhury', '9862000009', 'veg', 'en', 'Saheed Nagar', 'Near Kalyan Mandap', 20.2870, 85.8490, 'b1', 'active'),
-      ('b', 10, 'Sasmita Sahu', '9862000010', 'veg', 'or', 'Satya Nagar', 'Opposite AG square', 20.2800, 85.8380, 'b3', 'trial')
-    ) as t(k, n, name, phone, diet, lang, area, landmark, lat, lng, plan, status)
+      ('a', 1, 'Subhashree Mohanty', '9861000001', 'veg', 'or', 'KIIT Square', 'Near Campus 6 gate', 20.3540, 85.8180, 'a1', 'active', 'prepaid'),
+      ('a', 2, 'Ankit Das', '9861000002', 'veg', 'en', 'Infocity', 'Behind TCS gate 2', 20.3480, 85.8100, 'a1', 'active', 'prepaid'),
+      ('a', 3, 'Priyanka Sahoo', '9861000003', 'veg', 'or', 'Patia Chhak', 'Opposite Big Bazaar', 20.3550, 85.8220, 'a1', 'active', 'prepaid'),
+      ('a', 4, 'Rakesh Nayak', '9861000004', 'veg', 'or', 'Damana', 'Near Damana Square', 20.3330, 85.8150, 'a1', 'active', 'prepaid'),
+      ('a', 5, 'Smruti Patnaik', '9861000005', 'veg', 'or', 'Chandrasekharpur', 'Sailashree Vihar, lane 3', 20.3260, 85.8180, 'a1', 'active', 'prepaid'),
+      ('a', 6, 'Debasish Mishra', '9861000006', 'veg', 'hi', 'Patia', 'Near Patia Station', 20.3600, 85.8250, 'a1', 'active', 'prepaid'),
+      ('a', 7, 'Lipsa Rout', '9861000007', 'veg', 'or', 'KIIT Square', 'Ladies hostel QC-4', 20.3560, 85.8160, 'a1', 'active', 'prepaid'),
+      ('a', 8, 'Sambit Behera', '9861000008', 'veg', 'en', 'Infocity', 'Infosys back gate', 20.3460, 85.8070, 'a1', 'active', 'prepaid'),
+      ('a', 9, 'Ipsita Panda', '9861000009', 'veg', 'or', 'Raghunathpur', 'Near Raghunathpur temple', 20.3650, 85.8200, 'a1', 'active', 'monthly'),
+      ('a', 10, 'Abinash Jena', '9861000010', 'veg', 'or', 'Patia', 'DLF Cybercity tower B', 20.3500, 85.8060, 'a1', 'active', 'monthly'),
+      ('a', 11, 'Sonali Swain', '9861000011', 'veg', 'or', 'Nandankanan Road', 'Opposite Kalinga Hospital', 20.3300, 85.8230, 'a1', 'active', 'monthly'),
+      ('a', 12, 'Biswajit Pradhan', '9861000012', 'veg', 'en', 'Patia', 'Near Kanan Vihar phase 2', 20.3580, 85.8300, 'a1', 'active', 'monthly'),
+      ('a', 13, 'Pooja Mohapatra', '9861000013', 'veg', 'or', 'Chandrasekharpur', 'Niladri Vihar, near park', 20.3230, 85.8210, 'a2', 'active', 'prepaid'),
+      ('a', 14, 'Satyajit Barik', '9861000014', 'veg', 'hi', 'Damana', 'Behind Damana post office', 20.3350, 85.8120, 'a2', 'active', 'prepaid'),
+      ('a', 15, 'Ananya Tripathy', '9861000015', 'veg', 'or', 'KIIT Square', 'KIIT road, Sai mandir lane', 20.3530, 85.8200, 'a2', 'active', 'prepaid'),
+      ('a', 16, 'Chinmay Dash', '9861000016', 'veg', 'en', 'Infocity', 'Wipro gate, PG house', 20.3470, 85.8090, 'a2', 'active', 'prepaid'),
+      ('a', 17, 'Riya Senapati', '9861000017', 'veg', 'or', 'Patia', 'Patia Big Bazaar lane', 20.3545, 85.8235, 'a2', 'active', 'prepaid'),
+      ('a', 18, 'Manas Parida', '9861000018', 'nonveg', 'or', 'Raghunathpur', 'Near Gangapada road', 20.3670, 85.8180, 'a3', 'active', 'prepaid'),
+      ('a', 19, 'Swati Samal', '9861000019', 'nonveg', 'or', 'Patia', 'Kalinga Vihar, block C', 20.3610, 85.8270, 'a3', 'active', 'prepaid'),
+      ('a', 20, 'Kunal Biswal', '9861000020', 'veg', 'en', 'KIIT Square', 'Near KIMS hospital', 20.3520, 85.8140, 'a1', 'trial', 'prepaid'),
+      ('b', 1, 'Gyana Ranjan Sethi', '9862000001', 'veg', 'or', 'Saheed Nagar', 'Near Ram Mandir', 20.2890, 85.8440, 'b1', 'active', 'prepaid'),
+      ('b', 2, 'Madhusmita Nanda', '9862000002', 'veg', 'or', 'Bapuji Nagar', 'Behind Bapuji Nagar market', 20.2560, 85.8330, 'b1', 'active', 'prepaid'),
+      ('b', 3, 'Prateek Agarwal', '9862000003', 'jain', 'hi', 'Saheed Nagar', 'Esplanade One road', 20.2950, 85.8480, 'b2', 'active', 'prepaid'),
+      ('b', 4, 'Bhagyashree Rath', '9862000004', 'veg', 'or', 'Satya Nagar', 'Near Satya Nagar petrol pump', 20.2830, 85.8410, 'b1', 'active', 'prepaid'),
+      ('b', 5, 'Saroj Kumar Lenka', '9862000005', 'veg', 'or', 'Unit 4', 'MLA colony gate', 20.2810, 85.8300, 'b3', 'active', 'prepaid'),
+      ('b', 6, 'Neha Jain', '9862000006', 'jain', 'hi', 'Saheed Nagar', 'Jain mandir lane', 20.2910, 85.8460, 'b2', 'active', 'prepaid'),
+      ('b', 7, 'Tapas Acharya', '9862000007', 'veg', 'or', 'Saheed Nagar', 'Maharishi College road', 20.2930, 85.8420, 'b1', 'active', 'monthly'),
+      ('b', 8, 'Itishree Dalai', '9862000008', 'veg', 'or', 'Bapuji Nagar', 'Near BJB college', 20.2600, 85.8350, 'b3', 'active', 'monthly'),
+      ('b', 9, 'Rohit Choudhury', '9862000009', 'veg', 'en', 'Saheed Nagar', 'Near Kalyan Mandap', 20.2870, 85.8490, 'b1', 'active', 'monthly'),
+      ('b', 10, 'Sasmita Sahu', '9862000010', 'veg', 'or', 'Satya Nagar', 'Opposite AG square', 20.2800, 85.8380, 'b3', 'trial', 'prepaid'),
+      -- D-118: Gyana's younger brother, on the same family phone.
+      ('b', 11, 'Tanmay Sethi', '9862000001', 'veg', 'or', 'Saheed Nagar', 'Near Ram Mandir', 20.2890, 85.8440, 'b3', 'active', 'monthly')
+    ) as t(k, n, name, phone, diet, lang, area, landmark, lat, lng, plan, status, billing)
   loop
     v_customer := private.insert_customer(
       ('10000000-0000-4000-a000-00000000000' || r.k)::uuid,
       r.name, '+91' || r.phone, r.diet::public.diet_type, r.lang::public.language_code, null,
       jsonb_build_object('line1', 'House ' || r.n, 'area', r.area, 'landmark', r.landmark, 'lat', r.lat, 'lng', r.lng),
-      'vendor', 'vendor');
+      'vendor', 'vendor', r.billing::public.billing_mode);
     select id into v_address from public.addresses where customer_id = v_customer and is_default;
     insert into public.subscriptions (kitchen_id, customer_id, plan_id, address_id, start_date, status)
     values (('10000000-0000-4000-a000-00000000000' || r.k)::uuid, v_customer,
@@ -243,13 +255,15 @@ cross join unnest(enum_range(null::public.meal_slot)) as sl(slot);
 -- day's slots are locked. Ends with today's real-time refresh and lock.
 -- ---------------------------------------------------------------------------
 
--- Opening balances (until recharges exist in M3): 40 meals for every active subscription.
+-- Opening balances (until recharges exist in M3): 40 meals for every active prepaid subscription.
+-- Monthly (pay-later) customers start at zero and run up a khata.
 insert into public.balance_entries (kitchen_id, customer_id, type, meals, amount_paise, note, created_at)
 select s.kitchen_id, s.customer_id, 'adjust', 40, 40 * p.price_per_meal_paise, 'Opening balance (seed)',
        now() - interval '8 days'
 from public.subscriptions s
 join public.plans p on p.id = s.plan_id
-where s.status = 'active';
+join public.customers c on c.id = s.customer_id
+where s.status = 'active' and c.billing_mode = 'prepaid';
 
 do $$
 declare
@@ -322,6 +336,20 @@ begin
   perform set_config('app.now', '', true);
   update public.notifications_outbox set status = 'cancelled', last_error = 'seed history'
   where status = 'pending' and template in ('on_the_way', 'delivery_credit');
+end $$;
+
+-- A monthly (pay-later) customer paid part of her khata in cash two days ago: rupees only, no meals.
+do $$
+declare
+  v_pay uuid;
+begin
+  insert into public.payments (kitchen_id, customer_id, method, status, amount_paise, meals, note, paid_at, confirmed_at, created_at)
+  select c.kitchen_id, c.id, 'cash', 'paid', 30000, 0, 'Part payment of the khata',
+         now() - interval '2 days', now() - interval '2 days', now() - interval '2 days'
+  from public.customers c
+  where c.kitchen_id = '10000000-0000-4000-a000-00000000000a' and c.name = 'Ipsita Panda'
+  returning id into v_pay;
+  perform private.post_recharge(v_pay);
 end $$;
 
 -- Menus for the next 7 days.

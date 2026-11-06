@@ -8,6 +8,7 @@ import { SlotCard } from '@/components/slot-card';
 import { ChangeFeed } from '@/components/change-feed';
 import { OnboardingChecklist } from '@/components/onboarding-checklist';
 import { checklistItems } from '@/lib/checklist';
+import { isLead } from '@/lib/roles';
 import { UpcomingClosures } from './upcoming-closures';
 import { getTranslator } from '@/lib/i18n/server';
 import { localeOf } from '@/lib/i18n/translate';
@@ -18,6 +19,8 @@ export default async function TodayPage() {
   const { lang, t } = await getTranslator(); // Odia/Hindi drafts (D-130)
 
   if (kitchen.role === 'rider') redirect('/rider');
+  // Accountants read money only (no counts or kitchen orders).
+  if (kitchen.role === 'accountant') redirect('/money');
 
   const today = istDate();
   const slots: [string, MealSlot][] = [[today, 'lunch'], [today, 'dinner'], [addDays(today, 1), 'lunch'], [addDays(today, 1), 'dinner']];
@@ -27,16 +30,18 @@ export default async function TodayPage() {
     supabase.from('customers_v').select('id', { count: 'exact', head: true }).eq('kitchen_id', kitchen.kitchenId),
   ]);
   const isOwner = kitchen.role === 'owner';
+  // The manager sees the owner's numbers and shortcuts; the setup checklist stays the owner's.
+  const lead = isLead(kitchen.role);
 
   let active = 0;
   let paused = 0;
   let checklist: ReturnType<typeof checklistItems> = [];
-  if (isOwner) {
+  if (lead) {
     const [{ data: subs }, { data: list }] = await Promise.all([
       supabase.from('subscriptions').select('status').eq('kitchen_id', kitchen.kitchenId),
-      supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId }),
+      isOwner ? supabase.rpc('kitchen_checklist', { p_kitchen: kitchen.kitchenId }) : Promise.resolve({ data: null }),
     ]);
-    checklist = checklistItems(list);
+    if (isOwner) checklist = checklistItems(list);
     active = (subs ?? []).filter((s) => s.status === 'active' || s.status === 'low_balance').length;
     paused = (subs ?? []).filter((s) => s.status === 'paused').length;
   }
@@ -57,13 +62,13 @@ export default async function TodayPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card title={t('today.changes')} className="lg:col-span-2">
-          <ChangeFeed changes={changes ?? []} linkCustomers={isOwner || kitchen.role === 'staff'} />
+          <ChangeFeed changes={changes ?? []} linkCustomers={lead || kitchen.role === 'staff'} />
         </Card>
         <div className="space-y-4">
           <Stat label={t('today.customers')} value={customerCount ?? 0} />
-          <UpcomingClosures kitchenId={kitchen.kitchenId} canEdit={isOwner} />
-          {isOwner && <Stat label={t('today.active')} value={active} hint={paused ? t('today.paused', { n: paused }) : undefined} />}
-          {isOwner && (
+          <UpcomingClosures kitchenId={kitchen.kitchenId} canEdit={lead} />
+          {lead && <Stat label={t('today.active')} value={active} hint={paused ? t('today.paused', { n: paused }) : undefined} />}
+          {lead && (
             <div className="flex flex-wrap gap-2">
               <LinkButton href="/customers/new">{t('today.addCustomer')}</LinkButton>
               <LinkButton href="/customers/import" variant="secondary">{t('today.import')}</LinkButton>

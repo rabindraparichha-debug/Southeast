@@ -6,6 +6,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { rupeesToPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components/ui';
 import { QrScanner } from '@/components/qr-scanner';
+import { RiderRequestCard } from '@/components/rider-request';
 import { ChangedBadge } from '@/components/changed-badge';
 import { colors, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
@@ -261,6 +262,7 @@ export default function StopScreen() {
           <Button title={t('actions.back')} variant="secondary" onPress={() => setFailing(false)} />
         </Card>
       )}
+      <RiderRequestCard stop={stop} run={run} />
     </ScrollView>
   );
 }

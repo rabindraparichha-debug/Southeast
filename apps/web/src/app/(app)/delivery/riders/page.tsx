@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatPaise, istDate } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { LEAD_ROLES } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatKm } from '@/lib/delivery';
@@ -18,7 +19,7 @@ const monthLabel = (month: string) =>
 
 // Monthly numbers per rider, to pay riders: shifts, stops, proof rate, km, cash. Owner only.
 export default async function RidersPage({ searchParams }: PageProps<'/delivery/riders'>) {
-  const { kitchen } = await requireKitchen(['owner']);
+  const { kitchen } = await requireKitchen(LEAD_ROLES);
   const sp = await searchParams;
   const thisMonth = istDate().slice(0, 7);
   const month = typeof sp.month === 'string' && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : thisMonth;

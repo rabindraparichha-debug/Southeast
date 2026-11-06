@@ -17,6 +17,8 @@ export const IMPORT_FIELDS = [
   { key: 'start_date', label: 'Start date', required: false, aliases: ['start date', 'start', 'from', 'joining date', 'date'] },
   { key: 'qty', label: 'Tiffins per meal', required: false, aliases: ['qty', 'quantity', 'tiffins', 'count'] },
   { key: 'balance', label: 'Opening balance (meals)', required: false, aliases: ['balance', 'opening balance', 'meals left', 'advance meals', 'remaining meals'] },
+  { key: 'billing', label: 'Billing (monthly / prepaid)', required: false, aliases: ['billing', 'billing mode', 'monthly/prepaid', 'pay later', 'prepaid'] },
+  { key: 'dues', label: 'Opening dues (₹)', required: false, aliases: ['dues', 'opening dues', 'due', 'khata', 'amount due', 'baki', 'pending amount'] },
   { key: 'lat', label: 'Latitude', required: false, aliases: ['lat', 'latitude'] },
   { key: 'lng', label: 'Longitude', required: false, aliases: ['lng', 'lon', 'long', 'longitude'] },
 ] as const;
@@ -37,13 +39,17 @@ export type ImportErrorCode =
   | 'start_date_requires_plan'
   | 'invalid_qty'
   | 'invalid_balance'
-  | 'invalid_location';
+  | 'invalid_location'
+  | 'invalid_billing'
+  | 'invalid_dues'
+  | 'dues_need_monthly'
+  | 'balance_needs_plan';
 
 export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   name_required: 'Name is missing',
   invalid_phone: 'Phone is not a valid 10-digit Indian mobile number',
-  duplicate_in_file: 'Same phone number appears earlier in this file',
-  already_exists: 'A customer with this phone number already exists',
+  duplicate_in_file: 'Same name and phone number appear earlier in this file',
+  already_exists: 'A customer with this name and phone number already exists',
   invalid_diet: 'Diet must be Veg, Non-veg or Jain',
   invalid_language: 'Language must be English, Odia or Hindi',
   unknown_plan: 'No active plan with this name',
@@ -52,7 +58,28 @@ export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   invalid_qty: 'Tiffins per meal must be a number from 1 to 20',
   invalid_balance: 'Opening balance must be a whole number of meals (-200 to 1000)',
   invalid_location: 'Latitude and longitude must both be numbers',
+  invalid_billing: 'Billing must be Monthly (pay later) or Prepaid',
+  invalid_dues: 'Opening dues must be an amount in rupees (up to ₹1,00,000)',
+  dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees',
+  balance_needs_plan: 'Opening meals for a monthly customer need a plan (to price them), or put the amount in the dues column',
 };
+
+export type BillingModeValue = 'monthly' | 'prepaid';
+
+/** Billing column → billing mode (same words as the server); '' = the kitchen default; null = not understood. */
+export function parseBilling(value: string | undefined): BillingModeValue | '' | null {
+  const v = (value ?? '').trim().toLowerCase();
+  if (v === '') return '';
+  if (['monthly', 'month', 'month end', 'pay later', 'paylater', 'postpaid', 'khata', 'credit'].includes(v)) return 'monthly';
+  if (['prepaid', 'advance', 'pre-paid'].includes(v)) return 'prepaid';
+  return null;
+}
+
+/** Same comparison as private.same_name: case and repeated spaces ignored. */
+export function sameName(a: string | undefined, b: string | undefined): boolean {
+  const n = (s: string | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return n(a) === n(b);
+}
 
 /** Human message for a server or client error code (server may add `db_error:XXXXX`). */
 export function importErrorMessage(code: string): string {
@@ -153,11 +180,13 @@ export interface RowIssue {
 
 /**
  * Client-side preview. Catches everything except `already_exists`, which only
- * the server can know. planNames: the kitchen's active plan names.
+ * the server can know. planNames: the kitchen's active plan names; defaultBilling: the kitchen's
+ * default billing mode (used for rows with a blank billing column).
+ * D-118: several customers may share a phone, so only the same phone AND the same name is a duplicate.
  */
-export function validateImportRows(rows: ImportRow[], planNames: string[]): RowIssue[] {
+export function validateImportRows(rows: ImportRow[], planNames: string[], defaultBilling: BillingModeValue = 'monthly'): RowIssue[] {
   const plans = new Set(planNames.map((p) => p.trim().toLowerCase()));
-  const seen = new Set<string>();
+  const seen = new Map<string, string[]>();
   const issues: RowIssue[] = [];
 
   rows.forEach((r, i) => {
@@ -166,7 +195,7 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
 
     const phone = normalizePhone(r.phone);
     if (!phone) errors.push('invalid_phone');
-    else if (seen.has(phone)) errors.push('duplicate_in_file');
+    else if ((seen.get(phone) ?? []).some((n) => sameName(n, r.name))) errors.push('duplicate_in_file');
 
     if (DIETS[(r.diet ?? '').toLowerCase().replace(/[^a-z]/g, '')] === undefined) errors.push('invalid_diet');
     if (LANGUAGES[(r.language ?? '').trim().toLowerCase()] === undefined) errors.push('invalid_language');
@@ -178,14 +207,24 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
     }
     if (r.qty && !(/^\d{1,2}$/.test(r.qty) && Number(r.qty) >= 1 && Number(r.qty) <= 20)) errors.push('invalid_qty');
     if (r.balance && !(/^-?\d{1,4}$/.test(r.balance) && Number(r.balance) >= -200 && Number(r.balance) <= 1000)) errors.push('invalid_balance');
+    const billing = parseBilling(r.billing);
+    if (billing === null) errors.push('invalid_billing');
+    if (r.dues) {
+      if (/^-?\d{1,6}(\.\d{1,2})?$/.test(r.dues) && Math.abs(Number(r.dues)) <= 100000) {
+        if ((billing || defaultBilling) !== 'monthly' && Number(r.dues) !== 0) errors.push('dues_need_monthly');
+      } else errors.push('invalid_dues');
+    }
+    // A monthly customer's opening meals become rupees at the plan price: no plan, no price.
+    if ((billing || defaultBilling) === 'monthly' && r.balance && /^-?\d{1,4}$/.test(r.balance) && Number(r.balance) !== 0
+        && !r.plan?.trim()) errors.push('balance_needs_plan');
     const num = /^-?\d+(\.\d+)?$/;
     if (Boolean(r.lat) !== Boolean(r.lng) || (r.lat && !(num.test(r.lat) && num.test(r.lng ?? '')))) {
       errors.push('invalid_location');
     }
 
     if (errors.length) issues.push({ row: i + 1, errors });
-    // Like the server, only rows that would be saved claim their phone number.
-    if (phone && errors.length === 0) seen.add(phone);
+    // Like the server, only rows that would be saved claim their phone number (with their name).
+    if (phone && errors.length === 0) seen.set(phone, [...(seen.get(phone) ?? []), r.name ?? '']);
   });
   return issues;
 }
@@ -193,5 +232,5 @@ export function validateImportRows(rows: ImportRow[], planNames: string[]): RowI
 /** Template the vendor can download and fill in. */
 export const IMPORT_TEMPLATE_HEADERS = [
   'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan',
-  'Start date', 'Tiffins per meal', 'Opening balance (meals)',
+  'Start date', 'Tiffins per meal', 'Opening balance (meals)', 'Billing (monthly / prepaid)', 'Opening dues (₹)',
 ];

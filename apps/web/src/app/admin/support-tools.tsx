@@ -5,7 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatPhone, normalizePhone } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, friendlyErrorIn } from '@/lib/errors';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
 
 /** Masked number with a logged Reveal (audit_log + admin_actions). */
@@ -56,7 +56,7 @@ export function ChangePhoneForm({ userId, name }: { userId: string; name: string
     setBusy(false);
     if (error) {
       const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
-      return setMsg({ tone: 'red', text: friendlyError({ message: body?.error ?? error.message }) });
+      return setMsg({ tone: 'red', text: friendlyErrorIn('member_phone', { message: body?.error ?? error.message }) });
     }
     setMsg(data?.signed_out === false
       ? { tone: 'amber', text: 'Number changed, but signing them out of other devices failed. Use “Sign out everywhere” below.' }

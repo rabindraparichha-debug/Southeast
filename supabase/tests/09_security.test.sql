@@ -53,7 +53,7 @@ select is((select coalesce(array_agg(distinct table_name::text), '{}') from info
                                 'customers', 'webhook_events', 'notifications_outbox', 'lead_events', 'platform_commissions',
                                 'customer_health', 'referrals', 'kitchen_switch_requests', 'offices', 'platform_settings',
                                 'food_calendar', 'churn_risks', 'dispatch_photos', 'festival_specials', 'weather_alerts',
-                                'engine_errors', 'kitchen_closures')),
+                                'engine_errors', 'kitchen_closures', 'change_requests')),
   '{}'::text[], 'no direct inserts or updates on ledgers, money, orders, leads or customers (RPCs only)');
 
 -- Append-only ledgers refuse updates and deletes even for the database owner.
@@ -62,6 +62,12 @@ select is((select coalesce(array_agg(t order by t), '{}') from unnest(array['aud
            where not exists (select 1 from pg_trigger tr join pg_class c on c.oid = tr.tgrelid
                              where c.relname = t and tr.tgfoid = 'private.forbid_mutation'::regproc)),
   '{}'::text[], 'every ledger has the append-only trigger');
+
+-- Wave 2's exact-owner policies call the role helper overloads: any later blanket revoke on schema private
+-- must grant them again (merge plan §E).
+select ok(has_function_privilege('authenticated', 'private.kitchen_ids(public.member_role[], boolean)', 'execute')
+          and has_function_privilege('authenticated', 'private.has_role(uuid, public.member_role[], boolean)', 'execute'),
+  'the role helper overloads (roles, exact) stay executable for the RLS policies');
 
 -- Views run with the caller's rights (RLS applies).
 select is((select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace

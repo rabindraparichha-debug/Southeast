@@ -63,6 +63,8 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00001 | Owner, kitchen A (Maa Tarini Tiffin, Patia) |
 | 90000 00002 | Staff, kitchen A |
 | 90000 00003 | Rider, kitchen A |
+| 90000 00110 | Manager, kitchen A |
+| 90000 00111 | Accountant, kitchen A |
 | 90000 00011 | Owner, kitchen B (Saheed Nagar Mess) |
 | 90000 00012 | Staff, kitchen B |
 | 90000 00013 | Rider, kitchen B |
@@ -71,9 +73,10 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00021 | Owner, kitchen C (Infocity Home Kitchen, live on the platform) |
 | 90000 00101 – 90000 00106 | Spare (used by the M1, M3, M7, M6, P5/P6 and vendor-first wave 1 integration tests; test files run in parallel, so each suite needs its own number) |
 | 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
-| 90000 00180 – 90000 00189 | Spare for the held-back apps track (`held-apps.test.ts` uses 00180 – 00182) |
-| 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
+| 90000 00112 – 90000 00119 | Spare (00113–00115: the wave-2 integration test's owner, manager and accountant) |
 | 90000 00149 | Spare (wave 4: phone + password sign-up test; never logs in with a code) |
+| 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
+| 90000 00180 – 90000 00189 | Spare for the held-back apps track (`held-apps.test.ts` uses 00180 – 00182) |
 
 ## Conventions (follow these in every change)
 
@@ -89,8 +92,10 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Policies use `kitchen_id = any ((select private.kitchen_ids('{owner,...}'))::uuid[])`.
 - **Grants are fail-closed:** new tables and functions get nothing. Add explicit `grant`s in the migration, and pgTAP tests for each role (owner, staff, rider, other kitchen, admin, anon).
 - **Roles:**
+  - Manager (D-117/D-146): every `'{owner}'` check also accepts a manager (`private.expand_roles`). Owner-only areas pass `true`: `private.require_role(k, '{owner}', true)` / `private.kitchen_ids('{owner}', true)` (inbox, broadcasts, settings, members and invites, payouts, commission, audit log). Decide for every new owner check.
+  - Accountant: reads money only. Add `accountant` explicitly to money reads (`'{owner,accountant}'`); never to a write. Phones masked.
   - Staff: no money, no phone numbers.
-  - Riders: only their stops (M5).
+  - Riders: only their stops (M5); change requests via `rider_request_change`, approved by owner/manager.
   - Admins: read all; reveals are logged.
 
 **Writes and ledgers**
@@ -111,6 +116,12 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - pg_cron jobs: `tiffin-lock-due-slots` (every minute), `tiffin-nightly` (00:30 IST), `tiffin-owner-summary` (22:00 IST), `tiffin-plan-prices` (00:05 IST, wave 4).
 
 **Money (M3)**
+- **Billing mode (D-115, D-146):** `customers.billing_mode` is `monthly` (default from `kitchen_settings.default_billing_mode`; pay later, never suspended or cancelled automatically) or `prepaid` (meal balance, low balance, suspend, grace cancel).
+  - Owed meals are valued only by `private.recent_meals_value` (newest debt rows at their own price, the rest at the price per meal). A mode switch carries dues in rupees on its conversion row; never value meal debts anywhere else.
+  - Monthly: the rupee balance Σ `amount_paise` is the truth; dues = −that. Payments carry 0 meals; credits are valued by the trigger `balance_entries_value_monthly`; adjustments take `p_amount_paise`.
+  - Never value dues or statements with today's plan price: every meal carries its own `amount_paise`. `private.customer_unit_price` is only for turning rupees into meals.
+  - Switch modes only with `set_billing_mode` (converts the balance once). Anything that suspends, cancels, reminds or flags on a low balance must skip monthly customers.
+- Payments: `record_payment` takes `p_client_op` (idempotency) and `p_paid_at` (backdate); mistakes are fixed with `void_payment` (append-only reversal), never a negative adjustment.
 - Every recharge, refund, credit and adjustment is one `balance_entries` row.
   - Recharges come only from `private.post_recharge()` (idempotent on the payment id).
   - Refunds come only from `private.create_refund()` (FIFO value).
@@ -150,6 +161,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Leads and vendor applications belong to the platform: admin-only RLS; vendors see a customer only once the lead picks their kitchen.
 - All lead writes go through `private.upsert_lead()` (one open lead per phone) and `private.convert_lead()` (the only place that creates `platform_sourced` customers). Funnel stages after matching are set only by real events (the recharge trigger), never by hand.
 - Matching is `private.match_kitchens()`; change its rules there and in `docs/DECISIONS.md` D-078.
+- While the `customer_whatsapp` flag is off the webhook sends no bot replies (`wa_receive` returns `customer_messages: false`) and `wa_claim_outbox` cancels customer, lead and applicant rows. Integration suites that drive the bot call `setCustomerWhatsapp(true)` (reset after the run by `tests/integration/global-setup.ts`).
 - Unknown WhatsApp numbers go to `_shared/lead-bot.ts` (customer qualification, or vendor sign-up); unit-test flows in `tests/integration/lead-bot.test.ts`.
 - Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers.
 - Public anon RPCs (`submit_lead`, `lead_choose`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves.
@@ -171,6 +183,9 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
   - `platform_commissions` is append-only, written once per captured payment;
   - the Route transfer is `routeTransfer()` in `_shared/razorpay.ts`.
 - **Feature flags** live in `platform_settings`. Gate every entry point with `private.require_feature('<key>')` (`feature_disabled`), and test both flag states.
+  - Phase flags (all off): `customer_whatsapp`, `customer_portal`, `online_payments`, `marketplace`, `growth`, `extras`. While `customer_whatsapp` is off the outbox stores messages to customers, leads and applicants as `cancelled` (`customer_messages_off`); tests that need customer messages switch it on. Crons go through flag-checked wrappers (`private.cron_*`).
+  - Outbox rows expire (`expires_at`, default 48 h after due); the worker never sends an expired row.
+- **Shared phones (D-118):** several customers of a kitchen may share a phone. Never assume one customer per phone hash: return all, or pick deterministically (oldest) and document it. Same phone + same name = duplicate; a different name needs `p_allow_shared_phone`.
 - **Offices:** grouping happens in `private.build_runs()` (one stop per office, `delivery_stops.office_id`); counts and charges stay per customer.
 - **Health tags** (`customer_health`): consent required, owner + staff only, never in rider payloads.
 - **Notebook import** is a preview only. Rules live in `_shared/notebook.ts` (keep `normalizePhone` in sync with `@tiffin/core`); writes go through `import_customers`.

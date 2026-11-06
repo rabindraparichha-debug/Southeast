@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase/client';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, friendlyErrorIn } from '@/lib/errors';
+import { newClientOp } from '@/lib/money';
 import { formatQty, type StockUnit } from '@/lib/inventory';
 import { BigButton, Chip, ErrorText, FieldInput, Muted, Panel } from '@/components/field-ui';
 import { ItemPicker, parseEntryQty, toStockItems, UnitChips, type StockItem } from './stock-ui';
@@ -27,6 +28,8 @@ export function WasteView({ kitchenId, initialItem, onDone }: { kitchenId: strin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  // One key per waste entry: a double tap or a retry saves one move.
+  const [clientOp, setClientOp] = useState(newClientOp);
 
   const load = useCallback(async (keep?: string) => {
     const { data, error: e } = await supabaseBrowser().rpc('stock_levels', { p_kitchen: kitchenId });
@@ -63,9 +66,10 @@ export function WasteView({ kitchenId, initialItem, onDone }: { kitchenId: strin
     if (reason === 'other' && !other.trim()) return setError(friendlyError({ message: 'note_required' }));
     const text = reason === 'other' ? other.trim() : REASONS.find((r) => r.key === reason)!.value;
     setBusy(true);
-    const { error: e } = await supabaseBrowser().rpc('record_waste', { p_item: item.item_id, p_qty: n, p_reason: text, p_unit: unit });
+    const { error: e } = await supabaseBrowser().rpc('record_waste', { p_item: item.item_id, p_qty: n, p_reason: text, p_unit: unit, p_client_op: clientOp });
     setBusy(false);
-    if (e) return setError(friendlyError(e));
+    if (e) return setError(friendlyErrorIn('stock', e));
+    setClientOp(newClientOp());
     setSaved(`Saved: ${formatQty(n, unit)} ${item.name} (${text})`);
     setQty('');
     setReason(null);

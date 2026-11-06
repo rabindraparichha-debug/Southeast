@@ -65,6 +65,9 @@ async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<stri
   });
   if (received.duplicate) return 'duplicate';
   if (received.status === 'ignored') return 'ignored';
+  // Customer WhatsApp is a Phase 2 flag (customer_whatsapp). While it is off the message is kept for
+  // the owner's inbox, but no bot (or AI) reply goes to the customer, lead or applicant.
+  if (received.customer_messages === false) return 'customer_messages_off';
 
   let conversation: string = received.conversation_id;
   const say = async (out: Out, handledBy: string, intent: string | null) => {

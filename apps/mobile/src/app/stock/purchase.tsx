@@ -8,7 +8,9 @@ import { Button, Card, Chip, ErrorText, Input, Label, Muted } from '@/components
 import { ItemPicker, UnitChips } from '@/components/stock-ui';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
+import { friendlyErrorFor, newClientOp } from '@/lib/money';
 import { BILL_PHOTO, shrinkPhoto } from '@/lib/photo';
+import { isLead } from '@/lib/roles';
 import { uuid } from '@/lib/rider-store';
 import { useKitchen } from '@/lib/session';
 import { convertQty, parseQty, readPhotoBytes, type PurchaseResult, type StockRow, type StockUnit } from '@/lib/stock';
@@ -31,7 +33,7 @@ function unitPrice(line: Line): number | null {
 // A supplier bill in under a minute: supplier, photo, items with quantity and amount, save.
 export default function Purchase() {
   const kitchen = useKitchen();
-  const isOwner = kitchen.role === 'owner';
+  const isOwner = isLead(kitchen.role); // owner or manager: supplier payments and prices
   const today = istDate();
 
   const [items, setItems] = useState<StockRow[]>([]);
@@ -48,6 +50,7 @@ export default function Purchase() {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState<PurchaseResult | null>(null);
+  const [clientOp, setClientOp] = useState(newClientOp); // one key per bill: a retried save records it once
 
   const loadSuppliers = useCallback(async () => {
     const { data } = await supabase.from('suppliers').select('id, name').eq('kitchen_id', kitchen.kitchenId).eq('active', true).order('name');
@@ -139,14 +142,16 @@ export default function Purchase() {
       p_bill_no: billNo.trim() || undefined,
       p_photo_path: photo?.path,
       p_paid_now_paise: paid,
+      p_client_op: clientOp,
     });
     setBusy(false);
-    if (e) return setError(friendlyError(e));
+    if (e) return setError(friendlyErrorFor(e, 'stock'));
     setResult(data as unknown as PurchaseResult);
   };
 
   const reset = () => {
     setResult(null);
+    setClientOp(newClientOp());
     setLines([]);
     setPicking(true);
     setPhoto(null);

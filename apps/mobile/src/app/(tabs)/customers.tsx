@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Link, useFocusEffect } from 'expo-router';
-import { formatPhone } from '@tiffin/core';
+import { formatPhone, normalizePhone } from '@tiffin/core';
 import type { View as DbView } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
 import { useKitchen } from '@/lib/session';
+import { isLead } from '@/lib/roles';
 import { DIET_COLOR, DIET_LABEL, Input } from '@/components/ui';
 import { StaleBanner } from '@/components/offline-banner';
 import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
@@ -16,7 +17,7 @@ type Row = DbView<'customers_v'>;
 
 export default function Customers() {
   const kitchen = useKitchen();
-  const isOwner = kitchen.role === 'owner';
+  const isOwner = isLead(kitchen.role); // owner or manager: add customers, search by full number
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,15 +72,20 @@ export default function Customers() {
         keyExtractor={(c) => c.id!}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(q)} />}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
+        // D-118: a full number lists every customer on it (siblings, a family phone).
+        ListHeaderComponent={isOwner && rows.length > 1 && normalizePhone(q) ? <Text style={styles.shared}>{t('customers.sharedPhone', { n: rows.length })}</Text> : undefined}
         ListEmptyComponent={!loading && (!stale || stale.savedAt) ? <Text style={styles.empty}>{q ? t('customers.noMatch') : t('customers.empty')}</Text> : undefined}
         renderItem={({ item }) => (
           <Link href={{ pathname: '/customer/[id]', params: { id: item.id! } }} asChild>
             <Pressable style={styles.item}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}{item.platform_sourced ? <Text style={styles.platform}>  {t('customers.platform')}</Text> : null}</Text>
-                <Text style={styles.sub} numberOfLines={1}>
-                  {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}
-                </Text>
+                {/* Accountants see no addresses (D-146; the server sends none either). */}
+                {kitchen.role !== 'accountant' && (
+                  <Text style={styles.sub} numberOfLines={1}>
+                    {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}
+                  </Text>
+                )}
               </View>
               <View style={{ alignItems: 'flex-end', gap: 2 }}>
                 <Text style={styles.sub}>{formatPhone(item.phone)}</Text>
@@ -107,4 +113,5 @@ const styles = StyleSheet.create({
   diet: { fontSize: 12, fontWeight: '600' },
   sep: { height: 1, backgroundColor: colors.line },
   empty: { textAlign: 'center', color: colors.muted, padding: space(8) },
+  shared: { paddingHorizontal: space(4), paddingBottom: space(2), color: colors.inkSoft, fontWeight: '600' },
 });

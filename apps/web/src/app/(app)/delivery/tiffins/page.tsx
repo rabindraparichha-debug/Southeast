@@ -1,4 +1,5 @@
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { Alert, PageHeader } from '@/components/ui';
@@ -7,7 +8,7 @@ import { TiffinBoard } from './tiffin-board';
 
 // Steel tiffin boxes with customers (from the riders' counts) and returns at the kitchen.
 export default async function TiffinsPage() {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
   const supabase = await createClient();
   const [{ data: balances, error }, { data: customers }] = await Promise.all([
     supabase.rpc('tiffin_balances', { p_kitchen: kitchen.kitchenId }),
@@ -17,7 +18,7 @@ export default async function TiffinsPage() {
   return (
     <>
       <PageHeader title="Tiffins" subtitle="Boxes with customers, from what riders record at each stop. Customers holding 2 or more with nothing returned for 2 days are flagged." />
-      <DeliveryTabs isOwner={kitchen.role === 'owner'} />
+      <DeliveryTabs isOwner={isLead(kitchen.role)} />
       {error ? <Alert>{friendlyError(error)}</Alert> : <TiffinBoard balances={balances ?? []} customers={customers ?? []} />}
     </>
   );

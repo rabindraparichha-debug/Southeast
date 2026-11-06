@@ -1,5 +1,5 @@
 import 'server-only';
-import type { DietType, LanguageCode, SubscriptionStatus } from '@tiffin/db';
+import type { BillingMode, DietType, LanguageCode, SubscriptionStatus } from '@tiffin/db';
 import type { createClient } from './supabase/server';
 import { queryKind, searchOrFilter } from './desk-rules';
 
@@ -9,7 +9,8 @@ import { queryKind, searchOrFilter } from './desk-rules';
 //   also match the last 4 digits of the phone (phone_last4), as search_customers did;
 // * a full phone number: search_customers (phone hash; owners only, as before).
 // The query rules live in desk-rules.ts (unit-tested).
-// Status filters need subscriptions, which only owners can read (RLS), so staff get none.
+// Status filters need subscriptions, which only owners and managers use here (RLS hides them from staff).
+// isOwner means owner or manager (isLead).
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -38,6 +39,7 @@ export type CustomerRow = {
   area: string | null;
   diet: DietType;
   preferred_language: LanguageCode;
+  billing_mode: BillingMode | null;
   /** Owners only: statuses of the customer's subscriptions (null for staff). */
   statuses: SubscriptionStatus[] | null;
 };
@@ -45,7 +47,7 @@ export type CustomerRow = {
 /** page: the page actually shown (a page past the end shows the last one). */
 export type CustomerPage = { rows: CustomerRow[]; total: number; page: number; error: string | null };
 
-const COLUMNS = 'id, name, phone, phone_last4, platform_sourced, line1, landmark, area, diet, preferred_language';
+const COLUMNS = 'id, name, phone, phone_last4, platform_sourced, line1, landmark, area, diet, preferred_language, billing_mode';
 
 type Raw = Omit<CustomerRow, 'statuses'> & { subs?: { status: SubscriptionStatus }[] };
 

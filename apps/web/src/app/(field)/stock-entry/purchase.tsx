@@ -5,6 +5,7 @@ import { addDays, formatPaise, istDate, rupeesToPaise } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError, friendlyErrorIn } from '@/lib/errors';
 import { downscaleJpeg } from '@/lib/image';
+import { newClientOp } from '@/lib/money';
 import { convertQty, normalizePriceJumps, type PurchaseResult, type StockUnit } from '@/lib/inventory';
 import { uuid } from '@/lib/rider-store';
 import { BigButton, Chip, ErrorText, FieldInput, Muted, Panel } from '@/components/field-ui';
@@ -40,6 +41,8 @@ export function PurchaseView({ kitchenId, isOwner, onDone }: { kitchenId: string
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [result, setResult] = useState<PurchaseResult | null>(null);
+  // One key per bill: a retry after a lost response (weak network) returns the first purchase.
+  const [clientOp, setClientOp] = useState(newClientOp);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadSuppliers = useCallback(async () => {
@@ -130,15 +133,17 @@ export function PurchaseView({ kitchenId, isOwner, onDone }: { kitchenId: string
       p_bill_no: billNo.trim() || undefined,
       p_photo_path: photo?.path,
       p_paid_now_paise: paid,
+      p_client_op: clientOp,
     });
     setBusy(false);
-    if (e) return setError(friendlyError(e));
+    if (e) return setError(friendlyErrorIn('stock', e));
     const r = data as unknown as PurchaseResult;
     setResult({ ...r, price_jumps: normalizePriceJumps(r.price_jumps) });
   };
 
   const reset = () => {
     setResult(null);
+    setClientOp(newClientOp());
     setLines([]);
     setPicking(true);
     setPhoto(null);
@@ -159,7 +164,7 @@ export function PurchaseView({ kitchenId, isOwner, onDone }: { kitchenId: string
     return (
       <div className="space-y-3">
         {header}
-        <Panel><p className="text-lg font-semibold text-green-700" data-testid="purchase-saved">✓ Purchase saved: {formatPaise(result.total_paise)}</p></Panel>
+        <Panel><p className="text-lg font-semibold text-green-700" data-testid="purchase-saved">✓ {result.duplicate ? 'Already saved' : 'Purchase saved'}: {formatPaise(result.total_paise)}</p></Panel>
         {result.price_jumps.length > 0 && (
           <Panel tone="warn">
             <p className="text-base font-semibold text-ink-900">⚠️ Price went up</p>

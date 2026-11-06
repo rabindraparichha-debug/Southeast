@@ -9,6 +9,8 @@ select no_plan();
 select set_config('app.now', '2026-11-02 10:00:00+05:30', true);
 -- Keep every other kitchen (seed, or left by integration runs) out of the way.
 update public.kitchens set accepts_platform_leads = false;
+-- Messages to leads and applicants are a Phase 2 flag (off by default); this suite tests it switched on.
+update public.platform_settings set enabled = true where key = 'customer_whatsapp';
 
 -- ===========================================================================
 -- Setup: kitchens around Patia (20.3553, 85.8197). One owner user runs all of them.

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatPaise } from '@tiffin/core';
 import { requireKitchen } from '@/lib/session';
+import { KITCHEN_ROLES, isLead } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { friendlyError } from '@/lib/errors';
 import { formatIstDateTime, formatQty, formatSignedQty, type StockTakeReview } from '@/lib/inventory';
@@ -12,8 +13,8 @@ import { CountSheet, StartStockTake } from './count-sheet';
 // Physical count: start (or continue) one open count per kitchen, enter what is on the shelf,
 // give a reason for big differences, close to make book stock = counted stock.
 export default async function StockTakePage({ searchParams }: PageProps<'/inventory/stock-take'>) {
-  const { kitchen } = await requireKitchen(['owner', 'staff']);
-  const isOwner = kitchen.role === 'owner';
+  const { kitchen } = await requireKitchen(KITCHEN_ROLES);
+  const isOwner = isLead(kitchen.role); // owner or manager
   const sp = await searchParams;
   const viewId = typeof sp.view === 'string' && /^[0-9a-f-]{36}$/.test(sp.view) ? sp.view : null;
   const supabase = await createClient();

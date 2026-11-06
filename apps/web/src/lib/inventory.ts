@@ -109,7 +109,8 @@ export type StockTakeLine = {
 export type StockTakeReview = { id: string; status: 'open' | 'closed'; started_at: string; closed_at: string | null; lines: StockTakeLine[] };
 
 export type PriceJump = { item: string; pct: number; from_paise?: number; to_paise?: number };
-export type PurchaseResult = { purchase_id: string; total_paise: number; price_jumps: PriceJump[] };
+/** duplicate: the same p_client_op was saved before (a retried save), nothing new was stored. */
+export type PurchaseResult = { purchase_id: string; total_paise: number; price_jumps: PriceJump[]; duplicate?: boolean };
 
 /**
  * record_purchase returns one object per price jump: {item, pct} plus {from_paise, to_paise} for owners.
