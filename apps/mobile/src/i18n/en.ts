@@ -416,7 +416,6 @@ export const en = {
   'onboarding.area': 'Area',
   'onboarding.create': 'Create kitchen',
   'errors.generic': 'Something went wrong. Please try again.',
-  'errors.network': 'No internet. Check the signal and try again.',
   'errors.forbidden': 'You do not have permission to do this.',
   'errors.invalid_phone': 'Enter a valid 10-digit Indian mobile number.',
   'errors.already_exists': 'A customer with this phone number already exists in your kitchen.',
