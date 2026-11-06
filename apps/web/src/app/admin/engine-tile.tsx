@@ -11,6 +11,17 @@ const JOB_LABEL: Record<string, string> = {
   'tiffin-storage-retention': 'Photo retention (03:15)',
 };
 
+const ERROR_JOB_LABEL: Record<string, string> = {
+  lock: 'Cutoff lock',
+  build_runs: 'Building rider runs',
+  consume: 'Stock use',
+  nightly_status: 'Nightly: subscription states',
+  nightly_balance: 'Nightly: balance states',
+  nightly_cancel: 'Nightly: auto-cancel',
+  nightly_refresh: 'Nightly: meal orders',
+  nightly_reminders: 'Nightly: reminders',
+};
+
 function jobState(j: EngineJob): { tone: 'green' | 'amber' | 'red'; text: string } {
   if (!j.scheduled || !j.active) return { tone: j.critical ? 'red' : 'amber', text: 'Not scheduled' };
   if (j.stale) return { tone: j.critical ? 'red' : 'amber', text: j.last_ok_at ? 'Late' : 'Never ran' };
@@ -74,8 +85,9 @@ export function EngineTile({ h, healthUrl }: { h: EngineHealth; healthUrl: strin
             ) : (
               <ul className="space-y-1 text-red-800">
                 {h.cron.failing.map((f) => (
-                  <li key={f.job}>
+                  <li key={f.job} className={f.critical ? undefined : 'text-amber-800'}>
                     <strong>{JOB_LABEL[f.job] ?? f.job}</strong> · {istDateTime(f.at)}
+                    {!f.critical && ' · warning (not critical)'}
                     <span className="block break-words text-xs">{f.message}</span>
                   </li>
                 ))}
@@ -83,12 +95,31 @@ export function EngineTile({ h, healthUrl }: { h: EngineHealth; healthUrl: strin
             )}
           </section>
           <section>
-            <h3 className="mb-1 font-medium text-ink-700">Engine errors</h3>
-            <p className="text-ink-500">
-              {h.engine_errors.tracked
-                ? `${h.engine_errors.recent ?? 0} in the last 15 minutes · ${h.engine_errors.last_24h ?? 0} in 24 hours`
-                : 'Not recorded on this database yet.'}
-            </p>
+            <h3 className="mb-1 font-medium text-ink-700">Engine errors ({h.engine_errors.open} open)</h3>
+            {h.engine_errors.open === 0 ? (
+              <p className="text-ink-500">No open engine error.</p>
+            ) : (
+              <>
+                <p className="text-ink-500">
+                  {h.engine_errors.recent} seen in the last {h.engine_errors.window_hours} hours (these make the engine unhealthy).
+                  They close when the same work succeeds, or when the owner dismisses them.
+                </p>
+                <ul className="mt-1 space-y-1 text-red-800">
+                  {h.engine_errors.items.map((e) => (
+                    <li key={e.id}>
+                      <strong>{e.kitchen ?? 'Platform'}</strong> · {ERROR_JOB_LABEL[e.job] ?? e.job}
+                      {e.service_date && ` · ${formatServiceDate(e.service_date)}`}
+                      {e.slot && ` ${SLOT_LABEL[e.slot]}`} · last {istDateTime(e.last_seen_at)}
+                      {e.attempts > 1 && ` · ${e.attempts} tries`}
+                      <span className="block break-words text-xs">{e.message}</span>
+                    </li>
+                  ))}
+                  {h.engine_errors.open > h.engine_errors.items.length && (
+                    <li className="text-ink-500">and {h.engine_errors.open - h.engine_errors.items.length} more</li>
+                  )}
+                </ul>
+              </>
+            )}
           </section>
           <p className="text-xs text-ink-500">
             Uptime monitor: point a free pinger at <code className="break-all">{healthUrl}</code> and alert on anything but 200.

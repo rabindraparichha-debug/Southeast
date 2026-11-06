@@ -5,12 +5,12 @@ import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addDays, istDate } from '@tiffin/core';
-import { healthResponse, keyMatches, removalBatches, retentionOptions } from '../../supabase/functions/_shared/ops.ts';
+import { healthCache, healthResponse, keyMatches, removalBatches, retentionOptions } from '../../supabase/functions/_shared/ops.ts';
 import { env, loginAs, type Client } from './helpers';
 
 const healthy = {
   ok: true, checked_at: '2026-11-06T10:00:00Z',
-  checks: { lock_job: true, nightly_job: true, summary_job: true, overdue_slots: 0, failing_jobs: 0, engine_errors: null },
+  checks: { lock_job: true, nightly_job: true, summary_job: true, overdue_slots: 0, failing_jobs: 0, job_warnings: 0, engine_errors: 0 },
 };
 
 describe('ops helpers (no network)', () => {
@@ -23,8 +23,21 @@ describe('ops helpers (no network)', () => {
     expect(healthResponse({ ...healthy, checks: { ...healthy.checks, lock_job: false } }).status).toBe(503);
     // The database said ok but a check disagrees: still 503.
     expect(healthResponse({ ...healthy, checks: { ...healthy.checks, failing_jobs: 1 } }).body.ok).toBe(false);
+    // A failed housekeeping job is a warning: still 200.
+    expect(healthResponse({ ...healthy, checks: { ...healthy.checks, job_warnings: 2 } }).status).toBe(200);
     expect(healthResponse(null)).toEqual({ status: 503, body: { ok: false, error: 'health_unavailable' } });
     expect(healthResponse({ message: 'permission denied for function ops_health' })).toEqual({ status: 503, body: { ok: false, error: 'health_unavailable' } });
+  });
+
+  it('caches the health answer briefly', () => {
+    let t = 1_000;
+    const c = healthCache<number>(15_000, () => t);
+    expect(c.get()).toBeNull();
+    c.set(503);
+    t += 14_999;
+    expect(c.get()).toBe(503);
+    t += 1;
+    expect(c.get()).toBeNull();
   });
 
   it('checks the optional key', () => {
@@ -71,7 +84,7 @@ describe('ops over HTTP', () => {
     expect(text).not.toMatch(/eyJ|service_role|kitchen|[0-9a-f]{8}-[0-9a-f]{4}-/i);
     const body = JSON.parse(text) as { ok: boolean; checks: Record<string, unknown> };
     expect(body.ok).toBe(res.status === 200);
-    expect(Object.keys(body.checks).sort()).toEqual(['engine_errors', 'failing_jobs', 'lock_job', 'nightly_job', 'overdue_slots', 'summary_job']);
+    expect(Object.keys(body.checks).sort()).toEqual(['engine_errors', 'failing_jobs', 'job_warnings', 'lock_job', 'nightly_job', 'overdue_slots', 'summary_job']);
 
     const head = await fetch(fn('ops-health'), { method: 'HEAD' });
     expect([200, 503]).toContain(head.status);
@@ -93,9 +106,11 @@ describe('ops over HTTP', () => {
         expect(res.status).toBe(db.ok ? 200 : 503);
         return;
       }
+      // The function caches its answer for 15 s (healthCache): wait it out and compare again.
+      await new Promise((r) => setTimeout(r, 16_000));
     }
     throw new Error('ops-health and ops_health() disagree');
-  });
+  }, 60_000);
 
   it('ops_health is not callable with the anon key', async () => {
     const r = await fetch(`${env().url}/rest/v1/rpc/ops_health`, {

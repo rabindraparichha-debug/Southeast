@@ -342,7 +342,7 @@ Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sq
 | 18 | Changes after lock reach planned and out runs; office stops fixed; `changed` flag | ✅ SQL | `build_runs`, `resync_runs`, `rider_today` (D-121) |
 | 19 | Skip a locked meal: charged, or "don't charge" = one credit linked to the meal; stop leaves the run | ✅ SQL | `waive_meal_charge`, `meal_orders.charge_waived` (D-120) |
 
-Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
+Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, and removing the unused "Phone requests close at" setting.
 
 ## Vendor-first wave 3 — ops (docs/VENDOR_FIRST_AUDIT.md items 30–32)
 
@@ -352,11 +352,14 @@ Still to build on screens (apps): an Undo list on the customer page (web and mob
 | 31 | Retention and real erasure: diff-only audit rows for personal data, no rider pings, OTP never logged; purge job (cron log, outbox); photo retention through the Storage API; erasure scrubs audit log, conversations, import rows, delivery GPS and photos | ✅ | `20261110000200_lean_audit.sql`, `…0300_real_erasure.sql`, `…0400_retention.sql`, `supabase/functions/storage-retention`, D-130–D-132 |
 | 32 | Hosted deploy script, backups, restore drill into a staging copy, runbook | ✅ locally (dry run and staging-copy drill against the local stack); needs the founder's Pro projects for a real run | `scripts/deploy.sh`, `scripts/restore-drill.sh`, `scripts/backup.sh`, `docs/OPERATIONS.md`, D-133 |
 
-Tests: `supabase/tests/14_ops.test.sql` (106), `09_security` allowlists, `tests/integration/ops.test.ts` (10), `scripts/deploy.sh --self-test` and `--env staging --local`, `pnpm db:restore-drill` (both modes). Load test 13.2 s.
+Rebased onto m9-p5-p6 (wave 1, login, screens). Review fixes: engine health reads wave 1's `engine_errors` (open rows seen in 26 h make it unhealthy; Freeze now closes the slot's lock error), a manual rerun clears a failed cron run, non-critical job failures are warnings, erasure also covers payer-routed messages, owner alerts and the platform lead (D-134), the staging-copy drill keeps messaging jobs paused and cancels copied outbox rows (D-135), deploy refuses unlisted functions and a production deploy without `OPS_HEALTH_KEY` (D-136), backups take their checks in the dump's snapshot, bash 3.2 support. Slot cards use `slot_summary.overdue` and show `engine_error`; closed slots never show "not frozen". Decisions D-128 – D-136.
+
+Tests: `supabase/tests/14_ops.test.sql` (all 1,129 pgTAP tests pass on the rebased branch), `09_security` allowlists, `tests/integration/ops.test.ts` (11; 284 integration tests pass), `scripts/deploy.sh --self-test` and `--env staging --local`, `pnpm db:restore-drill` (both modes). Load test 12.0 s (normal day 2.0 s).
 
 Known gaps:
-- **Wave 1's `engine_errors`** is read only if the table exists (no hard dependency); after merging, the Engine tile and ops-health count its rows from the last 15 minutes (column `created_at`, `occurred_at`, `logged_at` or `at`).
-- **Managers** (D-117, wave 2) cannot Freeze now until `freeze_slot` lists the role.
+- **Managers** (D-117, wave 2): `freeze_slot` already accepts them through wave 2's `expand_roles`; the slot cards must show Freeze now for `manager` too when wave 2 merges.
+- **Other waves' functions and jobs** must be added to `scripts/deploy.sh` (`ALLOWLIST`: push-outbox, public-forms, admin-change-phone; `CRON_JOBS`: tiffin-push, tiffin-plan-prices, tiffin-outbox-stuck) as they merge; the deploy refuses unlisted functions.
+- **Erasure and other waves' free text:** wave 2's `change_requests` notes, wave 3 riders' `delivery_stops.credit_note`/`correction_note` and wave 5's `complaint_admin_events.note` (append-only) need adding to `audit_personal_keys` / `customer_erased_cleanup` when they merge.
 - **Not run against hosted yet:** `scripts/deploy.sh` without `--local`, and the staging-copy drill against a real staging project (needs the founder's projects, DB password and access token).
 
 ## Things to start outside code now

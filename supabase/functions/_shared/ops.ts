@@ -6,7 +6,11 @@ export type OpsHealthChecks = {
   nightly_job: boolean;
   summary_job: boolean;
   overdue_slots: number;
+  /** Critical engine jobs whose latest run failed (not cleared since). */
   failing_jobs: number;
+  /** Other tiffin-* jobs whose latest run failed: shown, but do not make the answer 503. */
+  job_warnings: number;
+  /** Wave 1's open engine_errors rows seen in the last 26 hours. */
   engine_errors: number | null;
 };
 
@@ -34,6 +38,7 @@ export function healthResponse(raw: unknown): { status: number; body: OpsHealthB
     summary_job: bool(r.checks.summary_job),
     overdue_slots: count(r.checks.overdue_slots),
     failing_jobs: count(r.checks.failing_jobs),
+    job_warnings: count(r.checks.job_warnings),
     engine_errors: errors === null || errors === undefined ? null : count(errors),
   };
   // Recomputed here as well: a response says "ok" only if the checks it shows agree.
@@ -50,6 +55,22 @@ export function keyMatches(given: string | null | undefined, expected: string | 
   let diff = a.length ^ expected.length;
   for (let i = 0; i < expected.length; i++) diff |= (a.charCodeAt(i) || 0) ^ expected.charCodeAt(i);
   return diff === 0;
+}
+
+/**
+ * Caches the last health answer for `ttlMs` (per Edge Function instance), so a pinger hitting the URL
+ * in a loop cannot make every request run the health query against the database.
+ */
+export function healthCache<T>(ttlMs: number, now: () => number = Date.now) {
+  let value: { at: number; v: T } | null = null;
+  return {
+    get(): T | null {
+      return value && now() - value.at < ttlMs ? value.v : null;
+    },
+    set(v: T): void {
+      value = { at: now(), v };
+    },
+  };
 }
 
 export type ExpiredObject = { bucket: string; name: string; reason?: string };

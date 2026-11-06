@@ -1,5 +1,5 @@
 -- Vendor-first wave 3 (ops): engine health (heartbeats, overdue slots, failed cron runs, wave 1's
--- engine_errors if present), Freeze now, the lean audit log (diff-only personal rows, no rider
+-- engine_errors), Freeze now, the lean audit log (diff-only personal rows, no rider
 -- pings, scrub-only guard), real erasure, and retention (purge job, storage retention RPCs).
 -- Calendar: 2027-02-01 is a Monday. Default cutoffs: lunch 21:00 the day before, dinner 12:00.
 begin;
@@ -91,6 +91,9 @@ select is((select count(*) from private.overdue_slots('31400000-0000-4000-e300-0
   'within 5 minutes of the cutoff it is not overdue yet (the minute job has time)');
 select set_config('app.now', '2027-02-02 09:30:00+05:30', true);
 
+-- The lock job failed for this slot (wave 1 records it and moves on; it never revisits a locked slot).
+select private.record_engine_error('31400000-0000-4000-e300-000000000001', 'lock', '2027-02-02', 'lunch', 'XX000', 'simulated lock failure');
+
 -- Freeze now: owner only.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-e300-000000000002","role":"authenticated"}', true);
@@ -117,6 +120,9 @@ reset role;
 
 select is((select count(*) from public.count_snapshots where kitchen_id = '31400000-0000-4000-e300-000000000001'
            and service_date = '2027-02-02' and slot = 'lunch'), 1::bigint, 'one count snapshot');
+select is((select count(*) from public.engine_errors where kitchen_id = '31400000-0000-4000-e300-000000000001'
+           and job = 'lock' and service_date = '2027-02-02' and slot = 'lunch' and resolved_at is null), 0::bigint,
+  'Freeze now closes the slot''s lock error');
 select is((select count(*) from public.balance_entries b join public.meal_orders o on o.id = b.ref_id
            where b.type = 'meal' and o.kitchen_id = '31400000-0000-4000-e300-000000000001' and o.service_date = '2027-02-02' and o.slot = 'lunch'),
   2::bigint, 'one meal entry per order, through the lock path (no second path)');
@@ -134,53 +140,67 @@ reset role;
 update public.kitchens set status = 'draft' where id = '31400000-0000-4000-e300-000000000001';
 
 -- ===========================================================================
--- Health: cron failures, engine_errors (wave 1, optional), unscheduled jobs, healthy state
+-- Health: cron failures, wave 1's engine_errors, unscheduled jobs, healthy state
 -- ===========================================================================
 insert into cron.job_run_details (jobid, runid, job_pid, database, username, command, status, return_message, start_time, end_time)
 values ((select jobid from cron.job where jobname = 'tiffin-nightly'), (select coalesce(max(runid), 0) + 1000000 from cron.job_run_details),
         1, 'postgres', 'postgres', 'select 1', 'failed', 'ERROR: simulated failure', private.now() - interval '1 hour', private.now() - interval '1 hour');
 select is((select x ->> 'job' from jsonb_array_elements(private.engine_health() -> 'cron' -> 'failing') x), 'tiffin-nightly',
   'a job whose latest run failed is reported');
-select is((public.ops_health() -> 'checks' ->> 'failing_jobs')::integer, 1, 'ops_health counts failing jobs');
+select is((public.ops_health() -> 'checks' ->> 'failing_jobs')::integer, 1, 'ops_health counts failing critical jobs');
 select is((private.engine_health() -> 'cron' ->> 'failures_24h')::integer, 1, 'and the failures of the last 24 hours');
+-- The runbook's fix: rerun by hand. That writes no cron log row, but its heartbeat clears the failure.
+select lives_ok($$ select private.run_job('tiffin-nightly') $$, 'the nightly job is rerun by hand');
+select is((public.ops_health() -> 'checks' ->> 'failing_jobs')::integer, 0, 'a heartbeat after the failed run clears it');
+-- A later scheduled success clears it too.
+update public.engine_heartbeats set last_ok_at = null where job = 'tiffin-nightly';
+select is((public.ops_health() -> 'checks' ->> 'failing_jobs')::integer, 1, 'without the heartbeat the failure is back');
 insert into cron.job_run_details (jobid, runid, job_pid, database, username, command, status, return_message, start_time, end_time)
 values ((select jobid from cron.job where jobname = 'tiffin-nightly'), (select coalesce(max(runid), 0) + 1 from cron.job_run_details),
         1, 'postgres', 'postgres', 'select 1', 'succeeded', '1 row', private.now(), private.now());
 select is((public.ops_health() -> 'checks' ->> 'failing_jobs')::integer, 0, 'a later success clears it');
 
--- Every critical heartbeat fresh, no overdue slot, no failing job: healthy.
+-- Every critical heartbeat fresh, no overdue slot, no failing job, no open engine error: healthy.
 update public.engine_heartbeats set last_ok_at = private.now()
 where job in ('tiffin-lock-due-slots', 'tiffin-nightly', 'tiffin-owner-summary');
-select is(public.ops_health() -> 'checks', '{"lock_job": true, "nightly_job": true, "summary_job": true, "overdue_slots": 0, "failing_jobs": 0, "engine_errors": null}'::jsonb
-            || case when to_regclass('public.engine_errors') is not null then '{"engine_errors": 0}'::jsonb else '{}'::jsonb end,
+update public.engine_errors set resolved_at = private.now() where resolved_at is null;   -- seed / earlier steps
+select is(public.ops_health() -> 'checks',
+  '{"lock_job": true, "nightly_job": true, "summary_job": true, "overdue_slots": 0, "failing_jobs": 0, "job_warnings": 0, "engine_errors": 0}'::jsonb,
   'all checks pass');
 select is((public.ops_health() ->> 'ok')::boolean, true, 'healthy');
 select ok(public.ops_health()::text !~ '(kitchen|Ops Test|[0-9a-f]{8}-[0-9a-f]{4})', 'ops_health carries no kitchen names or ids');
 
--- Wave 1's engine_errors table, when it exists, makes recent errors unhealthy. Simulated if absent.
-select is((private.engine_health() -> 'engine_errors' ->> 'tracked')::boolean, to_regclass('public.engine_errors') is not null,
-  'engine_errors is tracked exactly when the table exists');
--- When wave 1's table is absent a minimal stand-in is created (rolled back); when it exists (after the
--- merge) its own shape is unknown here, so its rows are not touched and the state must stay healthy.
-create temp table ee_sim (simulated boolean not null);
-do $$
-begin
-  if to_regclass('public.engine_errors') is null then
-    create table public.engine_errors (id bigint generated always as identity, created_at timestamptz not null default now(),
-                                       resolved_at timestamptz);
-    insert into public.engine_errors (created_at) values (private.now() - interval '1 minute');
-    insert into public.engine_errors (created_at, resolved_at) values (private.now() - interval '2 minutes', private.now());
-    insert into ee_sim values (true);
-  else
-    insert into ee_sim values (false);
-  end if;
-end $$;
-select is((public.ops_health() ->> 'ok')::boolean, not (select simulated from ee_sim),
-  'a recent unresolved engine error makes it unhealthy (simulated when wave 1''s table is absent)');
-select is((private.engine_health() -> 'engine_errors' ->> 'last_24h')::integer >= 1, (select simulated from ee_sim),
-  'and is counted for the admin tile; resolved ones are not');
-select is((private.engine_health() -> 'engine_errors' ->> 'recent')::integer, case when (select simulated from ee_sim) then 1 else 0 end,
-  'only unresolved errors count');
+-- A non-critical job failing is a warning on the tile, not an outage.
+insert into cron.job_run_details (jobid, runid, job_pid, database, username, command, status, return_message, start_time, end_time)
+values ((select jobid from cron.job where jobname = 'tiffin-outbox'), (select coalesce(max(runid), 0) + 1 from cron.job_run_details),
+        1, 'postgres', 'postgres', 'select 1', 'failed', 'ERROR: simulated outbox failure', private.now() - interval '1 minute', private.now());
+select is((public.ops_health() -> 'checks' ->> 'job_warnings')::integer, 1, 'a failed non-critical job is a warning');
+select is((public.ops_health() ->> 'ok')::boolean, true, 'and does not make the platform unhealthy');
+select is((select (x ->> 'critical')::boolean from jsonb_array_elements(private.engine_health() -> 'cron' -> 'failing') x
+           where x ->> 'job' = 'tiffin-outbox'), false, 'the admin tile marks it as not critical');
+
+-- Wave 1's engine errors: the engine catches them (the cron run succeeds, the heartbeat stays fresh),
+-- so an open row must make the platform unhealthy. Example: meal generation failed for this kitchen.
+select is((private.engine_health() -> 'engine_errors' ->> 'tracked')::boolean, true, 'engine_errors is tracked');
+select private.record_engine_error('31400000-0000-4000-e300-000000000001', 'nightly_refresh', null, null, 'XX000', 'simulated refresh failure');
+select is((public.ops_health() -> 'checks' ->> 'engine_errors')::integer, 1, 'an open engine error is counted');
+select is((public.ops_health() ->> 'ok')::boolean, false, 'and makes the platform unhealthy (ops-health 503)');
+select is((select x ->> 'kitchen' from jsonb_array_elements(private.engine_health() -> 'engine_errors' -> 'items') x
+           where x ->> 'job' = 'nightly_refresh'), 'Ops Test Kitchen', 'the admin tile names the kitchen and job');
+select is((private.engine_health() -> 'engine_errors' -> 'by_job' ->> 'nightly_refresh')::integer, 1, 'counted per job');
+-- Still red later (no short window that would turn a 00:30 failure green by 00:45).
+select set_config('app.now', '2027-02-02 09:50:00+05:30', true);
+update public.engine_heartbeats set last_ok_at = private.now() where job in ('tiffin-lock-due-slots', 'tiffin-nightly', 'tiffin-owner-summary');
+select is((public.ops_health() ->> 'ok')::boolean, false, 'still unhealthy 20 minutes later');
+-- An error last seen more than 26 hours ago stays on the tile but no longer holds the pinger red.
+select set_config('app.now', '2027-02-03 12:00:00+05:30', true);
+select is((private.engine_health() -> 'engine_errors' ->> 'recent')::integer, 0, 'an error not seen for 26 hours is not recent');
+select is((private.engine_health() -> 'engine_errors' ->> 'open')::integer, 1, 'but is still open on the tile');
+select set_config('app.now', '2027-02-02 09:50:00+05:30', true);
+-- The same work succeeding closes it.
+select private.resolve_engine_errors('31400000-0000-4000-e300-000000000001', 'nightly_refresh', null, null);
+select is((public.ops_health() -> 'checks' ->> 'engine_errors')::integer, 0, 'only unresolved errors count');
+select is((public.ops_health() ->> 'ok')::boolean, true, 'healthy again once resolved');
 
 -- Unscheduling the lock job is caught at once (the "unschedule the lock cron" test of the audit).
 select cron.unschedule('tiffin-lock-due-slots');
@@ -325,6 +345,23 @@ values ('81400000-0000-4000-e300-000000000001', '31400000-0000-4000-e300-0000000
 insert into public.notifications_outbox (kitchen_id, channel, recipient_type, recipient_id, template, payload, status, dedupe_key)
 values ('31400000-0000-4000-e300-000000000001', 'whatsapp', 'customer', (select v from ids where k = 'c1'), 'payment_receipt',
         '{"name": "Erasable Elango"}', 'sent', 'ops-test-receipt-1');
+-- P5 parent pays: a money message about them rerouted to their payer (Retained Ranjan).
+insert into public.notifications_outbox (kitchen_id, channel, recipient_type, recipient_id, template, payload, status, dedupe_key)
+values ('31400000-0000-4000-e300-000000000001', 'whatsapp', 'customer', (select v from ids where k = 'c2'), 'low_balance_reminder_payer',
+        jsonb_build_object('eater_customer_id', (select v from ids where k = 'c1'), 'eater_name', 'Erasable Elango', 'meals_left', 2),
+        'pending', 'ops-test-payer-1');
+-- Owner alerts naming them (and one naming someone else).
+insert into public.notifications_outbox (kitchen_id, channel, recipient_type, recipient_id, template, payload, status, dedupe_key)
+values ('31400000-0000-4000-e300-000000000001', 'whatsapp', 'member', '00000000-0000-4000-e300-000000000001', 'complaint_alert',
+        '{"category": "other", "customer_name": "Erasable Elango"}', 'sent', 'ops-test-owner-1'),
+       ('31400000-0000-4000-e300-000000000001', 'whatsapp', 'member', '00000000-0000-4000-e300-000000000001', 'complaint_alert',
+        '{"category": "other", "customer_name": "Retained Ranjan"}', 'sent', 'ops-test-owner-2');
+-- M7: they came in as a platform lead (admin-only data, audit rows without a kitchen).
+insert into public.leads (id, name, phone_last4, source, status, address_text, notes, chosen_kitchen_id)
+values ('91400000-0000-4000-e300-000000000001', 'Erasable Elango', '1001', 'website', 'matched', 'Flat 77 Rosewood Lane',
+        'Prefers Banyan shrine gate', '31400000-0000-4000-e300-000000000001');
+update public.leads set customer_id = (select v from ids where k = 'c1'), status = 'converted', converted_at = private.now()
+where id = '91400000-0000-4000-e300-000000000001';
 update public.subscriptions set status = 'cancelled', cancelled_at = private.now() where customer_id = (select v from ids where k = 'c1');
 
 create temp table before_erase as
@@ -363,6 +400,19 @@ select is((select reason from public.storage_purge_queue where bucket = 'proofs'
 select is((select count(*) from public.notifications_outbox where recipient_id = (select v from ids where k = 'c1')), 0::bigint,
   'messages to them are deleted');
 select is((select count(*) from public.customer_health where customer_id = (select v from ids where k = 'c1')), 0::bigint, 'health tags are deleted');
+select is((select count(*) from public.notifications_outbox where dedupe_key = 'ops-test-payer-1'), 0::bigint,
+  'money messages about them sent to their payer are deleted');
+select is((select payload ->> 'customer_name' from public.notifications_outbox where dedupe_key = 'ops-test-owner-1'), '[erased]',
+  'owner alerts keep the alert without their name');
+select is((select payload ->> 'customer_name' from public.notifications_outbox where dedupe_key = 'ops-test-owner-2'), 'Retained Ranjan',
+  'owner alerts about other customers are untouched');
+select is((select row(name, phone_last4, address_text, notes, status::text)::text from public.leads where id = '91400000-0000-4000-e300-000000000001'),
+  '(,,,,converted)', 'the lead that became them forgets who they were; the funnel stage stays');
+select is((select count(*) from public.audit_log where table_name = 'leads' and row_id = '91400000-0000-4000-e300-000000000001'
+           and coalesce(before::text, '') || coalesce(after::text, '') ~* '(Elango|Rosewood|Banyan|1001)'), 0::bigint,
+  'and its audit rows (no kitchen) are scrubbed');
+select ok((select count(*) from public.audit_log where table_name = 'leads' and row_id = '91400000-0000-4000-e300-000000000001') >= 2,
+  'the lead''s audit rows are kept');
 select is((select row(count(*), coalesce(sum(meals), 0))::text from public.balance_entries where customer_id = (select v from ids where k = 'c1')),
   (select row(entries, meals)::text from before_erase), 'the ledger is unchanged');
 

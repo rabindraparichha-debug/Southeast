@@ -493,6 +493,7 @@ export const en = {
   'today.freezeConfirmTitle': 'Freeze this count now?',
   'today.freezeConfirm': 'Meals are counted and charged as they stood at the cutoff, as the automatic lock would have done.',
   'today.askOwnerToFreeze': 'Ask the owner to press Freeze now.',
+  'today.engineError': 'Engine error: {message}',
   'common.cancel': 'Cancel',
   'tabs.stock': 'Stock',
   'stock.purchase': 'Purchase',

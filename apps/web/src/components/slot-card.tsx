@@ -8,9 +8,13 @@ import { healthLabel, type SlotTotalsP5 } from '@/lib/p5';
 /** Minutes after the cutoff before an unlocked slot counts as "not frozen" (the lock job runs every minute). */
 export const FREEZE_GRACE_MS = 5 * 60_000;
 
-/** True when the cutoff passed (plus grace) with meals ordered but no count snapshot: the engine missed it. */
+/**
+ * True when the cutoff passed (plus grace) with meals ordered but no count snapshot: the engine missed it.
+ * Uses slot_summary's own `overdue` (server clock) when present; closed slots are never overdue.
+ */
 export function isCountOverdue(s: SlotSummary, now = Date.now()): boolean {
-  return !s.locked && s.live.orders > 0 && now > Date.parse(s.cutoff_at) + FREEZE_GRACE_MS;
+  if (s.locked || s.closed || s.live.orders <= 0) return false;
+  return s.overdue ?? now > Date.parse(s.cutoff_at) + FREEZE_GRACE_MS;
 }
 
 /** One meal slot: locked or live count, diet split, skips, link to the kitchen sheet. */
@@ -44,6 +48,7 @@ export function SlotCard({ s, kitchenId, canFreeze = false }: { s: SlotSummary; 
         <div role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200">
           <strong>Count not frozen.</strong> Changes closed at {formatIstShort(s.cutoff_at)}, but the automatic lock has not run, so
           this count is not final and the meals are not charged or routed yet.
+          {s.engine_error && <span className="mt-1 block text-xs text-red-700">Engine error: {s.engine_error}</span>}
           {canFreeze && kitchenId ? (
             <FreezeButton kitchenId={kitchenId} date={s.service_date} slot={s.slot} />
           ) : (

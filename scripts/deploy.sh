@@ -8,6 +8,8 @@
 #   --skip-db          do not push migrations
 #   --skip-functions   do not deploy Edge Functions
 #   --only a,b         deploy only these functions (each must be on the allowlist below)
+#   --include-all      pass --include-all to `db push`: needed when a branch merged later added migrations
+#                      dated before ones already on the project (the dry run lists them first; read it)
 #   --local            self-test against the local stack (DB_URL from `supabase status`; implies --dry-run,
 #                      skips the hosted secrets list). The local stack has dev keys, so it must refuse.
 #   --self-test        check the script's own guards (no network, no database)
@@ -17,13 +19,17 @@
 # (Dashboard → Connect → Direct connection). Nothing secret is printed: checks report names only.
 # Live Razorpay keys: refused while RAZORPAY_ALLOW_LIVE is set, unless the owner approved live mode
 # and you pass OWNER_APPROVED_LIVE_PAYMENTS=yes (CLAUDE.md).
+# Every function directory must be on ALLOWLIST or NEVER: a function nobody listed is refused before
+# anything is written (add it to ALLOWLIST when its branch merges). Production needs OPS_HEALTH_KEY.
+# Works with bash 3.2 (macOS) and later.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib/pg.sh
 
 # Edge Functions that may be deployed. razorpay-mock (the local test payment page) is never deployed.
 ALLOWLIST=(ops-health storage-retention whatsapp-outbox whatsapp-webhook razorpay-payment-link razorpay-refund
-           razorpay-webhook notebook-import route-optimize lead-intake lead-email ads-conversions weather-alerts)
+           razorpay-webhook notebook-import route-optimize lead-intake lead-email ads-conversions weather-alerts
+           auth-send-sms)
 NEVER=(razorpay-mock)
 # Vault secrets every project needs (CLAUDE.md > Secrets, docs/OPERATIONS.md).
 VAULT=(phone_encryption_key phone_hash_key functions_base_url service_role_key public_web_url)
@@ -32,12 +38,28 @@ CRON_JOBS=(tiffin-lock-due-slots tiffin-nightly tiffin-owner-summary tiffin-tomo
            tiffin-outbox tiffin-growth tiffin-ad-conversions tiffin-weather tiffin-churn tiffin-late-delivery
            tiffin-purge tiffin-storage-retention)
 
-ENV_NAME="" REF="" DRY=0 SKIP_DB=0 SKIP_FN=0 ONLY="" LOCAL=0 SELF_TEST=0
+ENV_NAME="" REF="" DRY=0 SKIP_DB=0 SKIP_FN=0 ONLY="" LOCAL=0 SELF_TEST=0 INCLUDE_ALL=0
 problems=0
 fail() { echo "  FAIL  $*"; problems=$((problems + 1)); }
 ok() { echo "  ok    $*"; }
 warn() { echo "  warn  $*"; }
 die() { echo "refusing: $*" >&2; exit 2; }
+# SHA-256 of a string (sha256sum on Linux, shasum on macOS). No tool: refuse rather than compare with "".
+sha() {
+  if command -v sha256sum >/dev/null 2>&1; then printf '%s' "$1" | sha256sum | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1
+  else die "neither sha256sum nor shasum is installed (needed to compare secret digests)"
+  fi
+}
+# Function directories on neither list (printed one per line; empty when all are listed).
+unlisted_functions() {
+  local d fn
+  for d in supabase/functions/*/; do
+    fn=$(basename "$d")
+    [[ "$fn" == _shared ]] && continue
+    [[ " ${ALLOWLIST[*]} ${NEVER[*]} " == *" $fn "* ]] || echo "$fn"
+  done
+}
 
 # Every Supabase CLI call goes through here. Commands that could plant local settings, seed data or
 # wipe a hosted database are refused whatever the caller asks.
@@ -85,12 +107,13 @@ self_test() {
     if [[ -n "$(guard_cli $cmd)" ]]; then echo "self-test: '$cmd' was refused"; bad=1; fi
   done
   # Every function in the repo is either deployable or deliberately never deployed.
-  for d in supabase/functions/*/; do
-    local fn
-    fn=$(basename "$d")
-    [[ "$fn" == _shared ]] && continue
-    if [[ ! " ${ALLOWLIST[*]} ${NEVER[*]} " == *" $fn "* ]]; then echo "self-test: function $fn is on neither list"; bad=1; fi
-  done
+  local fn
+  for fn in $(unlisted_functions); do echo "self-test: function $fn is on neither list"; bad=1; done
+  [[ "$(sha abc)" == ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]] || { echo "self-test: sha() is wrong"; bad=1; }
+  # An empty array must expand to nothing under set -u (bash 3.2 aborts on a bare "${a[@]}").
+  local empty=() n
+  n=$(set -u; printf '%s' ${empty[@]+"${empty[@]}"} | wc -c)
+  [[ "$n" -eq 0 ]] || { echo "self-test: empty array expansion"; bad=1; }
   (( bad )) && { echo "SELF-TEST FAILED"; exit 1; }
   echo "SELF-TEST PASSED: forbidden commands refused, $(echo "${ALLOWLIST[@]}" | wc -w) deployable functions, never: ${NEVER[*]}"
   exit 0
@@ -104,6 +127,7 @@ while [[ $# -gt 0 ]]; do
     --skip-db) SKIP_DB=1; shift;;
     --skip-functions) SKIP_FN=1; shift;;
     --only) ONLY="${2:-}"; shift 2;;
+    --include-all) INCLUDE_ALL=1; shift;;
     --local) LOCAL=1; DRY=1; shift;;
     --self-test) SELF_TEST=1; shift;;
     *) die "unknown option $1 (see the header of scripts/deploy.sh)";;
@@ -125,6 +149,7 @@ if (( ! LOCAL )) && [[ "$target" =~ ^(localhost|127\.|0\.0\.0\.0|\[::1\]|host\.d
 fi
 
 FUNCS=("${ALLOWLIST[@]}")
+unlisted=$(unlisted_functions | tr '\n' ' ')
 if [[ -n "$ONLY" ]]; then
   IFS=',' read -r -a FUNCS <<<"$ONLY"
   for fn in "${FUNCS[@]}"; do
@@ -143,7 +168,6 @@ else
   secrets_json=$(sb secrets list --project-ref "$REF" -o json)
   # Name -> digest (the CLI shows a SHA-256 digest of each value, never the value).
   digest_of() { node -e 'const a=JSON.parse(process.argv[1]); const x=a.find(s=>s.name===process.argv[2]); console.log(x ? (x.digest ?? x.value ?? "") : "")' "$secrets_json" "$1"; }
-  sha() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
   d=$(digest_of PLATFORM_ENV)
   if [[ -z "$d" ]]; then
     fail "PLATFORM_ENV is not set (supabase secrets set PLATFORM_ENV=$ENV_NAME)"
@@ -166,6 +190,24 @@ else
   for name in WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN RAZORPAY_WEBHOOK_SECRET LEAD_INTAKE_KEY PUBLIC_WEB_URL SENTRY_DSN; do
     [[ -n "$(digest_of "$name")" ]] || warn "$name not set (the functions that need it refuse until it is)"
   done
+  # ops-health is public (--no-verify-jwt): without a key anyone can make it run the health query.
+  if [[ -z "$(digest_of OPS_HEALTH_KEY)" ]]; then
+    if [[ "$ENV_NAME" == production ]]; then
+      fail "OPS_HEALTH_KEY is not set (supabase secrets set OPS_HEALTH_KEY=<random>; the pinger URL gets ?key=<random>)"
+    else
+      warn "OPS_HEALTH_KEY not set: ops-health is open to anyone with the URL"
+    fi
+  else
+    ok "OPS_HEALTH_KEY"
+  fi
+fi
+
+# ---------------------------------------------------------------------------------------------
+echo "1b. Edge Function lists"
+if [[ -n "$unlisted" ]]; then
+  fail "function(s) on neither ALLOWLIST nor NEVER in scripts/deploy.sh: ${unlisted% } (add them before deploying)"
+else
+  ok "every function directory is on ALLOWLIST or NEVER"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -206,9 +248,11 @@ if (( SKIP_DB )); then
 elif (( problems )); then
   warn "not pushed: fix the $problems problem(s) above first"
 else
+  push_flags=()
+  (( INCLUDE_ALL )) && push_flags+=(--include-all)
   echo "  pending (dry run):"
-  sb db push --db-url "$DB_URL" --dry-run 2>&1 | sed 's/^/    /'
-  run db push --db-url "$DB_URL"
+  sb db push --db-url "$DB_URL" --dry-run ${push_flags[@]+"${push_flags[@]}"} 2>&1 | sed 's/^/    /'
+  run db push --db-url "$DB_URL" ${push_flags[@]+"${push_flags[@]}"}
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -225,7 +269,7 @@ else
     if awk -v s="[functions.$fn]" '$0 == s {f = 1; next} /^\[/ {f = 0} f && /^verify_jwt *= *false/ {found = 1} END {exit !found}' supabase/config.toml; then
       flags+=(--no-verify-jwt)
     fi
-    run functions deploy "$fn" --project-ref "$REF" "${flags[@]}"
+    run functions deploy "$fn" --project-ref "$REF" ${flags[@]+"${flags[@]}"}
   done
 fi
 
@@ -241,7 +285,7 @@ else
   (( problems )) || ok "${#CRON_JOBS[@]} pg_cron jobs active"
   echo "  ops_health: $(pq -c "select public.ops_health()")"
   code=$(curl -s -o /dev/null -w '%{http_code}' "https://$REF.supabase.co/functions/v1/ops-health" || true)
-  echo "  GET https://$REF.supabase.co/functions/v1/ops-health -> $code (200 healthy; on 503 open /admin → Engine)"
+  echo "  GET https://$REF.supabase.co/functions/v1/ops-health -> $code (200 healthy; 401: OPS_HEALTH_KEY is set, use ?key=; on 503 open /admin → Engine)"
 fi
 
 if (( problems )); then

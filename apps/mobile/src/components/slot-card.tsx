@@ -23,9 +23,13 @@ export function healthSummary(byHealth: Record<string, number> | null | undefine
 /** Minutes after the cutoff before an unlocked slot counts as "not frozen" (the lock job runs every minute). */
 export const FREEZE_GRACE_MS = 5 * 60_000;
 
-/** True when the cutoff passed (plus grace) with meals ordered but no count snapshot: the engine missed it. */
+/**
+ * True when the cutoff passed (plus grace) with meals ordered but no count snapshot: the engine missed it.
+ * Uses slot_summary's own `overdue` (server clock) when present; closed slots are never overdue.
+ */
 export function isCountOverdue(s: SlotSummary, now = Date.now()): boolean {
-  return !s.locked && s.live.orders > 0 && now > Date.parse(s.cutoff_at) + FREEZE_GRACE_MS;
+  if (s.locked || s.closed || s.live.orders <= 0) return false;
+  return s.overdue ?? now > Date.parse(s.cutoff_at) + FREEZE_GRACE_MS;
 }
 
 /** "Count not frozen" with Freeze now for the owner (freeze_slot: the idempotent lock). */
@@ -53,6 +57,7 @@ function NotFrozen({ s, kitchenId, canFreeze, onFrozen }: { s: SlotSummary; kitc
   return (
     <View style={styles.alert} accessibilityRole="alert">
       <Text style={styles.alertText}>{t('today.notFrozen', { time: formatIstShort(s.cutoff_at) })}</Text>
+      {s.engine_error ? <Text style={styles.alertText}>{t('today.engineError', { message: s.engine_error })}</Text> : null}
       {canFreeze && kitchenId
         ? <Button title={busy ? t('today.freezing') : t('today.freezeNow')} onPress={freeze} busy={busy} />
         : <Text style={styles.alertText}>{t('today.askOwnerToFreeze')}</Text>}

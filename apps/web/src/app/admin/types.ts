@@ -47,6 +47,14 @@ export type EngineHealth = {
   checked_at: string;
   jobs: EngineJob[];
   overdue_slots: { count: number; items: { kitchen_id: string; kitchen: string; service_date: string; slot: 'lunch' | 'dinner'; cutoff_at: string }[] };
-  cron: { failing: { job: string; at: string; message: string }[]; failures_24h: number };
-  engine_errors: { tracked: boolean; recent: number | null; last_24h: number | null };
+  /** Latest failed run per tiffin-* job not cleared since; only critical ones affect `ok`. */
+  cron: { failing: { job: string; at: string; critical: boolean; message: string }[]; failures_24h: number };
+  /** Wave 1's engine_errors: open rows; `recent` = open rows seen within `window_hours` (these affect `ok`). */
+  engine_errors: {
+    tracked: boolean; window_hours: number; open: number; recent: number; by_job: Record<string, number>;
+    items: {
+      id: number; kitchen_id: string | null; kitchen: string | null; job: string; service_date: string | null;
+      slot: 'lunch' | 'dinner' | null; message: string; attempts: number; first_seen_at: string; last_seen_at: string;
+    }[];
+  };
 };

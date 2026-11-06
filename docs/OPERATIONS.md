@@ -23,12 +23,13 @@ Always through `scripts/deploy.sh` (vendor-first wave 3). It pushes migrations, 
    scripts/deploy.sh --env staging --project-ref <ref> --dry-run   # read-only: checks + pending migrations + plan
    scripts/deploy.sh --env staging --project-ref <ref>
    ```
-   Options: `--skip-db`, `--skip-functions`, `--only ops-health,storage-retention`. Older Postgres client tools than the server (17)? Set `PG_TOOLS_IMAGE=postgres:17`.
+   Options: `--skip-db`, `--skip-functions`, `--only ops-health,storage-retention`, `--include-all` (only when the dry run says migrations from a later-merged branch are dated before ones already applied; read the list first). Older Postgres client tools than the server (17)? Set `PG_TOOLS_IMAGE=postgres:17`. Works with macOS's bash 3.2.
 3. What it checks, and refuses on (nothing secret is printed; only names):
-   - **Edge Function secrets** (`supabase secrets list`, names and SHA-256 digests): `PLATFORM_ENV` set to the `--env` you deploy; no value still equal to a placeholder from `supabase/functions/.env.example`; `RAZORPAY_ALLOW_LIVE` unset (only the owner approves live payments; after approval rerun with `OWNER_APPROVED_LIVE_PAYMENTS=yes`). Missing optional secrets are warnings: those functions refuse until set (`PLATFORM_ENV` fail-closed mocks).
+   - **Edge Function secrets** (`supabase secrets list`, names and SHA-256 digests): `PLATFORM_ENV` set to the `--env` you deploy; no value still equal to a placeholder from `supabase/functions/.env.example`; `RAZORPAY_ALLOW_LIVE` unset (only the owner approves live payments; after approval rerun with `OWNER_APPROVED_LIVE_PAYMENTS=yes`). Missing optional secrets are warnings: those functions refuse until set (`PLATFORM_ENV` fail-closed mocks). `OPS_HEALTH_KEY` must be set in production (warning on staging).
+   - **Function lists:** every directory under `supabase/functions` is on the script's `ALLOWLIST` or `NEVER`; an unlisted function stops the deploy before anything is written (add it to `ALLOWLIST` when its branch merges).
    - **Vault** (via `DB_URL`): `phone_encryption_key`, `phone_hash_key`, `functions_base_url`, `service_role_key`, `public_web_url` exist; the phone keys are not the seed's dev keys; `functions_base_url` is an `https://` hosted URL; `service_role_key` is not the local demo key; the seed test logins do not exist.
    - **After deploy**: every `tiffin-*` pg_cron job exists and is active, then prints `public.ops_health()` and the `ops-health` HTTP status.
-4. Edge Functions deployed (allowlist, with `--no-verify-jwt` where `supabase/config.toml` says `verify_jwt = false`): `ops-health`, `storage-retention`, `whatsapp-outbox`, `whatsapp-webhook`, `razorpay-payment-link`, `razorpay-refund`, `razorpay-webhook`, `notebook-import`, `route-optimize`, `lead-intake`, `lead-email`, `ads-conversions`, `weather-alerts`. **Never** `razorpay-mock` (the local test payment page): the script refuses it even with `--only`, and `scripts/deploy.sh --self-test` fails if a new function directory is on neither list.
+4. Edge Functions deployed (allowlist, with `--no-verify-jwt` where `supabase/config.toml` says `verify_jwt = false`): `ops-health`, `storage-retention`, `whatsapp-outbox`, `whatsapp-webhook`, `razorpay-payment-link`, `razorpay-refund`, `razorpay-webhook`, `notebook-import`, `route-optimize`, `lead-intake`, `lead-email`, `ads-conversions`, `weather-alerts`, `auth-send-sms` (deployed always; Supabase uses it only when the Send SMS hook is switched on, docs/LOGIN.md). **Never** `razorpay-mock` (the local test payment page): the script refuses it even with `--only`, and a function directory on neither list stops the deploy.
 5. Secrets: `supabase secrets set KEY=value`, with real random values; `supabase/functions/.env.example` lists the names but its values are local placeholders. Set `PLATFORM_ENV=staging` or `PLATFORM_ENV=production` on every hosted project. Mock modes (Razorpay, WhatsApp, the notebook-import fixture) run only when `PLATFORM_ENV` is `local`, so a hosted project without keys refuses (`payments_not_configured`, `whatsapp_not_configured`, `ai_not_configured`) instead of pretending to work. Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
 6. Web: deploy as usual. Mobile: `eas build` / `eas update` (docs/RELEASE.md).
 
@@ -73,15 +74,15 @@ Check jobs: `select jobname, status, start_time, return_message from cron.job_ru
 
 ## Engine health and monitoring
 
-- **Admin → Dashboard → Engine** (`public.engine_health()`, admins only): each job's last finished run and whether it is late or unscheduled, every slot past its cutoff with orders but no count ("count not frozen", with kitchen, date and slot), `tiffin-*` jobs whose latest run failed (with the error), and engine errors once wave 1's `engine_errors` table exists (it is read only if present).
+- **Admin → Dashboard → Engine** (`public.engine_health()`, admins only): each job's last finished run and whether it is late or unscheduled, every slot past its cutoff with orders but no count ("count not frozen", with kitchen, date and slot), `tiffin-*` jobs whose latest run failed (with the error; non-critical ones marked as warnings), and every open engine error (wave 1's `engine_errors`: kitchen, step, date, slot, message, tries).
 - **Uptime pinger** (free: UptimeRobot, Better Stack, cron-job.org): monitor `GET https://<ref>.supabase.co/functions/v1/ops-health` every 5 minutes and alert on anything but 200.
-  - 200 `{"ok":true,...}`: the lock job finished in the last 5 minutes, nightly and summary in the last 26 hours, all three are scheduled, no slot is more than 5 minutes past its cutoff without a count, no `tiffin-*` job's latest run failed, and no engine error in the last 15 minutes.
-  - 503 `{"ok":false,"checks":{...}}`: open the admin Engine tile. The body has booleans and counts only (no names, ids or errors).
-  - Optional secret `OPS_HEALTH_KEY`: when set, the URL needs `?key=<value>`.
+  - 200 `{"ok":true,...}`: the lock job finished in the last 5 minutes, nightly and summary in the last 26 hours, all three are scheduled, no slot is more than 5 minutes past its cutoff without a count, no critical job's latest run failed (not cleared since), and no open engine error seen in the last 26 hours (a failed nightly step, lock, run building or stock use: the engine catches these, so the cron run itself succeeds).
+  - 503 `{"ok":false,"checks":{...}}`: open the admin Engine tile. The body has booleans and counts only (no names, ids or errors). `job_warnings` counts failed housekeeping jobs; they do not cause a 503.
+  - Secret `OPS_HEALTH_KEY` (required in production by `scripts/deploy.sh`): the URL needs `?key=<value>`. Answers are cached for 15 seconds.
 - **Vendors see it too:** a slot card turns red with "Count not frozen" 5 minutes after its cutoff if it has orders and no lock. The owner can press **Freeze now** (`freeze_slot`: the same idempotent lock and balance sync as the job; only after the cutoff, last 7 days); staff see the banner and are told to ask the owner.
 - **Errors:** set `SENTRY_DSN` (Edge Functions secret, plus the web and mobile variables in `.env.example`). Edge Function errors are reported with phone numbers masked (`_shared/monitor.ts`).
 - **Daily glance (admin console):** `/admin` platform metrics. Watch failed outbox messages, escalated complaints, waitlisted leads, stops proved (goal 90%), the share of changes made on WhatsApp/web.
-- **Database:** Supabase dashboard (CPU, connections, slow queries, disk). Postgres logs carry `build_runs failed` / `consume_for_slot failed` warnings if routing or inventory fail during a lock (the lock itself still succeeds).
+- **Database:** Supabase dashboard (CPU, connections, slow queries, disk). Failures of run building or stock use during a lock (the lock itself still succeeds), and of each nightly step, are recorded in `engine_errors` (Postgres logs carry an `engine … failed` warning too) and turn the Engine tile and ops-health red.
 
 ## Retention
 
@@ -102,15 +103,15 @@ SQL cannot delete storage objects (Supabase blocks it), so photos go through the
 ## Backups and the restore drill
 
 - **Hosted (primary):** Supabase Pro daily backups on the production project (PITR optional). They restore the whole database (Vault and pg_cron included) through the dashboard.
-- **Portable copy:** `DB_URL=<direct connection string> pnpm db:backup` writes `backups/tiffin-<timestamp>.dump` (schemas `public`, `private`, `auth`) and `<dump>.checks` (row counts and ledger totals). Store both encrypted, off the server.
+- **Portable copy:** `DB_URL=<direct connection string> pnpm db:backup` writes `backups/tiffin-<timestamp>.dump` (schemas `public`, `private`, `auth`) and `<dump>.checks` (row counts and ledger totals, taken in the dump's own snapshot, so it can run during service hours). Store both encrypted, off the server.
 - **Keys are not in backups.** Vault keys (`phone_encryption_key`, `phone_hash_key`) live in your password manager. A restore into a new project needs the same keys, or phone numbers can't be decrypted. The drill below proves the keys you hold still fit.
 - **Photos are not in database backups.** Proof, dispatch and import photos expire anyway (Retention). Receipts and bills are money records: copy the `receipts` and `bills` buckets monthly with an S3 client against the project's S3 endpoint (Storage → Settings → S3 access keys).
 - **Local drill (monthly, and after big migrations):** `pnpm db:restore-drill` backs up the local database, restores it into a scratch database and checks every table's row count plus the ledger totals. It exits non-zero on any difference. If your local project id is not `tiffin`, set `DB_CONTAINER=supabase_db_<project_id>`.
 - **Staging-copy drill (before go-live, then quarterly):**
-  1. The staging project has every migration (`scripts/deploy.sh --env staging ...`) and the **production** Vault phone keys.
+  1. The staging project has every migration (`scripts/deploy.sh --env staging ...`) and the **production** Vault phone keys. The copy will hold real customers' phone numbers that those keys decrypt: the drill makes sure it never messages them (step 3), and nobody should switch the paused jobs back on while the copy holds production data.
   2. `DB_URL=<staging direct URL> CONFIRM_WIPE=<host:port/db of staging> SOURCE_DB_URL=<production direct URL> pnpm db:restore-drill` (or pass a dump file written by `db:backup` instead of `SOURCE_DB_URL`).
-  3. It pauses staging's `tiffin-*` jobs, replaces staging's data in one transaction (all or nothing), switches the jobs back on, and checks: row counts and ledger totals equal the source's, every `tiffin-*` cron job exists, and sampled phone numbers decrypt and re-hash to their stored hash (`decrypt_phone` works with the keys from the password manager). No phone number is printed.
-  Last local runs: scratch-database drill 66 tables matched; staging-copy drill against a local stack matched 66 tables, 13 cron jobs, 31/31 phones; with a wrong `phone_encryption_key` it failed as it should.
+  3. It pauses staging's `tiffin-*` jobs, replaces staging's data in one transaction (all or nothing) and cancels the copied outbox messages that had not been sent, then switches back on only the jobs that contact nobody (lock, nightly, churn, purge, storage retention). The outbox, nudges, summaries, growth, late-delivery, weather and ad-conversion jobs stay **paused** and are listed (`RESUME_JOBS=yes` resumes all, only for a staging copy with test data). It checks: row counts and ledger totals equal the source's, every `tiffin-*` cron job exists, and sampled phone numbers decrypt and re-hash to their stored hash (`decrypt_phone` works with the keys from the password manager). No phone number is printed.
+  Last local runs (after rebasing on wave 1): scratch-database drill 68 tables matched; staging-copy drill against a local stack matched 68 tables, 13 cron jobs, 88/88 phones, cancelled the 1 copied pending message and left 8 messaging jobs paused. Earlier, with a wrong `phone_encryption_key`, it failed as it should.
 - **Real disaster, new project:** create the project, run `scripts/deploy.sh` against it (migrations, functions, checks), set the Vault keys from the password manager, then run the staging-copy steps with the new project as `DB_URL` and the latest dump. Point the web and app at the new URL.
 
 ## Load test
@@ -121,14 +122,15 @@ Last local runs (Docker on the build sandbox):
 
 | Run | Time |
 |---|---|
-| First-ever lock (every route built and optimised from scratch) | ~9–13 s (13.2 s on a shared 4-CPU sandbox after the lean audit log) |
-| A normal day (routes saved) | 1.8 s |
+| First-ever lock (every route built and optimised from scratch) | ~9–13 s (12.0 s on a shared 4-CPU sandbox with wave 1 and the lean audit log) |
+| A normal day (routes saved) | 2.0 s |
 
 ## Runbooks
 
 - **ops-health is 503 / the Engine tile is red:** read which check failed.
   - `lock_job` false: the minute job is late or unscheduled. `select * from cron.job where jobname = 'tiffin-lock-due-slots';` If missing, apply the latest migration again with `scripts/deploy.sh` (it reschedules jobs) or run the `cron.schedule(...)` line from `supabase/migrations/20261110000100_engine_health.sql`.
-  - `failing_jobs` > 0: the tile shows the job and its error. Fix the cause, then run the job by hand (table above); the next success clears it.
+  - `failing_jobs` > 0: the tile shows the job and its error. Fix the cause, then run the job by hand (table above): its heartbeat clears the failure at once, as does the next scheduled success.
+  - `engine_errors` > 0: the tile lists each open error (kitchen, step, date, slot, message). Fix the cause; the next successful run of that step closes it (for a lock: Freeze now or `select private.run_job('tiffin-lock-due-slots');`; for a nightly step: `select private.run_job('tiffin-nightly');`). An error that needs no retry is dismissed by the owner or an admin (`dismiss_engine_error`).
   - `overdue_slots` > 0: run `select private.run_job('tiffin-lock-due-slots');` or ask the owner to press Freeze now.
 - **A slot didn't lock:** the owner presses **Freeze now** on the red slot card (web or app). Or as ops: `select private.run_job('tiffin-lock-due-slots');`.
 - **Customers say they didn't get WhatsApp messages:** check `notifications_outbox` for `failed` or `cancelled` rows and `last_error`:
@@ -136,4 +138,4 @@ Last local runs (Docker on the build sandbox):
   - a Meta error: check the template status and the access token.
 - **Razorpay payment not credited:** find the payment in `webhook_events` by provider and event id. A missing event means the webhook URL or secret is wrong in the Razorpay dashboard. Re-deliver from the dashboard; it's deduplicated.
 - **A rider's deliveries didn't sync:** they stay on the phone until the network returns (the app retries every 30 s and on opening). Logging out is blocked while actions are waiting.
-- **Data deletion request (DPDP):** the owner uses "Erase customer" (`erase_customer`, after cancelling their subscriptions). Ledger rows and counts stay; their name, phone, notes, address, delivery GPS and notes, complaint text, review comment, health tags, import row, WhatsApp conversation (unless a family member shares the number) and messages to them go, and every audit-log value of theirs becomes `"[erased]"`. Their proof photos are queued and deleted by the next `storage-retention` run. For leads (platform data), an admin marks them lost and removes notes.
+- **Data deletion request (DPDP):** the owner uses "Erase customer" (`erase_customer`, after cancelling their subscriptions). Ledger rows and counts stay; their name, phone, notes, address, delivery GPS and notes, complaint text, review comment, health tags, import row, WhatsApp conversation (unless a family member shares the number) and messages to them go, and every audit-log value of theirs becomes `"[erased]"`. Money messages about them sent to a payer are deleted; owner alerts naming them keep the alert with `"[erased]"` as the name. If they came through the platform, their lead keeps only its funnel stages (D-134). Their proof photos are queued and deleted by the next `storage-retention` run. For leads that never became customers (platform data), an admin marks them lost and removes notes.

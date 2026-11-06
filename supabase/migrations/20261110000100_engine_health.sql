@@ -111,9 +111,12 @@ as $$
   order by d.d, sl.slot, k.name;
 $$;
 
--- wave 1 adds public.engine_errors. Counted only if the table exists (no hard dependency). Rows with a
--- resolved_at are left out when that column exists. Without a recognised timestamp column nothing is
--- "recent" (health is not held red by old rows); the total still shows on the admin tile.
+-- Wave 1's engine_errors: one open row (resolved_at is null) per failing kitchen/job/date/slot,
+-- last_seen_at bumped on every retry, resolved when the same work later succeeds or dismissed by the
+-- owner/admin. The engine catches these failures (nightly steps, lock, run building, stock use), so
+-- pg_cron sees success and the heartbeat stays fresh: an open row is the only trace. Any open row seen
+-- in the last 26 hours makes the platform unhealthy (a daily step that failed at 00:30 stays red until
+-- the next night or a fix); older open rows still show on the admin tile.
 create or replace function private.engine_error_counts()
 returns jsonb
 language plpgsql
@@ -122,30 +125,29 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_rel regclass := to_regclass('public.engine_errors');
-  v_col text;
-  v_open text := '';
+  v_since timestamptz := private.now() - interval '26 hours';
+  v_open bigint;
   v_recent bigint;
-  v_day bigint;
+  v_by_job jsonb;
+  v_items jsonb;
 begin
-  if v_rel is null then
-    return jsonb_build_object('tracked', false, 'recent', null, 'last_24h', null);
-  end if;
-  if exists (select 1 from pg_attribute a where a.attrelid = v_rel and a.attname = 'resolved_at' and not a.attisdropped) then
-    v_open := ' where resolved_at is null';
-  end if;
-  select a.attname into v_col from pg_attribute a
-  where a.attrelid = v_rel and not a.attisdropped and a.attnum > 0
-    and a.attname in ('created_at', 'occurred_at', 'logged_at', 'at')
-  order by array_position(array['created_at', 'occurred_at', 'logged_at', 'at'], a.attname::text)
-  limit 1;
-  if v_col is null then
-    execute format('select count(*) from %s%s', v_rel, v_open) into v_day;
-    return jsonb_build_object('tracked', true, 'recent', null, 'last_24h', v_day);
-  end if;
-  execute format('select count(*) filter (where %1$I > $1), count(*) filter (where %1$I > $2) from %2$s%3$s', v_col, v_rel, v_open)
-    into v_recent, v_day using private.now() - interval '15 minutes', private.now() - interval '24 hours';
-  return jsonb_build_object('tracked', true, 'recent', v_recent, 'last_24h', v_day);
+  select count(*), count(*) filter (where e.last_seen_at > v_since)
+  into v_open, v_recent
+  from public.engine_errors e where e.resolved_at is null;
+
+  select coalesce(jsonb_object_agg(x.job, x.n), '{}'::jsonb) into v_by_job
+  from (select e.job, count(*) as n from public.engine_errors e
+        where e.resolved_at is null and e.last_seen_at > v_since group by e.job) x;
+
+  select coalesce(jsonb_agg(jsonb_build_object('id', i.id, 'kitchen_id', i.kitchen_id, 'kitchen', k.name, 'job', i.job,
+           'service_date', i.service_date, 'slot', i.slot, 'message', left(i.message, 300), 'attempts', i.attempts,
+           'first_seen_at', i.first_seen_at, 'last_seen_at', i.last_seen_at) order by i.last_seen_at desc), '[]'::jsonb)
+  into v_items
+  from (select * from public.engine_errors e where e.resolved_at is null order by e.last_seen_at desc limit 20) i
+  left join public.kitchens k on k.id = i.kitchen_id;
+
+  return jsonb_build_object('tracked', true, 'window_hours', 26, 'open', v_open, 'recent', v_recent,
+                            'by_job', v_by_job, 'items', v_items);
 end;
 $$;
 
@@ -185,15 +187,21 @@ begin
   into v_overdue_n, v_overdue
   from (select x.*, row_number() over (order by x.service_date, x.slot, x.kitchen_name) as rn from private.overdue_slots() x) o;
 
-  -- Latest finished run of every tiffin-* job; a failure stays until the next success.
-  select count(*), coalesce(jsonb_agg(jsonb_build_object('job', j.jobname, 'at', d.start_time,
-           'message', left(coalesce(d.return_message, ''), 300)) order by j.jobname), '[]'::jsonb)
+  -- Latest finished run of every tiffin-* job. A failure is cleared by the next successful run, or by
+  -- a heartbeat stamped after it (a manual private.run_job rerun writes no cron log row). Only the
+  -- critical engine jobs make the platform unhealthy; other failed jobs are warnings on the tile.
+  select count(*) filter (where f.critical), coalesce(jsonb_agg(jsonb_build_object('job', f.jobname, 'at', f.start_time,
+           'critical', f.critical, 'message', left(coalesce(f.return_message, ''), 300)) order by f.jobname), '[]'::jsonb)
   into v_failing_n, v_failing
-  from cron.job j
-  cross join lateral (select r.status, r.return_message, r.start_time from cron.job_run_details r
-                      where r.jobid = j.jobid and r.status in ('succeeded', 'failed')
-                      order by r.runid desc limit 1) d
-  where j.jobname like 'tiffin-%' and d.status = 'failed';
+  from (select j.jobname, d.start_time, d.return_message,
+               coalesce((select ej.critical from private.engine_jobs() ej where ej.job = j.jobname), false) as critical
+        from cron.job j
+        cross join lateral (select r.status, r.return_message, r.start_time from cron.job_run_details r
+                            where r.jobid = j.jobid and r.status in ('succeeded', 'failed')
+                            order by r.runid desc limit 1) d
+        left join public.engine_heartbeats h on h.job = j.jobname
+        where j.jobname like 'tiffin-%' and d.status = 'failed'
+          and not coalesce(h.last_ok_at > d.start_time, false)) f;
 
   select count(*) into v_fail_24h
   from cron.job_run_details r join cron.job j on j.jobid = r.jobid
@@ -201,7 +209,7 @@ begin
 
   v_ok := not exists (select 1 from jsonb_array_elements(v_jobs) e
                       where (e ->> 'critical')::boolean and not (e ->> 'healthy')::boolean)
-          and v_overdue_n = 0 and v_failing_n = 0 and coalesce((v_errors ->> 'recent')::bigint, 0) = 0;
+          and v_overdue_n = 0 and v_failing_n = 0 and (v_errors ->> 'recent')::bigint = 0;
 
   return jsonb_build_object(
     'ok', v_ok,
@@ -249,7 +257,8 @@ begin
       'nightly_job', coalesce((v_job ->> 'tiffin-nightly')::boolean, false),
       'summary_job', coalesce((v_job ->> 'tiffin-owner-summary')::boolean, false),
       'overdue_slots', (v -> 'overdue_slots' ->> 'count')::integer,
-      'failing_jobs', jsonb_array_length(v -> 'cron' -> 'failing'),
+      'failing_jobs', (select count(*) from jsonb_array_elements(v -> 'cron' -> 'failing') e where (e ->> 'critical')::boolean),
+      'job_warnings', (select count(*) from jsonb_array_elements(v -> 'cron' -> 'failing') e where not (e ->> 'critical')::boolean),
       'engine_errors', (v -> 'engine_errors' ->> 'recent')::bigint));
 end;
 $$;
@@ -289,6 +298,9 @@ begin
     -- Same follow-up as the lock job: meals just charged may change balance states.
     perform private.sync_balance_status(p_kitchen, null);
   end if;
+  -- As run_due_locks does after a lock: the slot is locked now, so its lock error (if any) is closed.
+  -- run_due_locks never revisits a slot with a snapshot, so nothing else would close it.
+  perform private.resolve_engine_errors(p_kitchen, 'lock', p_date, p_slot);
   return jsonb_build_object('snapshot_id', v_snap, 'already_locked', v_existing is not null,
     'locked_at', (select cs.locked_at from public.count_snapshots cs where cs.id = v_snap));
 end;

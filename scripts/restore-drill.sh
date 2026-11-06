@@ -14,7 +14,11 @@
 #    The staging project must already have every migration (scripts/deploy.sh) and the SAME Vault
 #    phone_encryption_key and phone_hash_key as the source (from the password manager). Its data in
 #    public, private and auth is REPLACED: CONFIRM_WIPE must repeat the target exactly. Its tiffin-*
-#    pg_cron jobs are paused during the drill and switched back on after.
+#    pg_cron jobs are paused during the drill. Copied outbox messages still waiting to go are cancelled
+#    in the load transaction, and afterwards only the jobs that cannot contact anyone are switched back
+#    on (RESUME_SAFE_JOBS); every job that sends WhatsApp/SMS/push or calls an outside service stays
+#    paused, because the copy holds production's real phone numbers and keys that decrypt them.
+#    RESUME_JOBS=yes switches every paused job back on (only for a staging copy with test data).
 #    Checks: row counts and ledger totals equal the source's, every tiffin-* cron job exists, and
 #    stored phone numbers decrypt and re-hash to their stored hash with the target's Vault keys
 #    (decrypt_phone works). No phone number is printed.
@@ -51,7 +55,9 @@ SQL
   docker exec -i "$C" pg_restore -U supabase_admin -d "$DRILL" --no-comments --exit-on-error < "$dump"
 
   checks=$(cat scripts/lib/drill-checks.sql)
-  live=$(psqlc -d postgres -c "$checks")
+  # Compare with the checks taken in the dump's own snapshot (scripts/backup.sh); the live database
+  # may have moved on since. Older dumps without .checks fall back to the live counts.
+  if [[ -f "$dump.checks" ]]; then live=$(cat "$dump.checks"); else live=$(psqlc -d postgres -c "$checks"); fi
   restored=$(psqlc -d "$DRILL" -c "$checks")
   psqlc -d postgres -c "drop database $DRILL" >/dev/null
 
@@ -99,18 +105,33 @@ echo "restore drill: ${dump#"$PWD/"} -> $target"
 
 PG_TMP=$(mktemp -d)
 export PG_TMP
-paused=$(tq -c "select coalesce(string_agg(jobid::text, ' '), '') from cron.job where jobname like 'tiffin-%' and active")
+# Jobs that only touch this database (locks, nightly orders, purges): safe to run on a copy. Any other
+# tiffin-* job (outbox, nudges, summaries, growth, late delivery, weather, ad conversions, push, ...)
+# stays paused after the drill unless RESUME_JOBS=yes.
+RESUME_SAFE_JOBS="tiffin-lock-due-slots tiffin-nightly tiffin-churn tiffin-purge tiffin-storage-retention"
+paused=$(tq -c "select coalesce(string_agg(jobid || ':' || jobname, ' '), '') from cron.job where jobname like 'tiffin-%' and active")
 resume() {
-  for id in $paused; do tq -c "select cron.alter_job($id, active := true)" >/dev/null || echo "WARNING: could not resume cron job $id" >&2; done
+  local item id name kept=""
+  for item in $paused; do
+    id=${item%%:*} name=${item#*:}
+    if [[ "${RESUME_JOBS:-}" == "yes" || " $RESUME_SAFE_JOBS " == *" $name "* ]]; then
+      tq -c "select cron.alter_job($id, active := true)" >/dev/null || echo "WARNING: could not resume cron job $name" >&2
+    else
+      kept="$kept $name"
+    fi
+  done
+  [[ -n "$kept" ]] && echo "left PAUSED on the target (they would contact real people from this copy):$kept" \
+    && echo "  switch one on only after its credentials point at test numbers: select cron.alter_job(jobid, active := true) from cron.job where jobname = '<job>';"
   rm -rf "$PG_TMP"
 }
 trap resume EXIT
-for id in $paused; do tq -c "select cron.alter_job($id, active := false)" >/dev/null; done
+for item in $paused; do tq -c "select cron.alter_job(${item%%:*}, active := false)" >/dev/null; done
 echo "paused $(wc -w <<<"$paused") tiffin-* cron jobs on the target"
 
 # One transaction: wipe the target's data and load the dump's, with triggers off (the ledgers'
 # append-only and no-truncate guards would refuse, and rows arrive in any order). If anything fails,
-# the target is left as it was. GoTrue's own migration list stays the target's.
+# the target is left as it was. GoTrue's own migration list stays the target's. Outbox messages the
+# source had not sent yet are cancelled in the same transaction, so the copy never sends them again.
 cat > "$PG_TMP/wipe.sql" <<'SQL'
 set session_replication_role = replica;
 do $$
@@ -126,8 +147,11 @@ begin
 end $$;
 SQL
 pgtool pg_restore -l "$dump" | grep -v 'TABLE DATA auth schema_migrations' > "$PG_TMP/restore.list"
-{ cat "$PG_TMP/wipe.sql"; pgtool pg_restore --data-only --no-owner --no-privileges -L "$PG_TMP/restore.list" -f - "$dump"; } |
+{ cat "$PG_TMP/wipe.sql"; pgtool pg_restore --data-only --no-owner --no-privileges -L "$PG_TMP/restore.list" -f - "$dump"
+  echo "update public.notifications_outbox set status = 'cancelled', last_error = 'restore drill: copied from the source, not sent'"
+  echo "  where status in ('pending', 'sending');"; } |
   tq --single-transaction >/dev/null
+echo "  copied outbox messages not yet sent: cancelled ($(tq -c "select count(*) from public.notifications_outbox where last_error = 'restore drill: copied from the source, not sent'"))"
 
 source_checks=$(cat "$dump.checks")
 target_checks=$(tq < scripts/lib/drill-checks.sql)

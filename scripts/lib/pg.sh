@@ -5,6 +5,7 @@
 # networking, e.g. PG_TOOLS_IMAGE=postgres:17 (or the local stack's supabase/postgres image).
 
 # pgtool <psql|pg_dump|pg_restore> args... : the host binary, or the same tool inside PG_TOOLS_IMAGE.
+# (Empty arrays expand as ${a[@]+"${a[@]}"}: bash 3.2 on macOS aborts on a bare "${a[@]}" under set -u.)
 # Paths passed as arguments must be absolute (the repo's backups/ and $TMPDIR are mounted at the same path).
 pgtool() {
   local tool="$1"; shift
@@ -13,7 +14,7 @@ pgtool() {
     [[ -n "${PG_TMP:-}" ]] && mounts+=(-v "$PG_TMP:$PG_TMP")
     local envs=()
     for v in PGOPTIONS PGPASSWORD PGSSLMODE; do [[ -n "${!v:-}" ]] && envs+=(-e "$v"); done
-    docker run --rm -i --network host "${mounts[@]}" "${envs[@]}" --entrypoint "$tool" "$PG_TOOLS_IMAGE" "$@"
+    docker run --rm -i --network host "${mounts[@]}" ${envs[@]+"${envs[@]}"} --entrypoint "$tool" "$PG_TOOLS_IMAGE" "$@"
   else
     command -v "$tool" >/dev/null || { echo "error: $tool not found (install Postgres 17 client tools or set PG_TOOLS_IMAGE)" >&2; return 127; }
     "$tool" "$@"

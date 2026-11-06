@@ -506,7 +506,7 @@ verify_jwt = false
 verify_jwt = false
 
 # Vendor-first wave 3: engine health for a free uptime pinger (200/503, booleans and counts only).
-# Optional OPS_HEALTH_KEY secret requires ?key=. See docs/OPERATIONS.md.
+# OPS_HEALTH_KEY secret (required in production by scripts/deploy.sh) requires ?key=. See docs/OPERATIONS.md.
 [functions.ops-health]
 verify_jwt = false
 
