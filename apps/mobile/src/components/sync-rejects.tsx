@@ -16,7 +16,7 @@ function why(code: string): string {
 }
 
 /**
- * Owner only: rider actions the server refused (rider_sync_rejects, D-126), so cash collected at the
+ * Owner only: rider actions the server refused (rider_sync_rejects, D-128), so cash collected at the
  * door is never lost silently. Shown only while something is open.
  */
 export function SyncRejectsCard({ kitchenId, version }: { kitchenId: string; version: number }) {

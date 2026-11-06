@@ -1,4 +1,4 @@
-// Web vendor app strings moved to keys so far (draft rollout D-128): the sidebar nav and the Today
+// Web vendor app strings moved to keys so far (draft rollout D-130): the sidebar nav and the Today
 // page only. Everything else on the web is still English literals (D-006). English is the source of
 // truth; Odia and Hindi drafts are in or.ts and hi.ts. No browser or server imports (unit-tested).
 export const WEB_EN = {

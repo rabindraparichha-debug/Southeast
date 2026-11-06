@@ -1,4 +1,4 @@
-// Tiny i18n helper for the web vendor app (draft rollout D-128). Pure: no browser or server imports,
+// Tiny i18n helper for the web vendor app (draft rollout D-130). Pure: no browser or server imports,
 // so server pages, client components and the unit tests share it. The language comes from the
 // tiffin_lang cookie (lib/i18n/server.ts); unknown keys fall back to English.
 import { WEB_EN, type WebKey } from './en';

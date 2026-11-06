@@ -1,4 +1,4 @@
-// Held-back apps track over the API (D-126): a rider's phone reports an action the server refused,
+// Held-back apps track over the API (D-128): a rider's phone reports an action the server refused,
 // the owner lists it with the cash amount and marks it handled; another kitchen sees nothing.
 // Role-by-role rules and the automatic close on a later sync are in
 // supabase/tests/15_rider_sync_rejects.test.sql.

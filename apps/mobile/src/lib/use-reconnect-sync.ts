@@ -6,7 +6,7 @@ import { syncQueue } from './rider-store';
  * Sends the rider queue (and pending reports to the owner) the moment the phone gets its connection
  * back, instead of waiting for the next minute's timer or the app coming back to the front (those
  * triggers stay: startRiderSync in rider-store.ts). Only a change from offline to online triggers it;
- * the queue rules themselves (backoff, what is final) are unchanged. D-127.
+ * the queue rules themselves (backoff, what is final) are unchanged. D-129.
  */
 export function useReconnectSync(enabled: boolean) {
   useEffect(() => {

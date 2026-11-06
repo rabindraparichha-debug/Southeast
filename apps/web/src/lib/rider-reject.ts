@@ -1,5 +1,5 @@
 // Pure helpers for telling the owner about rider actions the server refused (report_sync_reject,
-// table rider_sync_rejects, docs/DECISIONS.md D-126). No React Native imports: unit-tested from Node
+// table rider_sync_rejects, docs/DECISIONS.md D-128). No React Native imports: unit-tested from Node
 // in tests/integration/rider-reject.test.ts, which runs the same cases against the web twin
 // apps/web/src/lib/rider-reject.ts (keep the two identical).
 //

@@ -62,7 +62,7 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
 }
 
 export const DIET_COLOR = { veg: colors.veg, nonveg: colors.nonveg, jain: colors.jain } as const;
-/** Read at render time, so the label follows the app's language (D-128). */
+/** Read at render time, so the label follows the app's language (D-130). */
 export const DIET_LABEL: Readonly<Record<'veg' | 'nonveg' | 'jain', string>> = {
   get veg() { return t('diet.veg'); },
   get nonveg() { return t('diet.nonveg'); },

@@ -1,7 +1,7 @@
 // DRAFT — needs native speaker review (D-006)
 // Hindi strings for the vendor app, drafted for every key in en.ts (English is the source of truth).
 // Not machine-checked by a native speaker yet: do not ship to vendors as final wording. Placeholders
-// in {braces} must stay exactly as in English. Missing keys fall back to English (draft rollout D-128).
+// in {braces} must stay exactly as in English. Missing keys fall back to English (draft rollout D-130).
 import type { MessageKey } from './en';
 
 export const hi: Partial<Record<MessageKey, string>> = {

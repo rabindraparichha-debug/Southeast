@@ -1,4 +1,4 @@
--- Held-back apps track, item 1 (D-126; renumbered on merge): the server's record of rider actions it refused.
+-- Held-back apps track, item 1 (D-128; renumbered on merge): the server's record of rider actions it refused.
 -- Riders (and owners who deliver) report; riders read only their own reports; owners read and
 -- resolve their kitchen's; admins read and resolve all; staff, another kitchen and anon get nothing.
 -- Idempotent per client op; a newer refusal reopens; a later successful sync closes it by itself;

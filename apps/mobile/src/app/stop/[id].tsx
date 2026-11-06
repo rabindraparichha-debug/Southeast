@@ -120,7 +120,7 @@ export default function StopScreen() {
       if (!perm.granted) return setError(t('rider.cameraDenied'));
       const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.4, allowsEditing: false, exif: false });
       if (shot.canceled || !shot.assets[0]) return;
-      // Shrunk before it is queued, so the queued action stays small (D-127).
+      // Shrunk before it is queued, so the queued action stays small (D-129).
       photoUri = await keepPhoto(await shrinkPhoto(shot.assets[0].uri, PROOF_PHOTO), op);
       photoPath = `${run.kitchen_id}/${run.service_date}/${stop.id}-${op.slice(0, 8)}.jpg`;
     }

@@ -157,7 +157,7 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   health: { consent_required: 'Tick the box to confirm the customer agreed to share this health information.' },
   special: { already_exists: 'A special with this name already exists for that meal.' },
   office: { already_exists: 'An office with this name already exists.', invalid_payer: 'Choose who pays for this office (a customer of this kitchen).' },
-  // Owner's list of rider actions the server refused (D-126): why it was refused.
+  // Owner's list of rider actions the server refused (D-128): why it was refused.
   sync_reject: {
     already_done: 'Someone else had already marked this stop, so this record (and any cash on it) was not saved.',
     otp_wrong: 'The delivery code was wrong, so the stop stayed pending.',

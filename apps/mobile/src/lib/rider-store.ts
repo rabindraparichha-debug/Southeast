@@ -272,7 +272,7 @@ function parkItem(q: QueuedOp, reason: string): AttentionItem {
 }
 
 // ---------------------------------------------------------------------------
-// Reports of refused actions for the owner (rider_sync_rejects, D-126). Separate from the queue and
+// Reports of refused actions for the owner (rider_sync_rejects, D-128). Separate from the queue and
 // best effort: saved under their own key, sent when the server can be reached, never blocking or
 // changing a queued action or a "needs attention" item.
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 // Unit tests for the report of a refused rider action (apps/mobile/src/lib/rider-reject.ts and its
 // web twin; no network). The report carries what the owner needs (kitchen, run, stop, cash, labels)
 // and never the photo, its path, the delivery code or a phone number; only network/busy failures
-// keep a report for later; the pending list is bounded. D-126.
+// keep a report for later; the pending list is bounded. D-128.
 import { describe, expect, it } from 'vitest';
 import * as mobile from '../../apps/mobile/src/lib/rider-reject.ts';
 import * as web from '../../apps/web/src/lib/rider-reject.ts';

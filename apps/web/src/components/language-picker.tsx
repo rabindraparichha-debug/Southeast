@@ -6,7 +6,7 @@ import { setLanguage } from '@/lib/i18n/actions';
 import { LANGS, translator, type Lang } from '@/lib/i18n/translate';
 
 /**
- * Sidebar language picker (D-128). Odia and Hindi are drafts and cover the nav and Today page so far;
+ * Sidebar language picker (D-130). Odia and Hindi are drafts and cover the nav and Today page so far;
  * other pages stay in English.
  */
 export function LanguagePicker({ current }: { current: Lang }) {

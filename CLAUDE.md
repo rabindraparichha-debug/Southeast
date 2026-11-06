@@ -172,7 +172,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - The web app is installable (docs/WEB_APP.md). The web rider queue `apps/web/src/lib/rider-store.ts` mirrors the mobile one; new fields on queued actions must be optional. Bump `VERSION` in `apps/web/public/sw.js` when its logic changes; never cache pages holding customer data.
 - Android APK: `apps/mobile/scripts/build-apk.sh` (needs dl.google.com) or push a branch `apk/<name>` (GitHub Actions → pre-release). iOS: `.github/workflows/ios-testflight.yml`. Never commit a keystore.
 
-**Held-back apps (D-126 – D-128)**
+**Held-back apps (D-128 – D-130)**
 - A rider action that moves to "needs attention" is also reported to `report_sync_reject` (best effort, own storage key, `lib/rider-reject.ts` in both apps, kept identical). Never let a report block, reorder or drop a queued action; the queue rules stay in `rider-queue.ts`. Reports never carry the photo, its path, the delivery code or a phone; the server rebuilds the summary from a whitelist (`private.sync_reject_summary`).
 - `rider_sync_rejects`: riders read their own rows, owners read/resolve their kitchen's (`sync_rejects`, `resolve_sync_reject`), admins all; staff nothing. `report_sync_reject` checks only that run, stop and kitchen are the same kitchen (a moved stop is the main case); a report for a client op that already synced is stored closed. Log-out sends waiting reports first (`pendingReportCount`). Customer erasure must also blank `summary.note`/`stop_label` of that `customer_id`'s reports.
 - Mobile photos go through `shrinkPhoto()` (`apps/mobile/src/lib/photo.ts`) before they are saved or queued; never queue a full-size camera file.

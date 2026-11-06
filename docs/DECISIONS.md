@@ -84,7 +84,7 @@ The folder and repo were empty at audit time (see `docs/AUDIT.md`). You said "st
   - mobile: `apps/mobile/src/i18n`;
   - web: still English literals, moving to keys when Odia is added.
 - English ships first. The Odia and Hindi dictionaries exist but are empty (they fall back to English) until a native speaker writes and reviews them. I won't machine-translate vendor-facing text.
-- Update 2026-11-06: draft Odia and Hindi texts now exist behind an explicit language picker, marked as drafts (D-128). They still need the native speaker's review before a vendor uses them.
+- Update 2026-11-06: draft Odia and Hindi texts now exist behind an explicit language picker, marked as drafts (D-130). They still need the native speaker's review before a vendor uses them.
 
 ### D-007 Meal slots ⏳ PENDING
 - `meal_slot` enum is `lunch | dinner`.
@@ -735,7 +735,7 @@ Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14�
 Audit items 24 (rest) and 35 (docs/VENDOR_FIRST_AUDIT.md). Migration `20261116000100_rider_sync_rejects.sql`; tests
 `supabase/tests/15_rider_sync_rejects.test.sql`, `tests/integration/{rider-reject,i18n-drafts,held-apps}.test.ts`.
 
-### D-126 The server keeps a record of rider actions it refused
+### D-128 The server keeps a record of rider actions it refused
 - When a queued rider action moves to "needs attention" on the phone (a business refusal, a wrong code, a stop someone else marked, or an unexpected error after 10 tries), the app also sends a short report to `report_sync_reject`. The phone keeps the action, its photo and cash exactly as before (wave 1); the report is a copy for the owner.
 - Best effort and separate from the queue: reports wait under their own storage key (at most 50, none older than a week), are sent after every queue sync, and are kept only while the server cannot be reached or is busy. They never block, reorder or drop a queued action, and `rider-queue.ts` (the queue rules) is unchanged.
 - Idempotent per rider and client op: the same report again changes nothing; a newer refusal of the same action (the rider tried again) updates the row, counts it (`reports`) and opens it again.
@@ -747,13 +747,13 @@ Audit items 24 (rest) and 35 (docs/VENDOR_FIRST_AUDIT.md). Migration `2026111600
 - Reports keep `customer_id` (from the stop at report time, kept when runs are rebuilt) so a customer's reports can be found for erasure: the erasure routine must blank `summary.note` and `summary.stop_label` on them and scrub their audit rows (to wire in when merged with the wave 3 erasure).
 - Log-out (both apps) sends waiting reports first and is refused while any are left (none older than a week are kept), like queued actions.
 
-### D-127 Mobile photos are shrunk before they are queued; sync on reconnect
+### D-129 Mobile photos are shrunk before they are queued; sync on reconnect
 - Proof photos: at most 1280 px on the long side, JPEG 0.7. Supplier bills and dispatch photos: 1600 px, 0.75 (same as the web app, so bill text stays readable). Done with `expo-image-manipulator` right after the camera, before the photo is saved for the queue, so queued items stay small. If shrinking fails, the original photo is used (never lost).
 - Proof photos queued by an older version (full size) still upload: one over 2.5 MB is shrunk to a temporary copy at upload time; the queued original is kept until the upload succeeds.
 - `@react-native-community/netinfo` triggers a queue sync the moment the phone goes from offline to online, on top of the existing triggers (app back in front, the 1-minute timer, backoff wake-ups).
 - Both are native modules: they ship in the next APK/TestFlight build. `app.json` version goes to 1.1.0 so the runtime version changes and an over-the-air update from this code never reaches a 1.0.0 install without the modules.
 
-### D-128 Odia and Hindi: draft rollout
+### D-130 Odia and Hindi: draft rollout
 - Mobile: a language picker on the Account screen (English, ଓଡ଼ିଆ, हिन्दी), saved on the phone only (`tiffin.language`; members have no language column, and none was added). Choosing a language redraws the tabs at once (they reopen on the first tab). Dates on Today, the slot cards and rider mode follow the language (`@tiffin/core` date helpers take an optional locale, English by default).
 - `apps/mobile/src/i18n/or.ts` and `hi.ts` draft every key of `en.ts`, each headed "DRAFT — needs native speaker review (D-006)". They were written without a native speaker: English stays the default, and the pilot vendors only see a draft if they pick it. The audit's hard-coded literals (change types, "late, charged", diet labels, slot labels, rider diet counts) now go through keys.
 - Web: a small helper (`apps/web/src/lib/i18n/`) with a `tiffin_lang` cookie and a picker in the sidebar. Only the sidebar nav and the Today page's own labels (title, date, headings, buttons) use it so far; the shared slot cards and change feed, and every other page, stay English until the drafts are reviewed. The root `<html lang>` stays `en` (reading the cookie there would make every public page dynamic); the vendor area sets `lang` on its own wrapper.

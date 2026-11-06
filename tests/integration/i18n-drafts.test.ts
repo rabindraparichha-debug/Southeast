@@ -1,4 +1,4 @@
-// Odia and Hindi drafts (D-006, draft rollout D-128; no network): every English key of the mobile
+// Odia and Hindi drafts (D-006, draft rollout D-130; no network): every English key of the mobile
 // app and of the web nav/Today dictionary has a draft, placeholders survive translation, nothing
 // extra sneaks in, and each draft file is marked as needing a native speaker's review.
 import { readFileSync } from 'node:fs';

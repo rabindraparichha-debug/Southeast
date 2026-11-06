@@ -12,7 +12,7 @@ function icon(emoji: string) {
 export default function TabsLayout() {
   const { role } = useKitchen();
   const isRider = role === 'rider';
-  // A new language re-renders every tab (they read t() while rendering). D-128.
+  // A new language re-renders every tab (they read t() while rendering). D-130.
   const lang = useLanguage();
   return (
     <Tabs key={lang} screenOptions={{ tabBarActiveTintColor: colors.brand, headerTitleStyle: { fontWeight: '600' } }}>

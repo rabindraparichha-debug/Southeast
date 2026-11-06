@@ -14,7 +14,7 @@ installGlobalErrorHandler();
 
 function RootStack() {
   const { ready: authReady, session, kitchen } = useAuth();
-  // The language saved on this phone (D-128); screen titles below follow a change at once.
+  // The language saved on this phone (D-130); screen titles below follow a change at once.
   useLanguage();
   const [langReady, setLangReady] = useState(false);
   useEffect(() => void loadLanguage().finally(() => setLangReady(true)), []);

@@ -13,7 +13,7 @@ import { translateNav } from '@/lib/i18n/translate';
 export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const session = await requireKitchen();
   const role = session.kitchen.role;
-  const { lang, t } = await getTranslator(); // D-128: nav and Today only so far
+  const { lang, t } = await getTranslator(); // D-130: nav and Today only so far
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
 

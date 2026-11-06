@@ -11,7 +11,7 @@ import { Alert, Badge, Button, Card, Input } from '@/components/ui';
 
 const ACTION: Record<string, string> = { start: 'Start run', complete: 'Delivered', fail: 'Not delivered', finish: 'Finish run' };
 
-// Rider actions the server refused (rider_sync_rejects, D-126). The phone keeps them in its "needs
+// Rider actions the server refused (rider_sync_rejects, D-128). The phone keeps them in its "needs
 // attention" list; this is the owner's copy, so cash collected at the door is never lost silently.
 // Owner only. Shown only while something is open.
 export function SyncRejectsCard({ rows }: { rows: SyncReject[] }) {

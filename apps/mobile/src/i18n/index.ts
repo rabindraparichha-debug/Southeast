@@ -5,7 +5,7 @@ import { hi } from './hi';
 import { or } from './or';
 
 // Odia and Hindi are partial dictionaries; missing keys fall back to English. They are DRAFTS until a
-// native speaker reviews them (docs/DECISIONS.md D-006, draft rollout D-128). The choice is saved on
+// native speaker reviews them (docs/DECISIONS.md D-006, draft rollout D-130). The choice is saved on
 // this phone only (there is no language column on members).
 export type Language = 'en' | 'or' | 'hi';
 const dictionaries: Record<Language, Partial<Record<MessageKey, string>>> = { en, or, hi };

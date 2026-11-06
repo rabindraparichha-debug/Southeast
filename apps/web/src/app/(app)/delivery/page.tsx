@@ -33,7 +33,7 @@ export default async function DeliveryPage({ searchParams }: PageProps<'/deliver
   const board = data as unknown as LiveBoard | null;
   const { prev, next } = neighbours(date, slot);
   const isOwner = kitchen.role === 'owner';
-  // Rider actions the server refused (D-126): owner only, open ones.
+  // Rider actions the server refused (D-128): owner only, open ones.
   const { data: rejects } = isOwner ? await supabase.rpc('sync_rejects', { p_kitchen: kitchen.kitchenId }) : { data: null };
 
   return (

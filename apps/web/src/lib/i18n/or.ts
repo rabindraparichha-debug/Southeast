@@ -1,5 +1,5 @@
 // DRAFT — needs native speaker review (D-006)
-// Odia drafts for the web nav and Today page (draft rollout D-128). Placeholders in {braces} stay as
+// Odia drafts for the web nav and Today page (draft rollout D-130). Placeholders in {braces} stay as
 // in English; missing keys fall back to English.
 import type { WebKey } from './en';
 

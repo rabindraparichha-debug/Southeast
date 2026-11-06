@@ -14,7 +14,7 @@ import { localeOf } from '@/lib/i18n/translate';
 export default async function TodayPage() {
   const { kitchen } = await requireKitchen();
   const supabase = await createClient();
-  const { lang, t } = await getTranslator(); // Odia/Hindi drafts (D-128)
+  const { lang, t } = await getTranslator(); // Odia/Hindi drafts (D-130)
 
   if (kitchen.role === 'rider') redirect('/rider');
 

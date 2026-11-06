@@ -4,7 +4,7 @@ import { Card, Chip, Label, Muted } from './ui';
 import { space } from './theme';
 
 /**
- * Language for this phone (saved on the phone, D-128). Odia and Hindi are drafts until a native
+ * Language for this phone (saved on the phone, D-130). Odia and Hindi are drafts until a native
  * speaker has checked them (D-006); anything not translated yet shows in English.
  */
 export function LanguagePicker() {
