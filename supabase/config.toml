@@ -311,6 +311,8 @@ max_frequency = "5s"
 # tests/integration/ops.test.ts (vendor-first wave 3 ops): 90000 00120 – 00121.
 919000000120 = "123456"
 919000000121 = "123456"
+# Wave 3 riders track (tests/integration/w3-riders.test.ts).
+919000000130 = "123456"
 # Wave 4 onboarding: 90000 00150 – 00159. Phase 2 hardening (wave 5): 90000 00160 – 00169.
 919000000150 = "123456"
 919000000151 = "123456"
@@ -568,4 +570,8 @@ verify_jwt = false
 # Vendor-first wave 3: daily photo retention and erasure clean-up, started by pg_cron with the
 # service role key (checked inside the function).
 [functions.storage-retention]
+verify_jwt = false
+
+# Wave 3 riders: kicked every minute by pg_cron (private.kick_push) with the service role key (checked inside).
+[functions.push-outbox]
 verify_jwt = false

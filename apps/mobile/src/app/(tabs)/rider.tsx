@@ -5,6 +5,7 @@ import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } fr
 import { formatIstShort, formatPaise } from '@tiffin/core';
 import { Button, Card, Chip, ErrorText, Muted, Screen } from '@/components/ui';
 import { ChangedBadge } from '@/components/changed-badge';
+import { RiderExtras } from '@/components/rider-extras';
 import { colors, radius, space } from '@/components/theme';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -95,6 +96,8 @@ export default function Rider() {
         </Pressable>
       )}
       {rider.attention.length > 0 && <NeedsAttention items={rider.attention} runs={rider.runs} />}
+
+      <RiderExtras />
 
       {rider.runs.length > 1 && (
         <View style={styles.chips}>

@@ -5,6 +5,7 @@ import type { MemberRole } from '@tiffin/db';
 import { withTimeout } from './rider-queue';
 import { flushReports, loadRider, pendingReportCount, resetRider, riderPendingCount, syncQueue } from './rider-store';
 import { clearScreenCache } from './cache-storage';
+import { unregisterPush } from './push';
 import { loadServerOverride, readStoredSession, supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
@@ -140,6 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await withTimeout(flushReports(), 15_000).catch(() => undefined);
           if ((await pendingReportCount()) > 0) return false;
         }
+        // Only once nothing is left to send: this phone stops getting the member's alerts (wave 3).
+        await unregisterPush();
         await supabase.auth.signOut();
         await AsyncStorage.multiRemove([KITCHEN_KEY, MEMBERSHIPS_KEY]);
         await resetRider();

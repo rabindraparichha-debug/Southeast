@@ -29,14 +29,14 @@ source scripts/lib/pg.sh
 # Edge Functions that may be deployed. razorpay-mock (the local test payment page) is never deployed.
 ALLOWLIST=(ops-health storage-retention whatsapp-outbox whatsapp-webhook razorpay-payment-link razorpay-refund
            razorpay-webhook notebook-import route-optimize lead-intake lead-email ads-conversions weather-alerts
-           auth-send-sms admin-change-phone)
+           auth-send-sms admin-change-phone push-outbox)
 NEVER=(razorpay-mock)
 # Vault secrets every project needs (CLAUDE.md > Secrets, docs/OPERATIONS.md).
 VAULT=(phone_encryption_key phone_hash_key functions_base_url service_role_key public_web_url)
 # pg_cron jobs the migrations create.
 CRON_JOBS=(tiffin-lock-due-slots tiffin-nightly tiffin-owner-summary tiffin-tomorrow-nudge tiffin-escalate-complaints
            tiffin-outbox tiffin-growth tiffin-ad-conversions tiffin-weather tiffin-churn tiffin-late-delivery
-           tiffin-purge tiffin-storage-retention tiffin-outbox-stuck tiffin-plan-prices)
+           tiffin-purge tiffin-storage-retention tiffin-outbox-stuck tiffin-plan-prices tiffin-push)
 
 ENV_NAME="" REF="" DRY=0 SKIP_DB=0 SKIP_FN=0 ONLY="" LOCAL=0 SELF_TEST=0 INCLUDE_ALL=0
 problems=0

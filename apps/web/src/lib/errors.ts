@@ -166,6 +166,18 @@ const MESSAGES: Record<string, string> = {
   out_of_range: 'Only meals from the last 7 days can be frozen here. Contact Tiffin support.',
   kitchen_suspended: 'This kitchen is suspended. Contact Tiffin support.',
   invalid_setting: 'Retention days must be whole numbers from 1 to 3650.',
+  // Wave 3 (riders track): stop corrections, routes by area, devices, minimum app version.
+  too_old: 'Stops older than 7 days cannot be changed.',
+  retry_today_only: "Only today's stops can go back on the run. Correct it to delivered or not delivered instead.",
+  cash_confirmed: 'The cash for this stop is already confirmed. Reject or adjust the payment first.',
+  invalid_rules: 'Each line needs an area and a route.',
+  too_many_rules: 'Use at most 200 lines.',
+  invalid_route: 'That route does not belong to this meal.',
+  invalid_token: 'This device could not be registered for alerts.',
+  invalid_platform: 'This device could not be registered for alerts.',
+  invalid_version: 'Use a version like 1.2.0.',
+  invalid_url: 'The download link must start with https://',
+  invalid_decision: 'Choose give back or refuse.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -226,6 +238,8 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   rider_request: { invalid_client_op: 'This request was already saved for another stop. Refresh and try again.' },
   // Wave 4 admin phone change (login numbers, not customers).
   member_phone: { phone_in_use: 'Another account already uses that number.' },
+  // Wave 3 riders: correct_stop reuses wave 4's not_recorded code with another meaning.
+  correct_stop: { not_recorded: 'This stop has no outcome yet. Mark it delivered or not delivered first.' },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { formatPaise } from '@tiffin/core';
+import { formatPaise, istDate } from '@tiffin/core';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import {
@@ -20,6 +20,7 @@ import {
 import { Alert, Badge, Button, Card, Select } from '@/components/ui';
 import { SortableList } from '@/components/sortable-list';
 import type { MapRider, MapStop } from '@/components/delivery-map';
+import { CorrectStop } from './correct-stop';
 
 // Leaflet touches `window`, so the map only renders in the browser.
 const DeliveryMap = dynamic(() => import('@/components/delivery-map'), {
@@ -30,6 +31,18 @@ const DeliveryMap = dynamic(() => import('@/components/delivery-map'), {
 const POLL_MS = 15_000;
 type Msg = { tone: 'red' | 'green' | 'amber'; text: string } | null;
 
+/**
+ * Wave 3: credit decision per stop (pending / approved / rejected) on this board. Read straight from
+ * delivery_stops.credit_status (granted to every member, scoped by RLS), so staff see the real
+ * state too and never a "credited" badge for a credit that is waiting or was refused.
+ */
+async function fetchCredits(kitchenId: string, runIds: string[]): Promise<Record<string, string>> {
+  if (runIds.length === 0) return {};
+  const { data } = await supabaseBrowser().from('delivery_stops').select('id, credit_status')
+    .eq('kitchen_id', kitchenId).in('run_id', runIds).not('credit_status', 'is', null);
+  return Object.fromEntries((data ?? []).map((c) => [c.id, c.credit_status as string]));
+}
+
 export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: string; initial: LiveBoard; isOwner: boolean }) {
   const [board, setBoard] = useState<LiveBoard>(initial);
   const [busy, setBusy] = useState(false);
@@ -37,6 +50,18 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
   const [updatedAt, setUpdatedAt] = useState(() => new Date());
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [showMap, setShowMap] = useState(false);
+  // Wave 3: kitchen-fault credit decisions per stop (owners), from stop_credit_requests.
+  const [credits, setCredits] = useState<Record<string, string>>({});
+
+  const runKey = board.runs.map((r) => r.id).join(',');
+  const loadCredits = useCallback(
+    () => fetchCredits(kitchenId, runKey ? runKey.split(',') : []).then(setCredits),
+    [kitchenId, runKey],
+  );
+
+  useEffect(() => {
+    void fetchCredits(kitchenId, runKey ? runKey.split(',') : []).then(setCredits);
+  }, [kitchenId, runKey]);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabaseBrowser().rpc('live_board', {
@@ -176,6 +201,12 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
               }
               onReorder={(stops) => reorder(run, stops)}
               onMove={(stopId, toRun) => act(supabaseBrowser().rpc('move_stop', { p_stop: stopId, p_run: toRun }), 'Stop moved. It stays on that route from now on.')}
+              credits={credits}
+              retryAllowed={board.service_date === istDate()}
+              onCorrected={(text, ok) => {
+                setMsg({ tone: ok ? 'green' : 'red', text });
+                if (ok) void refresh().then(loadCredits);
+              }}
             />
           ))}
         </div>
@@ -185,7 +216,7 @@ export function LiveBoardView({ kitchenId, initial, isOwner }: { kitchenId: stri
 }
 
 function RunCard({
-  run, riders, otherRuns, isOwner, busy, photoUrls, onAssign, onReorder, onMove,
+  run, riders, otherRuns, isOwner, busy, photoUrls, onAssign, onReorder, onMove, credits, retryAllowed, onCorrected,
 }: {
   run: BoardRun;
   riders: BoardRider[];
@@ -196,6 +227,9 @@ function RunCard({
   onAssign: (riderId: string) => void;
   onReorder: (stops: BoardStop[]) => void;
   onMove: (stopId: string, runId: string) => void;
+  credits: Record<string, string>;
+  retryAllowed: boolean;
+  onCorrected: (message: string, ok: boolean) => void;
 }) {
   const c = run.counts;
   const pct = (n: number) => (c.stops ? `${(n * 100) / c.stops}%` : '0%');
@@ -257,7 +291,7 @@ function RunCard({
           label="stop"
           onReorder={onReorder}
           renderItem={(s) => <StopRow stop={s} isOwner={isOwner} photoUrl={s.photo_path ? photoUrls[s.photo_path] : undefined}
-            otherRuns={otherRuns} busy={busy} onMove={(to) => onMove(s.id, to)} />}
+            otherRuns={otherRuns} busy={busy} onMove={(to) => onMove(s.id, to)} credit={credits[s.id]} retryAllowed={retryAllowed} onCorrected={onCorrected} />}
         />
         {!closed && run.stops.length > 1 && (
           <p className="text-xs text-ink-500">Drag stops (or use ▲ ▼) to change the order. The new order is saved to the route for the next days.</p>
@@ -288,7 +322,7 @@ function Proof({ stop, isOwner, photoUrl }: { stop: BoardStop; isOwner: boolean;
 }
 
 function StopRow({
-  stop: s, isOwner, photoUrl, otherRuns, busy, onMove,
+  stop: s, isOwner, photoUrl, otherRuns, busy, onMove, credit, retryAllowed, onCorrected,
 }: {
   stop: BoardStop;
   isOwner: boolean;
@@ -296,6 +330,9 @@ function StopRow({
   otherRuns: BoardRun[];
   busy: boolean;
   onMove: (runId: string) => void;
+  credit?: string;
+  retryAllowed: boolean;
+  onCorrected: (message: string, ok: boolean) => void;
 }) {
   const address = [s.line1, s.landmark, s.area].filter(Boolean).join(', ');
   return (
@@ -317,7 +354,14 @@ function StopRow({
               {s.failed_note ? `: ${s.failed_note}` : ''}
             </span>
           )}
-          {s.status === 'failed' && s.kitchen_fault && <Badge tone="blue">Kitchen fault: credited</Badge>}
+          {s.status === 'failed' && s.kitchen_fault && (
+            credit === 'pending' ? (isOwner
+                ? <a href="/delivery/handover"><Badge tone="amber">Kitchen fault: credit waiting for you</Badge></a>
+                : <Badge tone="amber">Kitchen fault: credit waiting for the owner</Badge>)
+              : credit === 'rejected' ? <Badge tone="gray">Kitchen fault: credit refused</Badge>
+              : credit === 'approved' ? <Badge tone="blue">Kitchen fault: credited</Badge>
+              : <Badge tone="gray">Kitchen fault</Badge>
+          )}
           {s.offline && (
             <span className="text-amber-700">
               Offline, synced later
@@ -332,6 +376,7 @@ function StopRow({
             <span className="text-ink-600">Tiffins out {s.tiffins_out} · back {s.tiffins_returned}</span>
           )}
           {isOwner && s.cash_paise != null && s.cash_paise > 0 && <span className="text-ink-700">Cash {formatPaise(s.cash_paise)}</span>}
+          {isOwner && s.status !== 'pending' && <CorrectStop stop={s} retryAllowed={retryAllowed} onDone={onCorrected} />}
         </div>
       </div>
       {s.status === 'pending' && otherRuns.length > 0 && (

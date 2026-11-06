@@ -10,7 +10,7 @@ export function DeliveryTabs({ isOwner }: { isOwner: boolean }) {
     { href: '/delivery', label: 'Live board' },
     { href: '/delivery/routes', label: 'Routes' },
     { href: '/delivery/tiffins', label: 'Tiffins' },
-    ...(isOwner ? [{ href: '/delivery/riders', label: 'Riders' }] : []),
+    ...(isOwner ? [{ href: '/delivery/riders', label: 'Riders' }, { href: '/delivery/handover', label: 'Cash & credits' }] : []),
   ];
   return (
     <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-ink-200">

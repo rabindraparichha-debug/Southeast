@@ -76,6 +76,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 | 90000 00107 | Spare (login codes: `tests/integration/auth-sms.test.ts`) |
 | 90000 00112 – 90000 00119 | Spare (00113–00115: the wave-2 integration test's owner, manager and accountant) |
 | 90000 00120 – 90000 00121 | Spare (used by the vendor-first wave 3 ops integration test: owner of its own kitchen, and an outsider) |
+| 90000 00130 | Spare (used by the wave 3 riders integration test, `tests/integration/w3-riders.test.ts`) |
 | 90000 00149 | Spare (wave 4: phone + password sign-up test; never logs in with a code) |
 | 90000 00150 – 90000 00159 | Spare for the wave 4 onboarding tests (00155 – 00159 are deliberately not on the seed's allowed list, so new kitchens are refused for them) |
 | 90000 00160 – 90000 00169 | Spare for the Phase 2 hardening tests (00160: `tests/integration/phase2.test.ts`) |
@@ -156,6 +157,21 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
 - The queue never drops an action. Only the codes in `FINAL_ERRORS` (`rider-queue.ts`, mobile and web twins) are final, and those move to the saved "needs attention" list with photo and cash; everything else is retried with backoff. If a rider RPC gets a new `raise`, add the code there and in `tests/integration/rider-queue.test.ts`.
+
+**Riders, wave 3 (D-167…D-171, D-174…D-176, D-179)**
+- A new route's rider comes only from `private.default_rider()` (the only rider; no rider = the owner; 2+ riders = nobody). Owners see riderless runs through `unassigned_runs()` and take them with `assign_run`.
+- Bulk route changes go through `assign_routes_by_area` (preview with `p_dry_run` first). The import Route column is handled by the `import_rows` trigger (`private.import_row_route`); don't add route logic to `import_customers`.
+- Delivery credits are posted only by `private.post_stop_credit()` and taken back only by `private.reverse_stop_credit()` (an `adjust` row, `ref_type 'stop_credit_reversal'`). A kitchen-fault failure by a non-owner waits (`delivery_stops.credit_status = 'pending'`) for `decide_stop_credit`. Recorded outcomes change only through `correct_stop` (owner, note required).
+- Rider cash is confirmed in bulk with `confirm_rider_cash`, which calls `confirm_payment` per payment; never post recharges another way.
+- A kitchen's first rider takes over owner-held routes and planned runs (`members_joined_routes`, D-175). `correct_stop(..., 'pending')` is today-only (`retry_today_only`, D-176). Rebuild locked slots after route changes with `private.rebuild_locked_runs` (uses wave 1's `resync_runs` when present).
+
+**Push and app alerts (D-172, D-173, D-177, D-178)**
+- Member alerts queued for WhatsApp get a `push` twin automatically (trigger `notifications_outbox_push_twin`) when the member has a device in `member_devices`. App-only alerts use `private.notify_owners_push()`.
+- When you add a member template (WhatsApp or push-only), add its title/body/path to `private.member_alert_text` (one text for push and the in-app list, `my_notifications`). Paths must be screens in `apps/mobile/src/lib/push.ts` `PATHS`.
+- `push-outbox` (Edge Function, service role) sends through Expo; pure logic in `_shared/push.ts` (unit tests in `tests/integration/push.test.ts`). `PUSH_MODE=mock` is refused outside a local stack.
+- The mobile app-wide guards live in `apps/mobile/src/components/app-guards.tsx` (minimum version from `app_config()` after the rider queue is sent and today's run is finished, push registration); sign-out calls `unregisterPush()` right before `auth.signOut()`, and keeps the saved token unless the server confirmed.
+- Member alerts are owner alerts: who receives and lists them is `private.is_alert_role` (D-177). Non-owners who sign in on a phone call `release_device` for a token left there. Add `customer_id` to any new member-alert payload that names a customer (erasure trigger `customers_erased_alerts`).
+- Native code or new permissions in the mobile app mean a version bump in `apps/mobile/app.json` and a store/EAS build, never only an `eas update`.
 
 **Inventory (M6)**
 - Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.
@@ -327,6 +343,8 @@ P5/P6 Edge Function secrets (same file):
 | `NOTEBOOK_IMPORT_MODE` | Optional `mock` to force the fixture even with `ANTHROPIC_API_KEY` set; the model is `ANTHROPIC_MODEL` |
 
 Routing Edge Function secrets (same file): `VROOM_URL` (optional; without it the built-in optimiser is used) and `VROOM_USE_ROUTING` (`true` only if the VROOM server has its own OSRM/ORS).
+
+Push Edge Function secrets (same file): `PUSH_MODE` (`mock` | `live`; unset = mock on a local stack, live on a hosted project; mock is refused when hosted), `EXPO_ACCESS_TOKEN` (optional, only with Expo enhanced push security) and `EXPO_PUSH_URL` (optional override of `https://exp.host/--/api/v2/push/send`).
 
 Vault (database), needed for the cron to reach the outbox function: `functions_base_url`, `service_role_key`. Local values come from `seed.sql`.
 

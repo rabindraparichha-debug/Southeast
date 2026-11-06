@@ -76,7 +76,11 @@ describe('M5: rider mode over the API', () => {
     const pending = run.stops.filter((s) => s.status === 'pending').slice(1, 3);
     const late = await rider.client.rpc('fail_stop', { p_stop: pending[0]!.id, p_reason: 'kitchen_late', p_note: 'test' });
     expect(late.error).toBeNull();
-    const creditId = (late.data as { credit_entry_id: string | null }).credit_entry_id;
+    // Wave 3 (audit item 25): a rider's kitchen-fault credit waits for the owner's approval.
+    expect((late.data as { credit_entry_id: string | null }).credit_entry_id).toBeNull();
+    const approved = await owner.client.rpc('decide_stop_credit', { p_stop: pending[0]!.id, p_approve: true });
+    expect(approved.error).toBeNull();
+    const creditId = (approved.data as { credit_entry_id: string | null }).credit_entry_id;
     expect(creditId).toBeTruthy();
     const entry = await rest(`balance_entries?select=type,meals&id=eq.${creditId}`, owner.accessToken);
     expect(entry.body[0]).toEqual({ type: 'credit', meals: pending[0]!.meal_count });

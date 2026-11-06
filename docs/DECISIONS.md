@@ -48,12 +48,14 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
 | D-126 | Login codes: WhatsApp through Twilio first, SMS after DLT; Telnyx via the Send SMS hook | Decided (owner: providers) | Wave 2 |
 | D-127 | Who may create a login (signup policy): open today; invited/approved numbers or CAPTCHA proposed | ⏳ PENDING | Before the first hosted login |
-| D-158 – D-166 | Vendor-first wave 3 ops defaults (engine health, Freeze now, lean audit, erasure, retention, deploy/restore, lead erasure, staging-copy jobs, ops-health key) | Decided | Wave 3 |
-
+| D-128 – D-130 | Held-back apps (server record of refused rider actions, photos shrunk before queueing, Odia/Hindi drafts) | Decided | Held-back apps |
 | D-131 – D-138 | Wave 4 defaults (approval gate, non-Latin kitchen names, admin actions log, phone change / ownership / admins, dated plan prices, phoned-in complaints, export and close requests, support contact) | Decided | Wave 4 |
 | D-139 – D-145 | Wave 4 review fixes (proven phone, owner basis in good standing, pending phone changes, exact owner, approval-aware vendor messages, dues todo, logged signup switch) | Decided | Wave 4 |
+| D-146 – D-155 | Phase 2 hardening (delivery codes, referral links, AI caps, failed payment links, lead-intake keys, mock ad conversions, escalations, unticked boxes, template pack, review fixes) | Decided | Phase 2 |
 | D-156 | Vendor-first wave 2 defaults (manager and accountant roles, monthly rupee ledger and billing-mode switch, payment void/backdate/idempotency, shared phones, rider change requests, outbox expiry and phase flags) | Decided | Wave 2 |
 | D-157 | Held-back DB items (billing-aware customer messages, chunked idempotent import, outbox states with `mock`, stuck-row sweep, status callbacks) | Decided | Held-back DB |
+| D-158 – D-166 | Vendor-first wave 3 ops defaults (engine health, Freeze now, lean audit, erasure, retention, deploy/restore, lead erasure, staging-copy jobs, ops-health key) | Decided | Wave 3 |
+| D-167 – D-179 | Vendor-first wave 3 riders defaults (default rider, routes by area, stop credits and corrections, cash handover, owner push alerts and in-app list, minimum app version, review fixes) | Decided | Wave 3 |
 
 ---
 
@@ -1072,3 +1074,68 @@ Decisions taken in code; each can be changed. Migrations `20261115000100`–`202
 
 ### D-166 ops-health key in production (numbered D-136 on branch `wave3/ops-retry`)
 - `scripts/deploy.sh` refuses a production deploy while `OPS_HEALTH_KEY` is unset (a warning on staging): the free pinger's URL carries `?key=`. The function also caches its answer for 15 seconds, so a loop of requests cannot make every call run the health query during the 21:00 lock.
+### D-167 Default rider and runs without a rider (wave 3, audit item 25) (numbered D-126 on branch `wave3/riders-final-2`)
+- A new route's default rider (`private.default_rider`) is the kitchen's only rider; with **no rider, the owner** (small kitchens where the owner delivers); with two or more riders, nobody: the owner assigns. Existing routes without a rider in kitchens that have no rider were given the owner once (migration backfill).
+- A rider who leaves (or becomes staff) is taken off routes and planned runs from today; they fall back to the same rule (trigger on `members`).
+- Owners see today's runs that have no rider (`unassigned_runs()`) in the rider screens and take them with the existing `assign_run` ("always me" also sets the route's rider with `update_route`). `rider_today` is unchanged.
+
+### D-168 Routes by area and the import Route column (wave 3, audit item 25) (numbered D-127 on branch `wave3/riders-final-2`)
+- `assign_routes_by_area(kitchen, slot, rules, dry_run)` moves every address of an area (matched ignoring case and extra spaces) onto a route, for one slot (or both when the slot is null; the web screen does one slot at a time). A new route name creates the route; a rule may also set the rider. Preview (dry run) comes first in the UI.
+- Routes that receive addresses are re-optimised from scratch (hand-placed pins on them are cleared: it is an explicit bulk action). Routes that only lose addresses keep their order.
+- Slots already locked from today on are rebuilt at once (planned runs only, as `build_runs` does); a rebuild failure keeps the new routes and is reported (`rebuild_failed`), and "Plan / refresh runs" or the next lock rebuilds.
+- Addresses of a slot = live subscriptions of that slot, upcoming orders (dated moves) and addresses already on a route of that slot.
+- Import: an optional **Route** column (last in the template) places the customer's default address on that route for the plan's slots (both without a plan), creating the route if needed. It is a trigger on `import_rows`, so `import_customers` is unchanged; a bad route never fails the import (the address then joins a route at the next lock).
+
+### D-169 Kitchen-fault credits from riders wait for the owner (wave 3, audit item 25) (numbered D-128 on branch `wave3/riders-final-2`)
+- A kitchen-fault reason (`kitchen_late`, `food_issue`, `missing_meal`, `rider_issue`) recorded by anyone but an owner of the kitchen no longer posts a credit: the stop gets `credit_status = 'pending'` and the owners get an app alert (`stop_credit_request`, push + in-app list, never WhatsApp). The owner gives the meal back (`decide_stop_credit(..., true)`, credit at the price charged, same rule as before) or refuses it.
+- An owner's own kitchen-fault failure credits at once (`credit_status = 'approved'`).
+- Only owners decide for now; managers (D-117, wave 2) should be added to `decide_stop_credit` and `stop_credit_requests` when that role lands.
+- Updates D-071 (kitchen-side failures credited automatically).
+
+### D-170 The owner corrects a recorded stop (wave 3, audit item 25) (numbered D-129 on branch `wave3/riders-final-2`)
+- `correct_stop(stop, status, reason, note)`: owner only, a note is required (kept on the stop as `correction_note`, plus the audit log), stops up to 7 days old, and only stops that already have an outcome (pending stops use the rider actions).
+- `pending` = try again (a finished run reopens to `out`); `delivered` = it did arrive (proof `none`); `failed` with a reason.
+- Credits follow, append-only: leaving a kitchen-fault failure reverses its credit with an `adjust` row (`ref_type 'stop_credit_reversal'`, ref = the credit); entering one posts a credit (the owner's decision is the approval). After a reversal, a new credit is keyed on that reversal (`delivery_stop_again` / `delivery_stop_order_again`), so every step stays idempotent.
+- Door cash: moving a delivered stop away from `delivered` rejects its pending cash; confirmed cash blocks the change (`cash_confirmed`: reject or adjust the payment first).
+- Known limit: tiffin counts recorded on the first attempt stay in the tiffin ledger (one row per stop).
+
+### D-171 Cash handover per rider (wave 3, audit item 25) (numbered D-130 on branch `wave3/riders-final-2`)
+- Owners see the door cash each person holds (`cash_handover`: pending list, plus confirmed and rejected in the last 7 days) and confirm it in one step (`confirm_rider_cash`, all pending or the listed payments). Each payment goes through `confirm_payment`, so recharges stay on one path.
+- Whoever collected cash sees what they hold (`my_cash_handover`, names only, no phones).
+- Owner only for now; managers (D-117) should be added when wave 2 lands. Rejecting a single payment stays on the customer's money panel.
+
+### D-172 Owner push notifications without WhatsApp (wave 3, audit item 29) (numbered D-131 on branch `wave3/riders-final-2`)
+- Owners register their phone (Expo push token, `register_device`) when the app starts; sign-out unregisters it. A token moves to whoever signed in last on that phone; at most 10 active devices per person. `member_devices` is not audited (no money/customer data, and `last_seen_at` changes on every start).
+- Every member alert already queued for WhatsApp gets a `push` twin when the member has a device (trigger on `notifications_outbox`; `lock_slot`, `notify_owners` and the other writers are unchanged, and managers get pushes once wave 2 sends them the alerts). App-only alerts (`private.notify_owners_push`) are never sent on WhatsApp.
+- While WhatsApp is live too, an owner may get both; a per-member channel setting can come later.
+- `push-outbox` sends through the Expo Push API. `PUSH_MODE` unset = mock on a local stack, live on a hosted project (Expo needs no key; `EXPO_ACCESS_TOKEN` only with enhanced push security). Mock is refused on a hosted project (same PLATFORM_ENV rule as wave 1). Mock sends are recorded `sent` with `last_error = 'mock'`.
+- Push rows older than 12 hours are dropped (`expired`); unregistered devices are switched off; failures retry 5 times with backoff; rows stuck in `sending` for 10 minutes are claimed again. Kicked every minute by `tiffin-push`.
+
+### D-173 In-app alerts list (wave 3, audit item 29) (numbered D-132 on branch `wave3/riders-final-2`)
+- `my_notifications()` lists a member's alerts of the last 30 days (kitchens they still belong to), each once (push twins hidden), with title/body rendered in the database (`private.member_alert_text`, English) so the list and the push say the same thing. Mobile: Alerts screen and the Today desk card. Read/unread is not tracked yet.
+
+### D-174 Minimum app version (wave 3, audit item 26) (numbered D-133 on branch `wave3/riders-final-2`)
+- `platform_settings` row `min_app_version` (enabled + `{version, android_url, ios_url, message}`), set by platform admins (`admin_set_min_app_version`, Admin → Mobile app). `app_config()` serves it to everyone, before login too (an old build may not be able to log in), and the app caches it for offline starts.
+- The mobile gate first sends the rider's queued actions (a banner says so) and only then shows "Update required" with the download link; actions that need attention stay saved on the phone. The `x-app-version` request header from audit item 26 is not part of this track.
+
+### D-175 A kitchen's first rider takes over from the owner (wave 3 review) (numbered D-134 on branch `wave3/riders-final-2`)
+- When a kitchen goes from no rider to exactly one (a rider joins, or a member is made a rider), every route whose rider is an owner or nobody, and every planned run from today on with an owner or nobody as rider, moves to that rider (trigger `members_joined_routes`). Runs already out stay with whoever is delivering. With a second rider nothing moves; the owner assigns.
+- Consequence: an owner who deliberately kept a route for themselves in a kitchen with no rider must hand it back after the first rider joins (one tap on the board).
+
+### D-176 "Try again" is for today's stops only (wave 3 review) (numbered D-135 on branch `wave3/riders-final-2`)
+- `correct_stop(..., 'pending')` raises `retry_today_only` for a run that is not today's (IST). Riders see only today's runs, so a past stop sent back to pending could never be finished. Older stops (up to 7 days) can still be corrected to delivered or not delivered. The web live board offers "Try again" only on today's board.
+
+### D-177 Member alerts are owner alerts; shared phones release tokens (wave 3 review) (numbered D-136 on branch `wave3/riders-final-2`)
+- Every member alert on this base is an owner alert (counts with money, customer names). `my_notifications` and `push_claim_outbox` serve a member's alerts only while that member is an owner of the alert's kitchen (`private.is_alert_role`: `owner`, and `manager` once wave 2 adds the role). A demoted owner stops seeing and receiving them; queued pushes for them find no device and are cancelled.
+- `notify_owners_push` and the owner check in `do_fail_stop` (via `private.has_role`) follow the same rule, so managers count once wave 2's role expansion lands.
+- Phones change hands: when a member who gets no alerts (staff, rider) signs in on a phone that still holds a push token, the app calls `release_device` and the token stops receiving anyone's alerts. Owners call `register_device`, which moves the token to them. The app forgets its saved token only after the server confirmed `unregister_device` / `release_device`, so an offline sign-out is repaired at the next sign-in.
+
+### D-178 App version 1.1.0 and the update gate during a run (wave 3 review) (numbered D-137 on branch `wave3/riders-final-2`)
+- `expo-notifications` adds native code, so the mobile app version is 1.1.0 (runtime version follows it). The first 1.1.0 build must be a store/EAS build; an `eas update` to 1.0.0 binaries would crash them at launch (docs/RELEASE.md).
+- The minimum-version gate waits while the rider has a run today that is out, or planned with stops left (a banner says "finish today's deliveries first"), and while the rider queue is not yet sent.
+
+### D-179 Smaller rules from the wave 3 review (numbered D-138 on branch `wave3/riders-final-2`)
+- A rider's kitchen-fault credit request alerts the owner once per attempt (dedupe key includes the client op, or the failure time), so a second request after "try again" alerts again. Its payload carries `customer_id`.
+- Erasing a customer clears `delivery_stops.correction_note` and `credit_note` and replaces the customer's name in member alerts (and their push twins) with "Deleted customer" (trigger `customers_erased_alerts`; `erase_customer` is unchanged).
+- `assign_routes_by_area` rebuilds locked slots through `private.rebuild_locked_runs`, which uses wave 1's `private.resync_runs` (engine errors recorded and resolved) when it exists, else `build_runs`.
+- Staff see the real credit state on the live board (pending / refused / credited, read from `delivery_stops.credit_status`).

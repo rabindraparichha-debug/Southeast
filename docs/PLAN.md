@@ -537,6 +537,29 @@ Overlaps with other waves (resolve at merge; see D-157 "Overlaps"):
   `statement_ready` and their `_payer` variants, then regenerate the CSV (`UPDATE_TEMPLATE_PACK=1`).
 - Push outbox (wave 3 riders): `push_complete_outbox` records mock pushes as `sent`; move it to `mock`
   or record push as the exception.
+## Vendor-first wave 3 — riders ✅ (built 2026-11-06, waiting for your test pass)
+
+Audit items 25, 29 and the rest of 26 (docs/VENDOR_FIRST_AUDIT.md). Decisions D-167…D-179.
+
+Merged into `m9-p5-p6` (after wave 2, the held-back DB items and ops) with `20261130000400_merge_riders.sql`: push claim and the alert list on the engine clock and wave 2's `expires_at`, mock pushes recorded as `mock`, stop notes in the lean audit. The mobile Delivery desk shows for managers too; `correct_stop`'s `not_recorded` is mapped in its own web context (wave 4 uses the same code for phone changes). Tests: `20_merge_riders.test.sql`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 25 | Default rider (owner when the kitchen has no rider), runs without a rider shown to owners, a leaving rider is taken off routes | ✅ | `private.default_rider`, `unassigned_runs`, trigger `members_left_routes`; Deliver tab (mobile), `/rider` (web) |
+| 25 | Routes by area in one step (preview first), Route column in the import | ✅ | `area_routes`, `assign_routes_by_area`, trigger `import_rows_route`; web Delivery → Routes → "Routes by area" |
+| 25 | Rider kitchen-fault credits wait for the owner; owner corrects a recorded stop | ✅ | `decide_stop_credit`, `stop_credit_requests`, `correct_stop`; web live board "Correct", Delivery → Cash & credits; mobile Cash and credits |
+| 25 | Cash handover per rider | ✅ | `cash_handover`, `confirm_rider_cash`, `my_cash_handover`; web Delivery → Cash & credits and `/rider`; mobile Today desk, Cash and credits, Deliver tab |
+| 29 | Push notifications for owners and an in-app alerts list | ✅ mock locally; live needs FCM/APNs in EAS | `member_devices`, `register_device`, push twins of member alerts, `push-outbox` function, cron `tiffin-push`, `my_notifications`; mobile Alerts screen |
+| 26 | Minimum app version, shown only after the rider queue is sent | ✅ | `platform_settings.min_app_version`, `app_config` (anon), `admin_set_min_app_version`; mobile `components/app-guards.tsx`; Admin → Mobile app |
+
+Tests: `supabase/tests/14_riders_wave3.test.sql` (incl. a kitchen with no rider and 180 imported customers split by area into 3 routes), `tests/integration/w3-riders.test.ts`, `tests/integration/push.test.ts`, `packages/core/test/version.test.ts`, `import-route.test.ts`. Existing 06/12/m5 assertions now approve the rider's credit as the owner.
+
+Review fixes (migration `20261111000400_rider_fixes.sql`, D-175…D-179): a kitchen's first rider takes over the owner's routes and planned runs; "Try again" only for today's stops (`retry_today_only`); member alerts and pushes reach only current owners (and managers after wave 2); `release_device` so a shared phone stops getting a previous owner's alerts; one credit-request alert per attempt; erasure clears stop notes and names in member alerts; area moves rebuild through wave 1's `resync_runs` when present; staff see the real credit state on the live board; the update gate waits for today's run; the mobile app is version 1.1.0 (first push build must be a store/EAS build); the Alerts and Cash screens are inside the signed-in stack.
+
+Known gaps:
+- **Push on real phones** needs a development/release build (not Expo Go), the FCM V1 key in EAS for Android and the APNs key for iOS.
+- **Managers** (wave 2, D-117) should be added to the credit and cash RPCs, and get pushes once `notify_owners` includes them.
+- Read/unread for alerts, a per-member choice between push and WhatsApp, and the `x-app-version` header are not built.
 
 ## Things to start outside code now
 These have external lead times:

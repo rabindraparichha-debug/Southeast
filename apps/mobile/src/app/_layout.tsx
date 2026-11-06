@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/lib/session';
 import { startRiderSync } from '@/lib/rider-store';
 import { useReconnectSync } from '@/lib/use-reconnect-sync';
+import { AppGuards } from '@/components/app-guards';
 import { installGlobalErrorHandler } from '@/lib/monitor';
 import { colors } from '@/components/theme';
 import { loadLanguage, t, useLanguage } from '@/i18n';
@@ -49,6 +50,9 @@ function RootStack() {
         <Stack.Screen name="stock/count" options={{ title: t('stock.count.title') }} />
         <Stack.Screen name="money" options={{ title: t('tabs.money') }} />
         <Stack.Screen name="requests" options={{ title: t('lead.requests') }} />
+        {/* Wave 3: listed here so they are unreachable signed out or before a kitchen is chosen. */}
+        <Stack.Screen name="handover" options={{ title: t('handover.title') }} />
+        <Stack.Screen name="notifications" options={{ title: t('notifications.title') }} />
       </Stack.Protected>
     </Stack>
   );
@@ -58,7 +62,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <StatusBar style="dark" />
-      <RootStack />
+      {/* Minimum app version (after the rider queue is sent) and push alerts: wave 3. */}
+      <AppGuards>
+        <RootStack />
+      </AppGuards>
     </AuthProvider>
   );
 }

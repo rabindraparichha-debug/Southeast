@@ -305,6 +305,9 @@ select ok(exists (select 1 from jsonb_array_elements(public.rider_today()) r, js
                   where s ->> 'name' = 'Infy Block A'), 'the office stop shows the office name');
 -- Kitchen-fault failure at the office stop credits each employee.
 select is(public.fail_stop((select id from os), 'kitchen_late') ->> 'status', 'failed', 'the rider marks the office stop failed (kitchen late)');
+-- Wave 3 (audit item 25): a rider's kitchen-fault credit waits for the owner's approval.
+select set_config('request.jwt.claims', '{"sub":"e6000000-0000-4000-e000-000000000001","role":"authenticated"}', true);
+select is(public.decide_stop_credit((select id from os), true) ->> 'credit_status', 'approved', 'the owner approves the office credit');
 reset role;
 select is((select count(*) from public.balance_entries where ref_type = 'delivery_stop_order' and customer_id in
            ((select v from ids where k = 'e1'), (select v from ids where k = 'e2'))), 2::bigint, 'each employee gets their meal back');

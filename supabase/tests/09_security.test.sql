@@ -20,7 +20,8 @@ select is((select array_agg(p.proname::text order by p.proname) from pg_proc p j
            where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')),
   -- P5/P6 added the customer-page functions for payers, food prefs, referrals, health tags and kitchen switching;
   -- Phase 2 hardening added the kitchen-scoped referral join page (referral_invite, referral_join; D-147).
-  array['kitchen_directory', 'kitchen_profile', 'lead_attach_gclid', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_apply_referral',
+  -- Wave 3 riders: app_config (minimum app version; the mobile gate runs before login).
+  array['app_config', 'kitchen_directory', 'kitchen_profile', 'lead_attach_gclid', 'lead_choose', 'list_areas', 'portal_add_address', 'portal_apply_referral',
         'portal_cancel_switch', 'portal_change', 'portal_complaint', 'portal_dependent_payment_link_record', 'portal_get',
         'portal_payment_link_record', 'portal_request_switch', 'portal_review', 'portal_set_food_prefs', 'portal_set_health_tags',
         'portal_set_language', 'portal_switch_options', 'referral_invite', 'referral_join', 'submit_lead', 'submit_vendor_application'],
@@ -34,7 +35,7 @@ select ok(not has_schema_privilege('anon', 'private', 'usage'), 'anon cannot use
 select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'execute')
              and p.prosrc !~ '(require_role|require_admin|require_run_access|portal_customer|private.lead_|token_hash|auth.uid\(\) is null|private.has_role|private.is_platform_admin)'),
-  array['claim_invites', 'create_kitchen', 'kitchen_directory', 'kitchen_profile', 'list_areas', 'referral_invite', 'referral_join',
+  array['app_config', 'claim_invites', 'create_kitchen', 'kitchen_directory', 'kitchen_profile', 'list_areas', 'referral_invite', 'referral_join',
         'submit_vendor_application'],
   'every other RPC callable by signed-in users checks who is calling');
 -- Service-role-only RPCs are not callable by users (wave 3: ops_* for the ops-health and
@@ -42,7 +43,7 @@ select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') 
 select is((select coalesce(array_agg(p.proname::text order by p.proname), '{}') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and (p.proname like 'wa\_%' or p.proname like 'ops\_%' or p.proname in ('razorpay_process_event', 'attach_payment_link',
              'mark_refund_submitted', 'lead_ingest', 'weather_kitchens', 'weather_record_alert', 'cancel_payment_link_record',
-             'ads_claim_conversions', 'ads_complete_conversion'))
+             'ads_claim_conversions', 'ads_complete_conversion', 'push_claim_outbox', 'push_complete_outbox'))
              and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))),
   '{}'::text[], 'webhook/service functions are not callable by users');
 

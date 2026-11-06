@@ -310,8 +310,12 @@ select set_config('request.jwt.claims', '{"sub":"f1000000-0000-4000-f000-0000000
 select throws_ok($$ select public.fail_stop((select id from st where seq = 5), 'other') $$, '22023', 'note_required',
   '"other" needs a note');
 select is(public.fail_stop((select id from st where seq = 5), 'not_home') ->> 'credit_entry_id', null, 'customer not home: no credit');
-select ok((public.fail_stop((select id from st where seq = 6), 'food_issue', 'Dal spilled') ->> 'credit_entry_id') is not null,
-  'kitchen fault: a credit entry is posted');
+-- Wave 3 (audit item 25): a rider's kitchen-fault failure waits for the owner's approval.
+select ok((public.fail_stop((select id from st where seq = 6), 'food_issue', 'Dal spilled') ->> 'credit_entry_id') is null,
+  'kitchen fault recorded by the rider: no credit until the owner approves');
+select set_config('request.jwt.claims', '{"sub":"f1000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select ok((public.decide_stop_credit((select id from st where seq = 6), true) ->> 'credit_entry_id') is not null,
+  'kitchen fault: once approved, a credit entry is posted');
 reset role;
 select is((select meals || '/' || amount_paise from public.balance_entries
            where id = (select credit_entry_id from public.delivery_stops where id = (select id from st where seq = 6))),

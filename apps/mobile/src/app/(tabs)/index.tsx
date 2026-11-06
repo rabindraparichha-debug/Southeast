@@ -16,6 +16,7 @@ import { ClosuresCard } from '@/components/closures-card';
 import { StaleBanner } from '@/components/offline-banner';
 import { cachedFetch, useCacheScope, type Stale } from '@/lib/cached-fetch';
 import { SyncRejectsCard } from '@/components/sync-rejects';
+import { OwnerDesk } from '@/components/owner-desk';
 import { colors, space } from '@/components/theme';
 import { locale, t } from '@/i18n';
 
@@ -109,6 +110,8 @@ export default function Today() {
       <ClosuresCard kitchenId={kitchen.kitchenId} isOwner={isLead(kitchen.role)} version={version} onChanged={load} />
       <DispatchPhotoCard kitchenId={kitchen.kitchenId} version={version} />
       {isLead(kitchen.role) && <SyncRejectsCard kitchenId={kitchen.kitchenId} version={version} />}
+      {/* Wave 3 riders: stop credits to approve, rider cash handovers (owner or manager, D-117). */}
+      {isLead(kitchen.role) && <OwnerDesk kitchenId={kitchen.kitchenId} version={version} />}
       {isLead(kitchen.role) && <AtRiskCard kitchenId={kitchen.kitchenId} version={version} />}
       <Card>
         <Text style={styles.cardTitle}>{t('today.changes')}</Text>

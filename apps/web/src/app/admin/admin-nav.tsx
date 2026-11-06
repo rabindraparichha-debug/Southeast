@@ -16,6 +16,7 @@ const ITEMS = [
   { href: '/admin/calendar', label: 'Food calendar' },
   { href: '/admin/commission', label: 'Commission' },
   { href: '/admin/switching', label: 'Kitchen switching' },
+  { href: '/admin/app', label: 'Mobile app' },
   { href: '/admin/audit', label: 'Audit log' },
 ];
 

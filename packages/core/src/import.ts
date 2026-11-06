@@ -27,6 +27,8 @@ export const IMPORT_FIELDS = [
   { key: 'dues', label: 'Opening dues (₹)', required: false, aliases: ['dues', 'opening dues', 'due', 'khata', 'amount due', 'baki', 'pending amount'] },
   { key: 'lat', label: 'Latitude', required: false, aliases: ['lat', 'latitude'] },
   { key: 'lng', label: 'Longitude', required: false, aliases: ['lng', 'lon', 'long', 'longitude'] },
+  // Wave 3: the delivery route (created when new); the server places the address on it (import_rows trigger).
+  { key: 'route', label: 'Route', required: false, aliases: ['route', 'route name', 'delivery route', 'rider route'] },
 ] as const;
 
 export type ImportField = (typeof IMPORT_FIELDS)[number]['key'];
@@ -367,7 +369,7 @@ export function importChunks<T>(rows: T[], size: number = IMPORT_CHUNK_SIZE): { 
 export const IMPORT_TEMPLATE_HEADERS = [
   'Name', 'Phone', 'Diet', 'Language', 'Flat / house', 'Area', 'Landmark', 'Delivery notes', 'Notes', 'Plan', 'Second plan',
   'Start date', 'Tiffins per meal', 'Status (active / paused / stopped)', 'Paused from', 'Opening balance (meals)',
-  'Billing (monthly / prepaid)', 'Opening dues (₹)',
+  'Billing (monthly / prepaid)', 'Opening dues (₹)', 'Route',
 ];
 
 const ddmmyyyy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;

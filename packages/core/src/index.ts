@@ -4,3 +4,4 @@ export * from './time';
 export * from './import';
 export * from './login';
 export * from './kitchen-export';
+export * from './version';
