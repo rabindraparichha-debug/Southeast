@@ -671,3 +671,15 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 - Apple and Google reviewers cannot receive an SMS, and a store build only reaches the production backend (the server switch exists only in test builds). During a review the production project gets **one** Supabase test phone number with a random code (never the seed `123456`) and an expiry that just covers the review; it owns a draft demo kitchen whose sample customers use numbers the business owns. It is removed after the review. This is the only exception to "no `test_otp` in production" (docs/SECURITY.md).
 - Never `supabase config push` this repo's `config.toml` to a hosted project: it carries the local seed test numbers and dummy SMS settings.
 
+
+### D-115 Phase 1 billing: monthly pay-later by default (owner, 2026-11-06)
+- Default billing for customers is **monthly pay-later**: meals are delivered and charged to the customer's khata, the vendor collects at month end, and nothing is suspended or cancelled automatically. A kitchen can switch any customer (or its default) to **prepaid**, which keeps today's low-balance/suspend behaviour. Dues are valued from each meal's own `amount_paise`, not today's plan price. Supersedes the prepaid-only behaviour of D-002/D-048/D-056 for Phase 1.
+
+### D-116 Skips after the lock: charged, vendor can waive (owner, 2026-11-06)
+- Before a slot's real cutoff, vendor-entered skips are free. After the lock the meal is charged by default; the vendor can tick "don't charge", which posts one idempotent credit for that meal. The 19:00 previous-day phone-pause rule no longer applies to vendor-entered changes (D-031 updated).
+
+### D-117 Manager and Accountant roles (owner, 2026-11-06)
+- New roles: **manager** (customer changes, new customers, cash and payments, confirming rider cash, receives owner alerts) and **accountant** (reads money, no writes). Staff keep kitchen/stock work with no money or phones; riders can send change requests that an owner or manager approves. Updates SPEC roles and D-022.
+
+### D-118 Customers may share a phone number (owner, 2026-11-06)
+- Several customers in one kitchen may share a phone (siblings, family phone). Phone search returns all of them; messages to that number are sent per customer. The one-open-lead-per-phone rule for platform leads is unchanged.
