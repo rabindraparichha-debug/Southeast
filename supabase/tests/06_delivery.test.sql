@@ -281,9 +281,13 @@ select is(public.complete_stop((select id from st where seq = 2), 'photo',
   'the same queued action sent twice is accepted once...');
 select is(public.complete_stop((select id from st where seq = 2), 'none', p_client_op => 'c0000000-0000-4000-f000-000000000099') ->> 'conflict',
   'true', '...a different action on a finished stop is reported as a conflict');
--- An offline OTP can't be checked on the phone: recorded, flagged for review.
+-- An offline OTP can't be checked on the phone: a wrong one is not delivered (D-126); the queue parks
+-- it in "needs attention" and the rider sends it again without the code.
 select is(public.complete_stop((select id from st where seq = 3), 'otp', p_otp => '0000x', p_at => '2026-11-03 12:50:00+05:30',
-  p_client_op => 'c0000000-0000-4000-f000-000000000003', p_offline => true) ->> 'otp_ok', 'false', 'a wrong offline code is kept, flagged');
+  p_client_op => 'c0000000-0000-4000-f000-000000000003', p_offline => true) ->> 'otp_ok', 'false', 'a wrong offline code is refused');
+select is((select status::text from public.delivery_stops where id = (select id from st where seq = 3)), 'pending', '...not delivered');
+select is(public.complete_stop((select id from st where seq = 3), 'none', p_at => '2026-11-03 12:50:00+05:30',
+  p_client_op => 'c0000000-0000-4000-f000-000000000005', p_offline => true) ->> 'status', 'delivered', 'resent from needs attention');
 -- A phone with a clock in the future: clamped to the sync time, the raw value kept.
 select is(public.complete_stop((select id from st where seq = 4), 'none', p_at => '2026-11-03 18:00:00+05:30',
   p_client_op => 'c0000000-0000-4000-f000-000000000004', p_offline => true) ->> 'status', 'delivered', 'future device time accepted');

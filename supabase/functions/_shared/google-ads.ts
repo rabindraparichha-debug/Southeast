@@ -86,13 +86,18 @@ export async function accessToken(cfg: AdsConfig, fetchFn: typeof fetch = fetch)
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-/** Uploads; returns per-row outcome. Mock mode accepts everything without calling Google. */
+export type UploadResult = { id: string; ok: boolean; skip?: boolean; mock?: boolean; error?: string };
+
+/**
+ * Uploads; returns per-row outcome. Mock mode calls nothing and reports each row as mock (not ok):
+ * stored with status 'mock', never 'sent', so it is uploaded after going live (D-131).
+ */
 export async function uploadConversions(cfg: AdsConfig, rows: PendingConversion[], fetchFn: typeof fetch = fetch):
-  Promise<{ id: string; ok: boolean; skip?: boolean; error?: string }[]> {
+  Promise<UploadResult[]> {
   const { sendable, skipped, body } = buildUpload(cfg, rows);
-  const results = skipped.map((r) => ({ id: r.id, ok: false, skip: true, error: `no conversion action for ${r.stage}` }));
+  const results: UploadResult[] = skipped.map((r) => ({ id: r.id, ok: false, skip: true, error: `no conversion action for ${r.stage}` }));
   if (!sendable.length) return results;
-  if (cfg.mode === 'mock') return [...results, ...sendable.map((r) => ({ id: r.id, ok: true, error: 'mock' }))];
+  if (cfg.mode === 'mock') return [...results, ...sendable.map((r) => ({ id: r.id, ok: false, mock: true, error: 'mock' }))];
   const token = await accessToken(cfg, fetchFn);
   const res = await fetchFn(`https://googleads.googleapis.com/${cfg.apiVersion}/customers/${cfg.customerId}:uploadClickConversions`, {
     method: 'POST',

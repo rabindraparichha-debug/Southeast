@@ -22,6 +22,8 @@ export interface BotDeps {
   paymentLink(meals: number): Promise<{ url: string; amountPaise: number; meals: number }>;
   addLocation(lat: number, lng: number, label?: string): Promise<void>;
   complete?: Complete;
+  /** Takes one unit of the AI budget (per conversation and per day, D-128); false = answer from the rules. */
+  aiBudget?: () => Promise<boolean>;
 }
 
 export type BotResult = { replies: Out[]; intent: string; handledBy: 'bot' | 'ai' | 'none' };
@@ -345,7 +347,7 @@ export async function handleMessage(input: Inbound, ctx: Json, rawDeps: BotDeps)
     } else if (intent) {
       result = await runMenuItem(intent === 'greet' ? 'greet' : intent === 'language' ? 'lang' : intent, lang, ctx, deps);
     } else {
-      const ai = await askAi(text, ctx, lang, deps.complete);
+      const ai = await askAi(text, ctx, lang, deps.complete, deps.aiBudget);
       if (ai.handoff) {
         await deps.handoff('question for the kitchen');
         result = { replies: [{ type: 'text', text: t(lang, 'guarded', { kitchen }) }], intent: 'ai_handoff', handledBy: 'ai' };

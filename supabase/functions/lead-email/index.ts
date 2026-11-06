@@ -1,16 +1,19 @@
 // Inbound lead emails → leads. For directories without a lead API (Sulekha) and as a fallback for
 // Justdial: forward their enquiry emails to an address handled by an inbound-email service, which
-// posts here with ?key=LEAD_INTAKE_KEY. Accepts:
+// posts here with the header X-Lead-Key: LEAD_INTAKE_KEY, or Basic auth with the key as password
+// (https://leads:<KEY>@<project>.functions.supabase.co/lead-email). ?key= is refused (D-130). Accepts:
 //   - JSON {from, subject, text, message_id}   (our Cloudflare Email Routing worker, see docs/LEAD_SOURCES.md)
 //   - Postmark inbound JSON {From, Subject, TextBody, MessageID}
 //   - SendGrid Inbound Parse / Mailgun routes (multipart or urlencoded form: from|sender, subject, text|body-plain)
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
-import { parseLeadEmail, safeEqual, type LeadEmail } from '../_shared/leads.ts';
+import { checkLeadKey, parseLeadEmail, presentedKey, type LeadEmail } from '../_shared/leads.ts';
+import { mockAllowed } from '../_shared/platform.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LEAD_INTAKE_KEY = Deno.env.get('LEAD_INTAKE_KEY') ?? '';
+const LOCAL = mockAllowed((k) => Deno.env.get(k));
 const monitor = loadMonitorConfig((k) => Deno.env.get(k));
 
 async function readMail(req: Request): Promise<LeadEmail> {
@@ -38,8 +41,8 @@ async function readMail(req: Request): Promise<LeadEmail> {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
-  const key = new URL(req.url).searchParams.get('key') ?? req.headers.get('x-lead-key') ?? '';
-  if (!safeEqual(key, LEAD_INTAKE_KEY)) return json({ error: 'forbidden' }, 403);
+  const check = checkLeadKey('email', presentedKey(new URL(req.url), req.headers), { intake: LEAD_INTAKE_KEY, justdial: '' }, LOCAL);
+  if (!check.ok) return json({ error: check.error }, check.status);
   let mail: LeadEmail;
   try {
     mail = await readMail(req);

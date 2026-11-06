@@ -64,7 +64,9 @@ describe('Google Ads', () => {
 
   it('mock mode accepts without calling Google; live mode reads partial failures', async () => {
     const mock = await uploadConversions(cfg, rows, (async () => { throw new Error('no network in mock mode'); }) as unknown as typeof fetch);
-    expect(mock.filter((r) => r.ok).map((r) => r.id)).toEqual(['a', 'b']);
+    // Mock mode sends nothing: rows come back as mock (stored 'mock', not 'sent', D-131).
+    expect(mock.filter((r) => r.ok)).toEqual([]);
+    expect(mock.filter((r) => r.mock).map((r) => r.id)).toEqual(['a', 'b']);
     expect(mock.find((r) => r.id === 'c')).toMatchObject({ skip: true });
 
     const calls: string[] = [];
