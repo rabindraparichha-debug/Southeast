@@ -16,8 +16,7 @@ How to run the platform day to day: deploying, scheduled jobs, monitoring, backu
 1. Run every check locally: `pnpm db:reset && pnpm db:test && pnpm --filter @tiffin/core test && pnpm test:integration`, plus web and mobile `typecheck` and `lint`.
 2. Database: `supabase link --project-ref <ref>` then `supabase db push`. Migrations are append-only: never edit one that a shared environment has applied (CLAUDE.md).
 3. Regenerate types if the schema changed: `pnpm db:types`, and commit them.
-4. Edge Functions: `supabase functions deploy <name>` for each changed function (`--no-verify-jwt` for `razorpay-webhook`, `razorpay-mock`, `whatsapp-webhook`, `lead-intake`, matching `supabase/config.toml`).
-   `push-outbox` (wave 3) also needs `--no-verify-jwt`: it checks the service role key itself.
+4. Edge Functions: `supabase functions deploy <name>` for each changed function (`--no-verify-jwt` for `razorpay-webhook`, `razorpay-mock`, `whatsapp-webhook`, `lead-intake`, `push-outbox`, matching `supabase/config.toml`; `push-outbox` checks the service role key itself). Deploy `push-outbox` at least once: without it the `tiffin-push` job calls a missing function and owner pushes expire after 12 hours.
 5. Secrets: `supabase secrets set KEY=value` (see `supabase/functions/.env.example`). Vault secrets are set once per project in the SQL editor (CLAUDE.md > Secrets).
 6. Web: deploy as usual. Mobile: `eas build` / `eas update` (docs/RELEASE.md).
 

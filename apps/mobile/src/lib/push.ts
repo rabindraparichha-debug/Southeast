@@ -70,15 +70,36 @@ export async function registerForPush(opts: { ask?: boolean } = {}): Promise<Pus
   }
 }
 
-/** On sign-out: this phone stops receiving the member's alerts. Never blocks sign-out. */
+/**
+ * On sign-out: this phone stops receiving the member's alerts. Never blocks sign-out. The saved
+ * token is forgotten only when the server confirmed; otherwise (offline, expired session) it stays,
+ * and whoever signs in next takes it over (owner) or releases it (releasePush).
+ */
 export async function unregisterPush(): Promise<void> {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) return;
-    await supabase.rpc('unregister_device', { p_token: token });
-    await AsyncStorage.removeItem(TOKEN_KEY);
+    const { error } = await supabase.rpc('unregister_device', { p_token: token });
+    if (!error) await AsyncStorage.removeItem(TOKEN_KEY);
   } catch {
-    // Offline sign-out: the token moves to whoever signs in next on this phone.
+    // Offline sign-out: handled at the next sign-in on this phone.
+  }
+}
+
+/**
+ * For a member who gets no alerts (staff, rider): if this phone still holds a token from an earlier
+ * sign-in (a sign-out that could not reach the server, or a session that simply expired), the
+ * server drops it, so the earlier user's alerts stop arriving here. Retried on every start until
+ * the server confirms. Asks for no permission.
+ */
+export async function releasePush(): Promise<void> {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const { error } = await supabase.rpc('release_device', { p_token: token });
+    if (!error) await AsyncStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Offline: tried again on the next start.
   }
 }
 

@@ -325,7 +325,7 @@ Known gaps:
 
 ## Vendor-first wave 3 — riders ✅ (built 2026-11-06, waiting for your test pass)
 
-Audit items 25, 29 and the rest of 26 (docs/VENDOR_FIRST_AUDIT.md). Decisions D-126…D-133.
+Audit items 25, 29 and the rest of 26 (docs/VENDOR_FIRST_AUDIT.md). Decisions D-126…D-138.
 
 | Item | Scope | Status | Where |
 |---|---|---|---|
@@ -337,6 +337,8 @@ Audit items 25, 29 and the rest of 26 (docs/VENDOR_FIRST_AUDIT.md). Decisions D-
 | 26 | Minimum app version, shown only after the rider queue is sent | ✅ | `platform_settings.min_app_version`, `app_config` (anon), `admin_set_min_app_version`; mobile `components/app-guards.tsx`; Admin → Mobile app |
 
 Tests: `supabase/tests/14_riders_wave3.test.sql` (incl. a kitchen with no rider and 180 imported customers split by area into 3 routes), `tests/integration/w3-riders.test.ts`, `tests/integration/push.test.ts`, `packages/core/test/version.test.ts`, `import-route.test.ts`. Existing 06/12/m5 assertions now approve the rider's credit as the owner.
+
+Review fixes (migration `20261111000400_rider_fixes.sql`, D-134…D-138): a kitchen's first rider takes over the owner's routes and planned runs; "Try again" only for today's stops (`retry_today_only`); member alerts and pushes reach only current owners (and managers after wave 2); `release_device` so a shared phone stops getting a previous owner's alerts; one credit-request alert per attempt; erasure clears stop notes and names in member alerts; area moves rebuild through wave 1's `resync_runs` when present; staff see the real credit state on the live board; the update gate waits for today's run; the mobile app is version 1.1.0 (first push build must be a store/EAS build); the Alerts and Cash screens are inside the signed-in stack.
 
 Known gaps:
 - **Push on real phones** needs a development/release build (not Expo Go), the FCM V1 key in EAS for Android and the APNs key for iOS.

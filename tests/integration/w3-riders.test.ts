@@ -142,14 +142,27 @@ describe('Wave 3 riders track over the API', () => {
     expect(sent.status).toBe(200);
     expect(sent.body.mode).toBe('mock');
     // The every-minute cron may have sent it first; either way it ends up sent, marked as a mock send.
-    const dedupe = encodeURIComponent(`stop_credit_request:${stops[0]!.id}:${owner.userId}`);
+    // One alert per attempt: the key is stop_credit_request:<stop>:<attempt>:<owner>.
+    const dedupe = encodeURIComponent(`stop_credit_request:${stops[0]!.id}:*:${owner.userId}`);
     let row: { status: string; last_error: string | null } | undefined;
     for (let i = 0; i < 10; i++) {
-      row = (await rest(`notifications_outbox?select=status,last_error&channel=eq.push&dedupe_key=eq.${dedupe}`, owner.accessToken)).body[0];
+      row = (await rest(`notifications_outbox?select=status,last_error&channel=eq.push&dedupe_key=like.${dedupe}`, owner.accessToken)).body[0];
       if (row && row.status !== 'pending' && row.status !== 'sending') break;
       await new Promise((r) => setTimeout(r, 500));
     }
     expect(row).toEqual({ status: 'sent', last_error: 'mock' });
+  });
+
+  it("stops the owner's alerts on a shared phone once someone else signs in there", async () => {
+    // The owner registers the kitchen phone, then signs out offline (unregister never reaches the
+    // server). The rider who signs in next releases the token the app still holds.
+    const shared = `ExponentPushToken[w3-${run}-shared]`;
+    expect((await owner.client.rpc('register_device', { p_token: shared, p_platform: 'android' })).error).toBeNull();
+    expect((await rest('member_devices?select=token', owner.accessToken)).body.map((d: { token: string }) => d.token)).toContain(shared);
+    expect((await rider.client.rpc('release_device', { p_token: 'nope' })).error?.message).toBe('invalid_token');
+    expect((await rider.client.rpc('release_device', { p_token: shared })).error).toBeNull();
+    expect((await rest('member_devices?select=token', owner.accessToken)).body.map((d: { token: string }) => d.token)).not.toContain(shared);
+    expect((await anonClient().rpc('release_device', { p_token: shared })).error).not.toBeNull();
   });
 
   it('keeps the owner tools to owners, on a fresh kitchen without riders', async () => {

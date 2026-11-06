@@ -130,17 +130,20 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Riders reach data only via `rider_today()` and `my_run_ids()` (today's own runs). Never expose `delivery_stops.otp` or full phone numbers to them; calls go through `rider_call_number` (logged).
 - The mobile offline queue is `apps/mobile/src/lib/rider-store.ts`: every rider write goes through `act()`.
 
-**Riders, wave 3 (D-126…D-130, D-133)**
+**Riders, wave 3 (D-126…D-130, D-133…D-135, D-138)**
 - A new route's rider comes only from `private.default_rider()` (the only rider; no rider = the owner; 2+ riders = nobody). Owners see riderless runs through `unassigned_runs()` and take them with `assign_run`.
 - Bulk route changes go through `assign_routes_by_area` (preview with `p_dry_run` first). The import Route column is handled by the `import_rows` trigger (`private.import_row_route`); don't add route logic to `import_customers`.
 - Delivery credits are posted only by `private.post_stop_credit()` and taken back only by `private.reverse_stop_credit()` (an `adjust` row, `ref_type 'stop_credit_reversal'`). A kitchen-fault failure by a non-owner waits (`delivery_stops.credit_status = 'pending'`) for `decide_stop_credit`. Recorded outcomes change only through `correct_stop` (owner, note required).
 - Rider cash is confirmed in bulk with `confirm_rider_cash`, which calls `confirm_payment` per payment; never post recharges another way.
+- A kitchen's first rider takes over owner-held routes and planned runs (`members_joined_routes`, D-134). `correct_stop(..., 'pending')` is today-only (`retry_today_only`, D-135). Rebuild locked slots after route changes with `private.rebuild_locked_runs` (uses wave 1's `resync_runs` when present).
 
-**Push and app alerts (D-131, D-132)**
+**Push and app alerts (D-131, D-132, D-136, D-137)**
 - Member alerts queued for WhatsApp get a `push` twin automatically (trigger `notifications_outbox_push_twin`) when the member has a device in `member_devices`. App-only alerts use `private.notify_owners_push()`.
 - When you add a member template (WhatsApp or push-only), add its title/body/path to `private.member_alert_text` (one text for push and the in-app list, `my_notifications`). Paths must be screens in `apps/mobile/src/lib/push.ts` `PATHS`.
 - `push-outbox` (Edge Function, service role) sends through Expo; pure logic in `_shared/push.ts` (unit tests in `tests/integration/push.test.ts`). `PUSH_MODE=mock` is refused outside a local stack.
-- The mobile app-wide guards live in `apps/mobile/src/components/app-guards.tsx` (minimum version from `app_config()` after the rider queue is sent, push registration); sign-out calls `unregisterPush()` first.
+- The mobile app-wide guards live in `apps/mobile/src/components/app-guards.tsx` (minimum version from `app_config()` after the rider queue is sent and today's run is finished, push registration); sign-out calls `unregisterPush()` right before `auth.signOut()`, and keeps the saved token unless the server confirmed.
+- Member alerts are owner alerts: who receives and lists them is `private.is_alert_role` (D-136). Non-owners who sign in on a phone call `release_device` for a token left there. Add `customer_id` to any new member-alert payload that names a customer (erasure trigger `customers_erased_alerts`).
+- Native code or new permissions in the mobile app mean a version bump in `apps/mobile/app.json` and a store/EAS build, never only an `eas update`.
 
 **Inventory (M6)**
 - Stock is the sum of `stock_moves` (append-only); never store a stock number. Every write goes through an RPC that converts units with `private.convert_qty()` and stores the item's unit.

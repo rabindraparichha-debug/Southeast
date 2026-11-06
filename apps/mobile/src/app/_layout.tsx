@@ -37,6 +37,9 @@ function RootStack() {
         <Stack.Screen name="stock/purchase" options={{ title: t('stock.purchase.title'), presentation: 'modal' }} />
         <Stack.Screen name="stock/waste" options={{ title: t('stock.waste.title') }} />
         <Stack.Screen name="stock/count" options={{ title: t('stock.count.title') }} />
+        {/* Wave 3: listed here so they are unreachable signed out or before a kitchen is chosen. */}
+        <Stack.Screen name="handover" options={{ title: t('handover.title') }} />
+        <Stack.Screen name="notifications" options={{ title: t('notifications.title') }} />
       </Stack.Protected>
     </Stack>
   );

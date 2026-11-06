@@ -4622,6 +4622,7 @@ export type Database = {
         Returns: string;
       };
       reject_payment: { Args: { p_payment: string; p_reason: string }; Returns: undefined };
+      release_device: { Args: { p_token: string }; Returns: undefined };
       remove_member: { Args: { p_member: string }; Returns: undefined };
       reorder_run: { Args: { p_run: string; p_stop_ids: string[] }; Returns: undefined };
       request_schedule_change: {

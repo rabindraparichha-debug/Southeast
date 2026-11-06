@@ -514,5 +514,155 @@ select throws_ok($$ select public.admin_set_min_app_version('9.9.9') $$, '42501'
 select throws_ok($$ select * from public.member_devices $$, '42501', null, 'anon: member_devices');
 reset role;
 
+-- ===========================================================================
+-- 12. Review fixes (20261111000400_rider_fixes.sql)
+-- ===========================================================================
+-- 12a. Role coverage of the new tools.
+select set_config('app.now', '2026-11-10 23:00:00+05:30', true);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select throws_ok($$ select public.confirm_rider_cash('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000004') $$,
+  '42501', 'forbidden', 'staff cannot confirm cash');
+select throws_ok($$ select public.stop_credit_requests('83000000-0000-4000-f000-000000000002') $$, '42501', 'forbidden',
+  'staff cannot list credit requests');
+select lives_ok($$ select public.register_device('ExpoPushToken[staff-w-device-1]', 'android') $$, 'staff can register a phone');
+select lives_ok($$ select public.unregister_device('ExpoPushToken[staff-w-device-1]') $$, 'and remove it');
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000004","role":"authenticated"}', true);
+select throws_ok($$ select public.confirm_rider_cash('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000004') $$,
+  '42501', 'forbidden', 'a rider cannot confirm their own cash');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000011","role":"authenticated"}', true);
+select throws_ok($$ select public.correct_stop((select v from ids where k = 's2'), 'failed', 'not_home', 'x') $$, '42501', 'forbidden',
+  'another kitchen''s owner cannot correct a stop');
+select throws_ok($$ select public.stop_credit_requests('83000000-0000-4000-f000-000000000002') $$, '42501', 'forbidden',
+  'another kitchen''s owner cannot list credit requests');
+select throws_ok($$ select public.area_routes('83000000-0000-4000-f000-000000000002', 'lunch') $$, '42501', 'forbidden',
+  'another kitchen''s owner cannot see the area overview');
+select throws_ok($$ select public.cash_handover('83000000-0000-4000-f000-000000000002') $$, '42501', 'forbidden',
+  'another kitchen''s owner cannot see the cash handover');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000099","role":"authenticated"}', true);
+select throws_ok($$ select public.confirm_rider_cash('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000004') $$,
+  '42501', 'forbidden', 'an admin cannot confirm a kitchen''s cash');
+select throws_ok($$ select public.correct_stop((select v from ids where k = 's2'), 'failed', 'not_home', 'x') $$, '42501', 'forbidden',
+  'an admin cannot correct a stop');
+select throws_ok($$ select public.decide_stop_credit((select v from ids where k = 's3'), true) $$, '42501', 'forbidden',
+  'an admin cannot decide a credit');
+select throws_ok($$ select public.area_routes('83000000-0000-4000-f000-000000000002', 'lunch') $$, '42501', 'forbidden',
+  'an admin cannot see the area overview');
+select is((select count(*) from jsonb_array_elements(public.unassigned_runs())), 0::bigint, 'an admin sees no unassigned runs');
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select is(jsonb_array_length(public.area_routes('83000000-0000-4000-f000-000000000002', 'lunch') -> 'areas'), 3,
+  'the owner sees the area overview');
+reset role;
+set local role anon;
+select throws_ok($$ select public.confirm_rider_cash('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000004') $$,
+  '42501', null, 'anon: confirm_rider_cash');
+select throws_ok($$ select public.stop_credit_requests('83000000-0000-4000-f000-000000000002') $$, '42501', null, 'anon: stop_credit_requests');
+select throws_ok($$ select public.area_routes('83000000-0000-4000-f000-000000000002', 'lunch') $$, '42501', null, 'anon: area_routes');
+select throws_ok($$ select public.release_device('ExpoPushToken[anon-device-1]') $$, '42501', null, 'anon: release_device');
+reset role;
+
+-- 12b. A second credit request on the same stop (after "try again") alerts the owner again.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000004","role":"authenticated"}', true);
+select is(public.fail_stop((select v from ids where k = 's9'), 'kitchen_late') ->> 'status', 'failed', 'the rider fails s9 (kitchen late)');
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select is(public.correct_stop((select v from ids where k = 's9'), 'pending', null, 'food is ready now') ->> 'status', 'pending',
+  'the owner sends it back for another try');
+select set_config('app.now', '2026-11-10 23:10:00+05:30', true);
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000004","role":"authenticated"}', true);
+select is(public.fail_stop((select v from ids where k = 's9'), 'kitchen_late', null, null, null, null, 0,
+  'a3000000-0000-4000-f000-0000000000c9') ->> 'status', 'failed', 'and the second try fails for the kitchen again');
+reset role;
+select is((select count(*) from public.notifications_outbox where template = 'stop_credit_request'
+           and payload ->> 'stop_id' = (select v from ids where k = 's9')::text
+           and recipient_id = 'f3000000-0000-4000-f000-000000000002'), 2::bigint, 'the owner is alerted for each attempt');
+select is((select count(*) from public.notifications_outbox where template = 'stop_credit_request'
+           and payload ->> 'stop_id' = (select v from ids where k = 's9')::text
+           and payload ->> 'customer_id' = (select customer_id from public.delivery_stops where id = (select v from ids where k = 's9'))::text),
+  2::bigint, 'credit requests name the customer by id (erasure finds them)');
+
+-- 12c. "Try again" is for today only; other corrections still work on recent days.
+select set_config('app.now', '2026-11-11 10:00:00+05:30', true);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select throws_ok($$ select public.correct_stop((select v from ids where k = 's3'), 'pending', null, 'try again') $$, '22023', 'retry_today_only',
+  'yesterday''s stop cannot be sent back to pending (no rider could finish it)');
+select is(public.correct_stop((select v from ids where k = 's3'), 'delivered', null, 'it did arrive') ->> 'status', 'delivered',
+  'it can still be corrected to delivered');
+reset role;
+
+-- 12d. Rebuilding a locked slot (no wave 1 engine here: build_runs directly).
+select is(private.rebuild_locked_runs('83000000-0000-4000-f000-000000000002', '2026-11-11', 'lunch'), true,
+  'a locked slot is rebuilt');
+
+-- 12e. A kitchen's first rider takes over what the owner held; a second rider changes nothing.
+insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at, created_at, updated_at) values
+  ('00000000-0000-0000-0000-000000000000', 'f3000000-0000-4000-f000-000000000007', 'authenticated', 'authenticated', '919777000007', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'f3000000-0000-4000-f000-000000000008', 'authenticated', 'authenticated', '919777000008', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'f3000000-0000-4000-f000-000000000009', 'authenticated', 'authenticated', '919777000009', now(), now(), now());
+select set_config('app.now', '2026-11-10 22:30:00+05:30', true);
+insert into public.members (kitchen_id, user_id, role, display_name) values
+  ('83000000-0000-4000-f000-000000000001', 'f3000000-0000-4000-f000-000000000007', 'rider', 'First Rider');
+select is((select rider_id from public.delivery_routes where kitchen_id = '83000000-0000-4000-f000-000000000001'),
+  'f3000000-0000-4000-f000-000000000007'::uuid, 'the first rider takes over the route the owner held');
+select is((select rider_id from public.delivery_runs where kitchen_id = '83000000-0000-4000-f000-000000000001'
+           and service_date = '2026-11-10'), 'f3000000-0000-4000-f000-000000000007'::uuid, 'and today''s planned run');
+insert into public.members (kitchen_id, user_id, role, display_name) values
+  ('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000009', 'rider', 'Third');
+select is((select rider_id from public.delivery_routes where kitchen_id = '83000000-0000-4000-f000-000000000002' and name = 'North'),
+  'f3000000-0000-4000-f000-000000000004'::uuid, 'a second rider in a kitchen moves nothing');
+
+-- 12f. Member alerts reach owners only: a demoted owner stops seeing and receiving them.
+insert into public.members (kitchen_id, user_id, role, display_name) values
+  ('83000000-0000-4000-f000-000000000002', 'f3000000-0000-4000-f000-000000000008', 'owner', 'Co-owner');
+select private.notify_owners_push('83000000-0000-4000-f000-000000000002', 'stop_credit_request',
+  '{"customer_name": "Test", "meals": 1}', 'review-test');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000008","role":"authenticated"}', true);
+select lives_ok($$ select public.register_device('ExponentPushToken[co-owner-device-1]', 'ios') $$, 'the co-owner registers a phone');
+select is(jsonb_array_length(public.my_notifications()), 1, 'the co-owner sees the owner alert');
+reset role;
+update public.members set role = 'staff'
+where kitchen_id = '83000000-0000-4000-f000-000000000002' and user_id = 'f3000000-0000-4000-f000-000000000008';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000008","role":"authenticated"}', true);
+select is(public.my_notifications(), '[]'::jsonb, 'once made staff, owner alerts are no longer listed');
+reset role;
+set local role service_role;
+create temp table claimed2 as select * from public.push_claim_outbox(100);
+reset role;
+select is((select tokens from claimed2 where recipient_id = 'f3000000-0000-4000-f000-000000000008'), '{}'::text[],
+  'and queued owner pushes get no device (the worker cancels them)');
+
+-- 12g. A phone that changes hands: a member who gets no alerts releases the earlier user's token.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select lives_ok($$ select public.register_device('ExponentPushToken[shared-phone-1]', 'android') $$, 'the owner registers the shared phone');
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000004","role":"authenticated"}', true);
+select throws_ok($$ select public.release_device('nope') $$, '22023', 'invalid_token', 'release checks the token');
+select lives_ok($$ select public.release_device('ExponentPushToken[shared-phone-1]') $$, 'the rider who signs in next releases it');
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000006","role":"authenticated"}', true);
+select throws_ok($$ select public.release_device('ExponentPushToken[shared-phone-1]') $$, '42501', 'forbidden',
+  'someone with no kitchen cannot release tokens');
+reset role;
+select is((select count(*) from public.member_devices where token = 'ExponentPushToken[shared-phone-1]'), 0::bigint,
+  'the owner''s alerts no longer reach that phone');
+
+-- 12h. Erasure scrubs the stop notes and the member alerts that name the customer.
+insert into ids select 'c9', customer_id from public.delivery_stops where id = (select v from ids where k = 's9');
+update public.delivery_stops set credit_note = 'note naming the customer' where id = (select v from ids where k = 's9');
+update public.subscriptions set status = 'cancelled' where customer_id = (select v from ids where k = 'c9');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
+select lives_ok($$ select public.erase_customer((select v from ids where k = 'c9')) $$, 'the owner erases the customer');
+reset role;
+select is((select coalesce(correction_note, '') || coalesce(credit_note, '') from public.delivery_stops
+           where id = (select v from ids where k = 's9')), '', 'the stop''s correction and credit notes are cleared');
+select is((select count(*) from public.notifications_outbox where template = 'stop_credit_request'
+           and payload ->> 'stop_id' = (select v from ids where k = 's9')::text and payload ->> 'customer_name' <> 'Deleted customer'),
+  0::bigint, 'member alerts no longer carry the name');
+select ok((select count(*) from public.notifications_outbox where template = 'stop_credit_request'
+           and payload ->> 'customer_name' not in ('Deleted customer', 'Test')) > 0, 'other customers'' alerts are untouched');
+
 select * from finish();
 rollback;

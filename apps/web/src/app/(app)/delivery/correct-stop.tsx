@@ -11,9 +11,14 @@ const REASONS = ['not_home', 'wrong_address', 'refused', 'unreachable', 'kitchen
 /**
  * Owner fixes a recorded outcome (audit item 25): a mis-tap, a second attempt after "not home", or
  * the wrong reason. Credits follow on the server (a kitchen-fault failure is credited; leaving one
- * reverses its credit with an adjust row). A note is required and kept on the stop.
+ * reverses its credit with an adjust row). A note is required and kept on the stop. "Try again" is
+ * offered on today's board only: riders see only today's runs, so a past stop could not be finished.
  */
-export function CorrectStop({ stop, onDone }: { stop: BoardStop; onDone: (message: string, ok: boolean) => void }) {
+export function CorrectStop({ stop, retryAllowed, onDone }: {
+  stop: BoardStop;
+  retryAllowed: boolean;
+  onDone: (message: string, ok: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<'delivered' | 'failed' | 'pending'>(stop.status === 'delivered' ? 'failed' : 'delivered');
   const [reason, setReason] = useState<string>(stop.failed_reason ?? 'not_home');
@@ -51,7 +56,7 @@ export function CorrectStop({ stop, onDone }: { stop: BoardStop; onDone: (messag
       <Select aria-label="Correct to" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="max-w-44">
         <option value="delivered">Delivered</option>
         <option value="failed">Not delivered</option>
-        <option value="pending">Try again</option>
+        {retryAllowed && <option value="pending">Try again</option>}
       </Select>
       {status === 'failed' && (
         <Select aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value)} className="max-w-48">

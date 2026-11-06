@@ -32,6 +32,7 @@ The vendor app (owners, staff and rider mode) ships to Android first. Builds run
 5. **Push notifications (owner alerts, D-131):** push only works in a development or release build (not Expo Go).
    - Android: create a Firebase project for `in.tiffinos.vendor`, download its FCM V1 service-account key and upload it with `npx eas-cli@latest credentials` (Android → Google Service Account → FCM V1). No `google-services.json` needs committing for Expo push.
    - iOS: let EAS create the APNs key on the first iOS build (`eas credentials` → Push Notifications).
+   - **The first build with push (app version 1.1.0, `expo-notifications`) must be a store or EAS build, never an `eas update`:** the 1.0.0 binaries lack the native module and would crash at launch on the new bundle. After 1.1.0 is installed everywhere, an admin can set the minimum app version to 1.1.0 (Admin → App).
    - Hosted Supabase: deploy the `push-outbox` function. Nothing else is required (Expo needs no key); optionally `supabase secrets set PUSH_MODE=live`, and `EXPO_ACCESS_TOKEN` only if you switch on Expo's enhanced push security.
 
 ## Each release

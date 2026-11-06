@@ -727,3 +727,25 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 ### D-133 Minimum app version (wave 3, audit item 26)
 - `platform_settings` row `min_app_version` (enabled + `{version, android_url, ios_url, message}`), set by platform admins (`admin_set_min_app_version`, Admin → Mobile app). `app_config()` serves it to everyone, before login too (an old build may not be able to log in), and the app caches it for offline starts.
 - The mobile gate first sends the rider's queued actions (a banner says so) and only then shows "Update required" with the download link; actions that need attention stay saved on the phone. The `x-app-version` request header from audit item 26 is not part of this track.
+
+### D-134 A kitchen's first rider takes over from the owner (wave 3 review)
+- When a kitchen goes from no rider to exactly one (a rider joins, or a member is made a rider), every route whose rider is an owner or nobody, and every planned run from today on with an owner or nobody as rider, moves to that rider (trigger `members_joined_routes`). Runs already out stay with whoever is delivering. With a second rider nothing moves; the owner assigns.
+- Consequence: an owner who deliberately kept a route for themselves in a kitchen with no rider must hand it back after the first rider joins (one tap on the board).
+
+### D-135 "Try again" is for today's stops only (wave 3 review)
+- `correct_stop(..., 'pending')` raises `retry_today_only` for a run that is not today's (IST). Riders see only today's runs, so a past stop sent back to pending could never be finished. Older stops (up to 7 days) can still be corrected to delivered or not delivered. The web live board offers "Try again" only on today's board.
+
+### D-136 Member alerts are owner alerts; shared phones release tokens (wave 3 review)
+- Every member alert on this base is an owner alert (counts with money, customer names). `my_notifications` and `push_claim_outbox` serve a member's alerts only while that member is an owner of the alert's kitchen (`private.is_alert_role`: `owner`, and `manager` once wave 2 adds the role). A demoted owner stops seeing and receiving them; queued pushes for them find no device and are cancelled.
+- `notify_owners_push` and the owner check in `do_fail_stop` (via `private.has_role`) follow the same rule, so managers count once wave 2's role expansion lands.
+- Phones change hands: when a member who gets no alerts (staff, rider) signs in on a phone that still holds a push token, the app calls `release_device` and the token stops receiving anyone's alerts. Owners call `register_device`, which moves the token to them. The app forgets its saved token only after the server confirmed `unregister_device` / `release_device`, so an offline sign-out is repaired at the next sign-in.
+
+### D-137 App version 1.1.0 and the update gate during a run (wave 3 review)
+- `expo-notifications` adds native code, so the mobile app version is 1.1.0 (runtime version follows it). The first 1.1.0 build must be a store/EAS build; an `eas update` to 1.0.0 binaries would crash them at launch (docs/RELEASE.md).
+- The minimum-version gate waits while the rider has a run today that is out, or planned with stops left (a banner says "finish today's deliveries first"), and while the rider queue is not yet sent.
+
+### D-138 Smaller rules from the wave 3 review
+- A rider's kitchen-fault credit request alerts the owner once per attempt (dedupe key includes the client op, or the failure time), so a second request after "try again" alerts again. Its payload carries `customer_id`.
+- Erasing a customer clears `delivery_stops.correction_note` and `credit_note` and replaces the customer's name in member alerts (and their push twins) with "Deleted customer" (trigger `customers_erased_alerts`; `erase_customer` is unchanged).
+- `assign_routes_by_area` rebuilds locked slots through `private.rebuild_locked_runs`, which uses wave 1's `private.resync_runs` (engine errors recorded and resolved) when it exists, else `build_runs`.
+- Staff see the real credit state on the live board (pending / refused / credited, read from `delivery_stops.credit_status`).

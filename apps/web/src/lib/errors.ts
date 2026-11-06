@@ -109,6 +109,7 @@ const MESSAGES: Record<string, string> = {
   // Wave 3 (riders track): stop corrections, routes by area, devices, minimum app version.
   not_recorded: 'This stop has no outcome yet. Mark it delivered or not delivered first.',
   too_old: 'Stops older than 7 days cannot be changed.',
+  retry_today_only: "Only today's stops can go back on the run. Correct it to delivered or not delivered instead.",
   cash_confirmed: 'The cash for this stop is already confirmed. Reject or adjust the payment first.',
   invalid_rules: 'Each line needs an area and a route.',
   too_many_rules: 'Use at most 200 lines.',
