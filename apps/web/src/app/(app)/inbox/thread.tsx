@@ -92,7 +92,7 @@ export function Thread({ conversationId, customerId, title, handoffOpen, unread,
             <div className={`max-w-[80%] whitespace-pre-wrap rounded-2xl [overflow-wrap:anywhere] px-3 py-2 text-sm ${m.direction === 'out' ? (m.handled_by === 'vendor' ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-ink-200') : 'bg-green-100'}`}>
               {m.body}
               <div className={`mt-1 text-[10px] ${m.direction === 'out' && m.handled_by === 'vendor' ? 'text-brand-100' : 'text-ink-500'}`}>
-                {WHO[m.handled_by]} {formatIstShort(m.created_at)}{m.direction === 'out' ? ` · ${m.status}` : ''}
+                {WHO[m.handled_by]} {formatIstShort(m.created_at)}{m.direction === 'out' ? ` · ${m.status === 'mock' ? 'test mode, not sent' : m.status}` : ''}
               </div>
             </div>
           </div>

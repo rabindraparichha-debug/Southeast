@@ -63,6 +63,7 @@ export default function Chat() {
               <Text style={{ color: vendor ? '#fff' : colors.ink }}>{item.body}</Text>
               <Text style={[styles.meta, vendor && { color: '#FFEDD5' }]}>
                 {mine ? (vendor ? t('inbox.you') : item.handled_by === 'ai' ? 'AI' : 'Bot') + ' · ' : ''}{formatIstShort(item.created_at)}
+                {mine && item.status === 'mock' ? ` · ${t('inbox.mock')}` : ''}
               </Text>
             </View>
           );

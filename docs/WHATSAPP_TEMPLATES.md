@@ -24,8 +24,10 @@ Meta only lets us message a customer outside the 24-hour customer-service window
 | `payment_receipt_v1` | Utility | `{{1}}: payment of {{2}} received for {{3}} meals. Balance: {{4}} meals. Thank you!` | kitchen, amount, meals, balance | – |
 | `refund_notice_v1` | Utility | `{{1}}: a refund of {{2}} for {{3}} unused meals has been created. You will be told when it is paid.` | kitchen, amount, meals | – |
 | `refund_receipt_v1` | Utility | `{{1}}: your refund of {{2}} has been paid ({{3}}).` | kitchen, amount, method | – |
-| `low_balance_v1` | Utility | `{{1}}: you have {{2}} meals left. Reply PAY to recharge.` | kitchen, meals | – |
-| `dues_reminder_v1` | Utility | `{{1}}: {{2}} is due for {{3}} meals. Reply PAY to pay now.` | kitchen, amount, meals | – |
+| `payment_receipt_monthly_v1` | Utility | `{{1}}: payment of {{2}} received. Still to pay: {{3}}. Thank you!` | kitchen, amount, amount still owed (monthly / pay-later customers) | – |
+| `statement_ready_v1` | Utility | `{{1}}: your bill for {{2}} is ready: {{3}} meals, {{4}}. Still to pay: {{5}}. Please pay the kitchen.` | kitchen, month ("November 2026"), meals, amount charged, amount still owed (monthly customers, sent on the 1st–3rd only while something is unpaid) | – |
+| `low_balance_v1` | Utility | `{{1}}: you have {{2}} meals left. Reply PAY to recharge.` | kitchen, meals (prepaid customers only) | – |
+| `dues_reminder_v1` | Utility | `{{1}}: {{2}} is due for {{3}} meals. Reply PAY to pay now.` | kitchen, amount, meals (prepaid customers only) | – |
 | `tomorrow_menu_v1` | Utility | `{{1}}: tomorrow's menu ({{2}}): {{3}}. Not eating? Tap Skip before the cutoff.` | kitchen, date, dishes | `Skip tomorrow` (payload `nudge_skip\|<date>`), `Keep` (`nudge_keep`) |
 | `kitchen_message_v1` | Utility | `Message from {{1}}: {{2}}` | kitchen, text | – |
 | `kitchen_update_v1` | Marketing | `Update from {{1}}: {{2}}` | kitchen, text | – |
@@ -35,6 +37,8 @@ Meta only lets us message a customer outside the 24-hour customer-service window
 | `low_balance_payer_v1` | Utility | `{{1}}: {{2}} has {{3}} meals left. Pay for them here: {{4}}` | kitchen, eater name, meals, payer page link | – |
 | `dues_reminder_payer_v1` | Utility | `{{1}}: {{2}} is due for {{3}} ({{4}} meals). Pay here: {{5}}` | kitchen, amount, eater name, meals, payer page link | – |
 | `payment_receipt_payer_v1` | Utility | `{{1}}: payment of {{2}} received for {{3}} meals for {{4}}. Their balance: {{5}} meals. Thank you!` | kitchen, amount, meals, eater name, balance | – |
+| `payment_receipt_monthly_payer_v1` | Utility | `{{1}}: payment of {{2}} received for {{3}}. Still to pay: {{4}}. Thank you!` | kitchen, amount, eater name, amount still owed | – |
+| `statement_ready_payer_v1` | Utility | `{{1}}: the {{2}} bill for {{3}} is ready: {{4}} meals, {{5}}. Still to pay: {{6}}. See it and pay here: {{7}}` | kitchen, month, eater name, meals, amount charged, amount still owed, payer page link | – |
 | `refund_notice_payer_v1` | Utility | `{{1}}: a refund of {{2}} for {{3}} unused meals of {{4}} has been created. You will be told when it is paid.` | kitchen, amount, meals, eater name | – |
 | `refund_receipt_payer_v1` | Utility | `{{1}}: the refund of {{2}} for {{3}} has been paid ({{4}}).` | kitchen, amount, eater name, method | – |
 | `festival_special_v1` | Marketing | `{{1}}: festival special on {{2}} ({{3}}): {{4}}. {{5}}` | kitchen, date, lunch/dinner, dish, "Included in your meal." or "Add-on ₹X: message the kitchen to order." | – |

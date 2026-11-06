@@ -124,8 +124,8 @@ function Metrics({ m }: { m: PlatformMetrics }) {
           <OpenItem n={m.open.escalated_complaints} label="Escalated complaints" href="#escalated" tone="red" />
           <OpenItem n={m.open.vendor_applications} label="Open vendor applications" href="/admin/vendors" tone="amber" />
           <OpenItem n={m.open.waitlisted_leads} label="Waitlisted leads (no kitchen yet)" href="/admin/funnel" tone="amber" />
-          <OpenItem n={m.open.outbox_failed} label="Failed WhatsApp messages (7 days)" tone="red"
-            hint="See notifications_outbox (status failed) in Supabase Studio." />
+          <OpenItem n={m.open.outbox_failed} label="Failed or stuck WhatsApp messages" tone="red"
+            hint={`Failed in the last 7 days, plus ${m.open.outbox_stuck ?? 0} stuck in sending (re-queued every 5 minutes). Mock sends this week: ${d.whatsapp_mock ?? 0} (not delivered). See notifications_outbox in Supabase Studio.`} />
         </ul>
       </Card>
     </div>

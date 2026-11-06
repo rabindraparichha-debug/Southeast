@@ -103,19 +103,22 @@ insert into public.notifications_outbox (kitchen_id, channel, recipient_type, re
   ('80000000-0000-4000-f000-000000000001', 'whatsapp', 'customer', (select cust from w where n = 3), 'low_balance_reminder', '{"balance_meals":2}', 't3', private.now() - interval '1 day');
 create temp table claimed as select * from public.wa_claim_outbox(10) where kitchen_id = '80000000-0000-4000-f000-000000000001';
 select is((select count(*) from claimed), 2::bigint, 'due rows are claimed');
-select is((select phone_e164 || '/' || in_window || '/' || opted_in from claimed where template = 'payment_receipt'), '+919444000001/true/true',
+-- (a monthly customer's receipt becomes payment_receipt_monthly at insert, 20261115000100)
+select is((select phone_e164 || '/' || in_window || '/' || opted_in from claimed where template like 'payment_receipt%'), '+919444000001/true/true',
   'claim decrypts the phone and reports the 24h window and opt-in');
 select is((select opted_in from claimed where template = 'low_balance_reminder'), false, 'customer 3 has not opted in');
 select is((select count(*) from public.wa_claim_outbox(10) where kitchen_id = '80000000-0000-4000-f000-000000000001'), 0::bigint,
   'claimed rows are not handed out twice');
-select public.wa_complete_outbox((select id from claimed where template = 'payment_receipt'), true, 'wamid.out1', null, 'Receipt text');
+select public.wa_complete_outbox((select id from claimed where template like 'payment_receipt%'), true, 'wamid.out1', null, 'Receipt text');
 select is((select status from public.notifications_outbox where dedupe_key = 't1'), 'sent', 'sent rows are marked sent');
 select is((select count(*) from public.messages where wa_message_id = 'wamid.out1' and direction = 'out'), 1::bigint,
   'sent customer messages appear in the conversation');
 select public.wa_complete_outbox((select id from claimed where template = 'low_balance_reminder'), false, null, 'timeout', null);
 select is((select status || '/' || attempts from public.notifications_outbox where dedupe_key = 't3'), 'pending/1',
   'a failed send is retried later (backoff)');
-update public.notifications_outbox set attempts = 5 where dedupe_key = 't3';
+-- Claimed again (only a claim that is still out can fail; a failure report for a row that is not
+-- 'sending' changes nothing, see 16_held_back), now on its 5th attempt.
+update public.notifications_outbox set status = 'sending', attempts = 5 where dedupe_key = 't3';
 select public.wa_complete_outbox((select id from claimed where template = 'low_balance_reminder'), false, null, 'timeout', null);
 select is((select status from public.notifications_outbox where dedupe_key = 't3'), 'failed', 'after 5 attempts it is marked failed');
 select public.wa_message_status('wamid.out1', 'read');

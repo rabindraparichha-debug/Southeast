@@ -25,6 +25,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
   const [s, setS] = useState({
     low_balance_meals: String(settings.low_balance_meals), credit_limit_meals: String(settings.credit_limit_meals),
     grace_days: String(settings.grace_days), notice_days: String(settings.notice_days),
+    dues_overdue_days: String(settings.dues_overdue_days),
   });
   const [msg, setMsg] = useState<{ tone: 'red' | 'green'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,7 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
       supabase.from('kitchen_settings').update({
         low_balance_meals: Number(s.low_balance_meals), credit_limit_meals: Number(s.credit_limit_meals),
         grace_days: Number(s.grace_days), notice_days: Number(s.notice_days),
+        dues_overdue_days: Number(s.dues_overdue_days),
       }).eq('kitchen_id', kitchen.id),
     ]);
     setBusy(false);
@@ -127,6 +129,9 @@ export function SettingsForm({ kitchen, settings }: { kitchen: Tables<'kitchens'
             <Field label="Allow credit up to (meals)" hint="0 = stop meals at zero balance."><Input {...num('s', 'credit_limit_meals')} /></Field>
             <Field label="Grace days before cancelling" hint="After the balance runs out."><Input {...num('s', 'grace_days')} /></Field>
             <Field label="Cancellation notice (days)"><Input {...num('s', 'notice_days')} /></Field>
+            <Field label="Monthly bills: at risk after (days)" hint="Monthly customers with meals older than this still unpaid show as at risk (7–365).">
+              <Input {...num('s', 'dues_overdue_days')} min={7} max={365} />
+            </Field>
           </div>
         </Card>
       </div>

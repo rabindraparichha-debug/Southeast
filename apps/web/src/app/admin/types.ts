@@ -10,8 +10,11 @@ export type PlatformMetrics = {
   last_7_days: {
     meals: number; collections_paise: number; whatsapp_changes: number; all_changes: number;
     stops: number; stops_proved: number; leads: number; vendor_applications: number;
+    /** Real WhatsApp sends; mock sends (WHATSAPP_MODE=mock) are counted apart and never as delivered. */
+    whatsapp_sent?: number; whatsapp_mock?: number;
   };
-  open: { escalated_complaints: number; vendor_applications: number; waitlisted_leads: number; outbox_failed: number };
+  /** outbox_failed includes outbox_stuck (rows left in 'sending' for over 10 minutes). */
+  open: { escalated_complaints: number; vendor_applications: number; waitlisted_leads: number; outbox_failed: number; outbox_stuck?: number };
 };
 
 export type AdminKitchen = {

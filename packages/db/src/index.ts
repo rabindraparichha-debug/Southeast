@@ -17,9 +17,18 @@ export type PaymentStatus = Database['public']['Enums']['payment_status'];
 export type ImportResult = {
   batch_id: string;
   total: number;
+  /** Rows saved (new customers + repeated rows that added a plan). */
   imported: number;
   failed: number;
   errors: { row: number; errors: string[] }[];
+  /** Saved rows the vendor should know about (diet differs from the plan, a stopped row's plan ignored). */
+  warnings?: { row: number; warnings: string[] }[];
+  /** New customers. */
+  customers?: number;
+  /** Repeated rows that added a plan to a customer saved earlier in the file. */
+  merged?: number;
+  /** Rows of a retried chunk that this batch had already saved (reported, not redone). */
+  already_done?: number;
 };
 
 export type OrderStatus = Database['public']['Enums']['order_status'];

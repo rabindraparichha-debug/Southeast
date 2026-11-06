@@ -54,7 +54,10 @@ export function SpecialsCard({ kitchenId, isOwner, version }: { kitchenId: strin
 }
 
 type Risk = Database['public']['Functions']['at_risk_customers']['Returns'][number];
-type RiskDetail = { balance_meals?: number; skips_7d?: number; open_complaints?: number; paused_since?: string };
+type RiskDetail = {
+  balance_meals?: number; skips_7d?: number; open_complaints?: number; paused_since?: string;
+  overdue_paise?: number; oldest_unpaid?: string; overdue_days?: number;
+};
 
 function reasonText(reason: string, d: RiskDetail): string {
   switch (reason) {
@@ -62,6 +65,10 @@ function reasonText(reason: string, d: RiskDetail): string {
     case 'skips': return t('risk.skips', { n: d.skips_7d ?? 0 });
     case 'open_complaint': return t('risk.open_complaint', { n: d.open_complaints ?? 1 });
     case 'paused_long': return t('risk.paused_long', { date: d.paused_since ? formatServiceDate(istDate(new Date(d.paused_since))) : '—' });
+    case 'dues_overdue': return t('risk.dues_overdue', {
+      amount: formatPaise(d.overdue_paise ?? 0), days: d.overdue_days ?? 40,
+      date: d.oldest_unpaid ? formatServiceDate(d.oldest_unpaid) : '—',
+    });
     default: return t(`risk.${reason}`);
   }
 }

@@ -65,7 +65,8 @@ export type Inbound =
   | { kind: 'other' };
 
 export type ParsedMessage = { id: string; from: string; contactName?: string; input: Inbound; body: string };
-export type ParsedStatus = { id: string; status: string };
+/** callbackData: the biz_opaque_callback_data we sent with the message ('outbox:<id>' for outbox rows). */
+export type ParsedStatus = { id: string; status: string; callbackData?: string };
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -98,7 +99,12 @@ export function parseWebhook(payload: Json): { messages: ParsedMessage[]; status
           : `[${m.type}]`;
         messages.push({ id: String(m.id), from: String(m.from), contactName: names.get(m.from), input, body });
       }
-      for (const s of value.statuses ?? []) statuses.push({ id: String(s.id), status: String(s.status) });
+      for (const s of value.statuses ?? []) {
+        statuses.push({
+          id: String(s.id), status: String(s.status),
+          ...(s.biz_opaque_callback_data ? { callbackData: String(s.biz_opaque_callback_data) } : {}),
+        });
+      }
     }
   }
   return { messages, statuses };
@@ -125,8 +131,16 @@ export function previewOf(out: Out): string {
   }
 }
 
-export function toGraphPayload(to: string, out: Out): Json {
-  const base = { messaging_product: 'whatsapp', recipient_type: 'individual', to: to.replace(/^\+/, '') };
+/**
+ * callbackData travels with the message and comes back on every status webhook (Meta's
+ * biz_opaque_callback_data, at most 512 characters): the outbox sends 'outbox:<row id>', so a send
+ * the worker failed to record is still recognised and never sent twice.
+ */
+export function toGraphPayload(to: string, out: Out, callbackData?: string): Json {
+  const base = {
+    messaging_product: 'whatsapp', recipient_type: 'individual', to: to.replace(/^\+/, ''),
+    ...(callbackData ? { biz_opaque_callback_data: callbackData.slice(0, 512) } : {}),
+  };
   switch (out.type) {
     case 'text':
       return { ...base, type: 'text', text: { body: clip(out.text, 4096), preview_url: true } };
@@ -158,14 +172,15 @@ export function toGraphPayload(to: string, out: Out): Json {
   }
 }
 
-export async function sendWhatsApp(cfg: WaConfig, to: string, out: Out): Promise<{ id: string }> {
-  if (cfg.mode === 'mock') return { id: `wamid.mock_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}` };
+/** In mock mode nothing leaves the server: the id says so ('wamid.mock_…') and callers record 'mock', never 'sent'. */
+export async function sendWhatsApp(cfg: WaConfig, to: string, out: Out, opts: { callbackData?: string } = {}): Promise<{ id: string; mock: boolean }> {
+  if (cfg.mode === 'mock') return { id: `wamid.mock_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`, mock: true };
   const res = await fetch(`https://graph.facebook.com/${cfg.graphVersion}/${cfg.phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(toGraphPayload(to, out)),
+    body: JSON.stringify(toGraphPayload(to, out, opts.callbackData)),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(`WhatsApp send failed: ${res.status} ${JSON.stringify(json?.error ?? json)}`);
-  return { id: String(json?.messages?.[0]?.id ?? '') };
+  return { id: String(json?.messages?.[0]?.id ?? ''), mock: false };
 }

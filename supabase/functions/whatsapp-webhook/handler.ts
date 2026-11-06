@@ -50,14 +50,31 @@ export async function handleWhatsAppWebhook(req: Request, deps: WebhookDeps): Pr
   }
 
   const { messages, statuses } = parseWebhook(payload);
+  let proofLost = false;
   for (const s of statuses) {
-    await deps.rpc('wa_message_status', { p_wa_message_id: s.id, p_status: s.status }).catch((e) => console.error('status', e));
+    // p_callback ('outbox:<id>') lets the database mark an outbox row sent even if the worker never recorded it.
+    try {
+      await deps.rpc('wa_message_status', { p_wa_message_id: s.id, p_status: s.status, p_callback: s.callbackData ?? null });
+    } catch (e) {
+      console.error('status', e);
+      // This status may be the only proof that an outbox row was sent: without it the stuck-row job
+      // would queue the message again. Ask Meta to deliver the webhook again (non-2xx below).
+      if (isOutboxProof(s)) proofLost = true;
+    }
   }
   const results: string[] = [];
   for (const m of messages) results.push(await processMessage(m, deps));
-  // Always 200 once the signature is valid: messages are deduplicated, so a Meta retry would
-  // only be dropped as a duplicate anyway; failures are answered and logged per message instead.
-  return new Response(JSON.stringify({ processed: results }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  // 200 once the signature is valid: messages are deduplicated, so a Meta retry would only be dropped
+  // as a duplicate anyway; failures are answered and logged per message instead. The one exception is a
+  // lost proof of an outbox send (above): 503, so Meta retries (statuses are idempotent).
+  return new Response(JSON.stringify({ processed: results, ...(proofLost ? { retry: 'status_not_recorded' } : {}) }), {
+    status: proofLost ? 503 : 200, headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** A status that proves an outbox row was sent (wa_message_status marks the row sent from it). */
+export function isOutboxProof(s: { status: string; callbackData?: string }): boolean {
+  return !!s.callbackData?.startsWith('outbox:') && ['sent', 'delivered', 'read'].includes(s.status);
 }
 
 async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<string> {
@@ -76,7 +93,8 @@ async function processMessage(m: ParsedMessage, deps: WebhookDeps): Promise<stri
     const sent = await deps.send(m.from, out);
     await deps.rpc('wa_log_outbound', {
       p_conversation: conversation, p_body: previewOf(out), p_payload: { type: out.type }, p_wa_message_id: sent.id,
-      p_handled_by: handledBy, p_status: deps.cfg.mode === 'mock' ? 'sent' : 'queued', p_intent: intent,
+      // Mock mode sends nothing: the inbox shows the reply as 'mock', never as 'sent'.
+      p_handled_by: handledBy, p_status: deps.cfg.mode === 'mock' ? 'mock' : 'queued', p_intent: intent,
     });
   };
 

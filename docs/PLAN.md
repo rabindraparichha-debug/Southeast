@@ -485,6 +485,39 @@ Migration `20261114000700_phase2_review_fixes.sql`.
 
 Still open: Turnstile / IP limits on the join form (wave 3's public-forms function at merge), logging the team's complaint actions in wave 4's `admin_actions`, renumbering D-146 – D-155 at merge, and adding samples for the other branches' new templates to the pack.
 
+## Held-back items: billing-aware messages, import, outbox (2026-11-06)
+
+Built on `wave2/db` (branch `held/db`, review fixes on `held/db-final-r2`). Defaults in D-157 (written as D-120, then D-136 on the branch; renumbered at merge).
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| Phase 2 step 6 + Phase 1 step 7 | Monthly customers get no low-balance or dues reminders mid-month; one month-end `statement_ready` message (Phase 2 flag only, unpaid only); monthly payment receipt; churn `dues_overdue` after `dues_overdue_days` (default 40) instead of "owes money" | ✅ DB, templates, settings field, at-risk labels | `20261115000100_billing_aware_messages.sql`, `_shared/templates.ts`, `docs/WHATSAPP_TEMPLATES.md` |
+| Phase 1 step 5 | Import: status column (paused from a date, stopped without a plan), second plan column and repeated rows merged by phone + name, diet taken from or checked against the plan, 100-row chunks with a client batch id (idempotent per row, resumable), IST start date, full template example | ✅ DB, core, web wizard | `20261115000200_import_upgrades.sql`, `packages/core/src/import.ts`, `apps/web/src/app/(app)/customers/import/` |
+| Phase 2 step 6 / item 41 / item 10 (mock) | Outbox: stuck `sending` rows re-queued (cron), provider id stored with the sent mark, row id sent to Meta and matched on status webhooks, no failure report after a send; `mock` status for mock sends (conversation, rider OTP hint, admin metrics) | ✅ | `20261115000300_outbox_reliability.sql`, `whatsapp-outbox`, `whatsapp-webhook` |
+
+Tests: `supabase/tests/16_held_back.test.sql` (both billing modes, import per role, outbox paths),
+`tests/integration/held-db.test.ts` (245-row import in chunks with a retried chunk, templates, the
+callback key), core Vitest (preview, chunks, template); `m4.test.ts` now expects `mock`.
+
+Known gaps:
+- Refund notices and delivery or complaint credits still use meal wording for monthly customers.
+- The statement message has no link to a statement page (the customer page is a Phase 2 flag).
+- Mobile has no import (web only, as before) and no settings screen for `dues_overdue_days`.
+
+Overlaps with other waves (resolve at merge; see D-157 "Overlaps"):
+- `public.rider_today` (wave 1, `20261107000500`): not re-created here; `20261115000300` patches the
+  live body's otp_sent test and is a no-op on wave 1's body (keeps `changed`/`changed_at` and the
+  skipped filter).
+- `whatsapp-outbox/index.ts` (wave 1): keep wave 1's try/catch around `loadWaConfig`, drop its comment
+  "Mock mode still records a send as sent".
+- Import (wave 3 riders `Route` column; wave 2 web wizard and page): `importTemplateRows` fills the
+  example rows by header (a `Route` entry is ready); keep this `previewImportRows`/plans API and take
+  wave 2 web's `LEAD_ROLES` page guard and billing/dues preview columns.
+- Templates (wave 5 template pack): add `TEMPLATE_SAMPLES` entries for `payment_receipt_monthly`,
+  `statement_ready` and their `_payer` variants, then regenerate the CSV (`UPDATE_TEMPLATE_PACK=1`).
+- Push outbox (wave 3 riders): `push_complete_outbox` records mock pushes as `sent`; move it to `mock`
+  or record push as the exception.
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

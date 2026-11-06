@@ -135,6 +135,7 @@ export type CommissionStatement = {
 
 export const RISK_LABEL: Record<string, string> = {
   balance_out: 'Balance finished, no payment for 3 days',
+  dues_overdue: 'Old dues unpaid (monthly bill)',
   skips: '3+ skips in the last week',
   open_complaint: 'Open complaint',
   paused_long: 'Paused for over a week',

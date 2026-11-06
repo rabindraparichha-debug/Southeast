@@ -72,12 +72,15 @@ export default async function InsightsPage() {
                   <div className="min-w-0">
                     <Link href={`/customers/${r.customer_id}`} className="font-medium hover:text-brand-700">{r.customer_name}</Link>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {r.reasons.map((x) => <Badge key={x} tone={x === 'open_complaint' || x === 'balance_out' ? 'red' : 'amber'}>{RISK_LABEL[x] ?? x}</Badge>)}
+                      {r.reasons.map((x) => <Badge key={x} tone={x === 'open_complaint' || x === 'balance_out' || x === 'dues_overdue' ? 'red' : 'amber'}>{RISK_LABEL[x] ?? x}</Badge>)}
                     </div>
                   </div>
                   <div className="text-right text-xs text-ink-500">
                     {typeof d.balance_meals === 'number' && <div>Balance {d.balance_meals} meals</div>}
                     {typeof d.skips_7d === 'number' && d.skips_7d > 0 && <div>{d.skips_7d} skips this week</div>}
+                    {typeof d.overdue_paise === 'number' && (
+                      <div>{formatPaise(d.overdue_paise)} older than {String(d.overdue_days ?? 40)} days unpaid</div>
+                    )}
                   </div>
                 </li>
               );
