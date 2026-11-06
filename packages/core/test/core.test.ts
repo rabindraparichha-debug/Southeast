@@ -80,6 +80,12 @@ describe('IST time helpers', () => {
     expect(formatServiceDate('2026-11-03')).toBe('Tue, 3 Nov');
     expect(formatIstShort('2026-11-02T15:30:00Z')).toBe('Mon, 9:00 pm');
   });
+  it('formats dates in Odia and Hindi when the app passes a locale (D-130), English by default', () => {
+    expect(formatServiceDate('2026-11-03', 'or-IN')).toContain('ମଙ୍ଗଳ');
+    expect(formatServiceDate('2026-11-03', 'hi-IN')).toContain('मंगल');
+    expect(formatIstShort('2026-11-02T15:30:00Z', 'hi-IN')).toContain('सोम');
+    expect(formatServiceDate('2026-11-03', 'en-IN')).toBe(formatServiceDate('2026-11-03'));
+  });
 });
 
 describe('import mapping', () => {

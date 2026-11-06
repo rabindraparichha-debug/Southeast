@@ -344,6 +344,25 @@ Migrations `20261107000200` – `20261107000500`; pgTAP `14_vendor_first.test.sq
 
 Still to build on screens (apps): an Undo list on the customer page (web and mobile), a Reactivate button, "Closed tomorrow" on Today, mobile locked meals as chips with "don't charge", showing `changed` on rider stops, an engine-health banner from `slot_summary.overdue` / `engine_error`, and removing the unused "Phone requests close at" setting.
 
+## Held-back apps track (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md items 24 (rest) and 35. Decisions D-128 – D-130. Migrations `20261116000100_rider_sync_rejects.sql`, `20261116000200_rider_sync_rejects_fixes.sql` (review fixes);
+pgTAP `15_rider_sync_rejects.test.sql` (78 checks); Vitest `rider-reject.test.ts`, `i18n-drafts.test.ts`, `held-apps.test.ts`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 1 | Server record of rider actions the server refused; owner list + "Mark handled" (web Delivery, mobile Today); auto-close on a later sync | ✅ | `rider_sync_rejects`, `report_sync_reject`, `sync_rejects`, `resolve_sync_reject`; `lib/rider-reject.ts` (both apps) (D-128) |
+| 2 | Mobile photos shrunk before they are saved or queued (proof 1280 px / 0.7, bills and dispatch 1600 px / 0.75); old full-size queued proofs shrunk at upload | ✅ needs a new build | `apps/mobile/src/lib/photo.ts`, `expo-image-manipulator` (D-129) |
+| 3 | Queue sync on network reconnect (NetInfo), on top of the app-in-front and 1-minute triggers | ✅ needs a new build | `apps/mobile/src/lib/use-reconnect-sync.ts`, `@react-native-community/netinfo` (D-129) |
+| 4 | Odia/Hindi groundwork: mobile picker (per phone), drafts for every mobile key, audited literals moved to keys; web helper + `tiffin_lang` cookie for the nav and Today only | ✅ drafts, need a native reviewer | `apps/mobile/src/i18n/{or,hi}.ts`, `components/language-picker.tsx`, `apps/web/src/lib/i18n/` (D-130) |
+
+Known gaps:
+- **The two native modules need the next APK/TestFlight build.** `app.json` version is now 1.1.0, so the runtime version changes and no over-the-air update built from this code can reach a 1.0.0 install that lacks the modules.
+- **Translations are drafts**: written without a native speaker. A reviewer must check the ~470 mobile strings (rider, Today and phone desk first) before any pilot vendor sees them; the rest of the web app is still English.
+- Rider sync reports are best effort, but log-out now sends waiting reports first and is refused while any are left (both apps), so a discarded refused action's report is not wiped with the phone.
+- Review fixes (2026-11-06): a report naming the old run of a stop the owner moved (`move_stop`) is accepted (it used to be refused and dropped); a report that arrives after the same action synced is stored closed and never reopens; reports keep `customer_id`.
+- On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)`; renumber D-128 – D-130 into the global sequence (the migration headers cite the decision by title, not number).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

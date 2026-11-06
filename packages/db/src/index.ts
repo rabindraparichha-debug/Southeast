@@ -75,3 +75,6 @@ export type ReactivateResult = { subscription_id: string; status: SubscriptionSt
 
 /** public.set_kitchen_closure / remove_kitchen_closure result. */
 export type ClosureResult = { dry_run: boolean; closure_id?: string; service_date: string; slot: MealSlot | null; orders: number; meals: number };
+
+/** public.sync_rejects row: a rider action the server refused, for the owner (D-128). */
+export type SyncReject = Database['public']['Functions']['sync_rejects']['Returns'][number];

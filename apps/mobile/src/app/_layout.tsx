@@ -1,25 +1,32 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/lib/session';
 import { startRiderSync } from '@/lib/rider-store';
+import { useReconnectSync } from '@/lib/use-reconnect-sync';
 import { installGlobalErrorHandler } from '@/lib/monitor';
 import { colors } from '@/components/theme';
-import { t } from '@/i18n';
+import { loadLanguage, t, useLanguage } from '@/i18n';
 
 SplashScreen.preventAutoHideAsync();
 installGlobalErrorHandler();
 
 function RootStack() {
-  const { ready, session, kitchen } = useAuth();
+  const { ready: authReady, session, kitchen } = useAuth();
+  // The language saved on this phone (D-130); screen titles below follow a change at once.
+  useLanguage();
+  const [langReady, setLangReady] = useState(false);
+  useEffect(() => void loadLanguage().finally(() => setLangReady(true)), []);
+  const ready = authReady && langReady;
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
   const signedIn = Boolean(session);
-  // Queued rider actions sync from any screen (and when the app comes back to the front), not only
-  // while the Rider tab is open.
+  // Queued rider actions sync from any screen (and when the app comes back to the front, or the
+  // network comes back), not only while the Rider tab is open.
   useEffect(() => (signedIn ? startRiderSync() : undefined), [signedIn]);
+  useReconnectSync(signedIn);
   if (!ready) return null;
 
   return (

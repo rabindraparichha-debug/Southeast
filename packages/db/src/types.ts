@@ -3255,6 +3255,109 @@ export type Database = {
           },
         ];
       };
+      rider_sync_rejects: {
+        Row: {
+          acted_at: string;
+          action: string;
+          cash_paise: number;
+          client_op: string;
+          customer_id: string | null;
+          error_code: string;
+          had_photo: boolean;
+          id: string;
+          kitchen_id: string;
+          refused_at: string;
+          reported_at: string;
+          reports: number;
+          resolution_note: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          rider_id: string | null;
+          run_id: string | null;
+          stop_id: string | null;
+          summary: NonNullable<Json>;
+        };
+        ComputedFields: never;
+        Insert: {
+          acted_at: string;
+          action: string;
+          cash_paise?: number;
+          client_op: string;
+          customer_id?: string | null;
+          error_code: string;
+          had_photo?: boolean;
+          id?: string;
+          kitchen_id: string;
+          refused_at: string;
+          reported_at?: string;
+          reports?: number;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          rider_id?: string | null;
+          run_id?: string | null;
+          stop_id?: string | null;
+          summary?: NonNullable<Json>;
+        };
+        Update: {
+          acted_at?: string;
+          action?: string;
+          cash_paise?: number;
+          client_op?: string;
+          customer_id?: string | null;
+          error_code?: string;
+          had_photo?: boolean;
+          id?: string;
+          kitchen_id?: string;
+          refused_at?: string;
+          reported_at?: string;
+          reports?: number;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          rider_id?: string | null;
+          run_id?: string | null;
+          stop_id?: string | null;
+          summary?: NonNullable<Json>;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rider_sync_rejects_customer_fk';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'rider_sync_rejects_customer_fk';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'rider_sync_rejects_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'rider_sync_rejects_run_id_kitchen_id_fkey';
+            columns: ['run_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_runs';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'rider_sync_rejects_stop_id_kitchen_id_fkey';
+            columns: ['stop_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'delivery_stops';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       route_stops: {
         Row: {
           address_id: string;
@@ -4621,6 +4724,22 @@ export type Database = {
       };
       remove_member: { Args: { p_member: string }; Returns: undefined };
       reorder_run: { Args: { p_run: string; p_stop_ids: string[] }; Returns: undefined };
+      report_sync_reject: {
+        Args: {
+          p_acted_at?: string;
+          p_cash_paise?: number;
+          p_client_op: string;
+          p_error: string;
+          p_had_photo?: boolean;
+          p_kind: string;
+          p_kitchen?: string;
+          p_refused_at?: string;
+          p_run?: string;
+          p_stop?: string;
+          p_summary?: Json;
+        };
+        Returns: string;
+      };
       request_schedule_change: {
         Args: {
           p_address?: string;
@@ -4639,6 +4758,7 @@ export type Database = {
         Args: { p_complaint: string; p_credit_meals?: number; p_note: string };
         Returns: undefined;
       };
+      resolve_sync_reject: { Args: { p_id: string; p_note?: string }; Returns: undefined };
       reveal_customer_phone: { Args: { p_customer: string }; Returns: string };
       revoke_invite: { Args: { p_invite: string }; Returns: undefined };
       revoke_schedule_change: {
@@ -4850,6 +4970,33 @@ export type Database = {
           phone: string;
           purchased_paise: number;
           supplier_id: string;
+        }[];
+      };
+      sync_rejects: {
+        Args: { p_include_resolved?: boolean; p_kitchen: string; p_limit?: number };
+        Returns: {
+          acted_at: string;
+          action: string;
+          cash_paise: number;
+          customer_name: string;
+          error_code: string;
+          had_photo: boolean;
+          id: string;
+          kitchen_id: string;
+          refused_at: string;
+          reported_at: string;
+          reports: number;
+          resolution_note: string;
+          resolved_at: string;
+          resolved_by: string;
+          rider_id: string;
+          rider_name: string;
+          route_name: string;
+          run_id: string;
+          service_date: string;
+          slot: Database['public']['Enums']['meal_slot'];
+          stop_id: string;
+          summary: Json;
         }[];
       };
       tiffin_balances: {
