@@ -320,6 +320,9 @@ begin
   end if;
   return new;
 end $$;
+-- Take the strongest lock first: the drop below then needs no upgrade, so a pg_cron job
+-- touching this table waits for the rollback instead of deadlocking with the test.
+lock table public.subscriptions in access exclusive mode;
 create trigger r16_boom before update on public.subscriptions for each row execute function pg_temp.boom();
 select lives_ok($$select private.nightly()$$, 'the nightly job runs through a failing auto-cancel');
 select is((select status::text from public.subscriptions where id = (select sub from cx where name = 'Monthly Trial')), 'trial',

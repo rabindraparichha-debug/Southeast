@@ -410,6 +410,9 @@ select is((select count(*) from public.delivery_stops where run_id = (select v f
 -- Item 12: lock job errors per kitchen, recorded failures, 7-day catch-up, cancel charging
 -- ===========================================================================
 create function public.test_boom() returns trigger language plpgsql as $$ begin raise exception 'test boom'; end $$;
+-- Take the strongest lock first: the drop below then needs no upgrade, so a pg_cron job
+-- touching this table waits for the rollback instead of deadlocking with the test.
+lock table public.count_snapshots in access exclusive mode;
 create trigger test_boom_lock before insert on public.count_snapshots
   for each row when (new.kitchen_id = '84000000-0000-4000-f000-000000000002') execute function public.test_boom();
 select set_config('app.now', '2026-11-10 21:00:30+05:30', true);
@@ -431,6 +434,9 @@ select is((select count(*) from public.engine_errors where kitchen_id = '8400000
            and resolved_at is null), 0::bigint, 'and the error is resolved');
 
 -- Run building fails: the lock still happens; the failure is recorded and shown on the slot.
+-- Take the strongest lock first: the drop below then needs no upgrade, so a pg_cron job
+-- touching this table waits for the rollback instead of deadlocking with the test.
+lock table public.delivery_runs in access exclusive mode;
 create trigger test_boom_runs before insert on public.delivery_runs
   for each row when (new.kitchen_id = '84000000-0000-4000-f000-000000000002') execute function public.test_boom();
 select set_config('app.now', '2026-11-11 12:00:30+05:30', true);
@@ -481,6 +487,9 @@ insert into public.recipe_lines (kitchen_id, dish_id, item_id, qty_per_portion)
 values ('84000000-0000-4000-f000-000000000002', '88000000-0000-4000-f000-000000000001', '87000000-0000-4000-f000-000000000001', 0.1);
 insert into public.menus (kitchen_id, service_date, slot, dishes, published)
 values ('84000000-0000-4000-f000-000000000002', '2026-11-12', 'lunch', '{Rice}', true);
+-- Take the strongest lock first: the drop below then needs no upgrade, so a pg_cron job
+-- touching this table waits for the rollback instead of deadlocking with the test.
+lock table public.stock_moves in access exclusive mode;
 create trigger test_boom_stock before insert on public.stock_moves
   for each row when (new.kitchen_id = '84000000-0000-4000-f000-000000000002') execute function public.test_boom();
 select set_config('app.now', '2026-11-11 21:00:30+05:30', true);
