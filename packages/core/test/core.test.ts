@@ -140,6 +140,7 @@ describe('validateImportRows', () => {
           { name: 'D', phone: '9861000004', balance: '5000' },
         ],
         [],
+        'prepaid', // meals balances (a monthly row needs a plan to price them, tested below)
       ),
     ).toEqual([
       { row: 3, errors: ['invalid_balance'] },
@@ -181,6 +182,13 @@ describe('validateImportRows', () => {
     expect(validateImportRows([{ name: 'F', phone: '9861000006', dues: '50' }], [], 'prepaid')).toEqual([
       { row: 1, errors: ['dues_need_monthly'] },
     ]);
+    // Opening meals on a monthly row need a plan to be priced (else they would be lost); prepaid keeps meals.
+    expect(validateImportRows([
+      { name: 'G', phone: '9861000007', balance: '10' },
+      { name: 'H', phone: '9861000008', balance: '10', plan: 'Veg Lunch' },
+      { name: 'I', phone: '9861000009', balance: '10', billing: 'prepaid' },
+      { name: 'J', phone: '9861000010', balance: '0' },
+    ], ['Veg Lunch'])).toEqual([{ row: 1, errors: ['balance_needs_plan'] }]);
     expect(parseBilling('Khata')).toBe('monthly');
     expect(parseBilling('')).toBe('');
     expect(guessMapping(['Name', 'Mobile', 'Billing', 'Dues']).dues).toBe(3);

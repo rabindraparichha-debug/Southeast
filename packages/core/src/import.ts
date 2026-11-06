@@ -42,7 +42,8 @@ export type ImportErrorCode =
   | 'invalid_location'
   | 'invalid_billing'
   | 'invalid_dues'
-  | 'dues_need_monthly';
+  | 'dues_need_monthly'
+  | 'balance_needs_plan';
 
 export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   name_required: 'Name is missing',
@@ -60,6 +61,7 @@ export const IMPORT_ERROR_MESSAGES: Record<ImportErrorCode, string> = {
   invalid_billing: 'Billing must be Monthly (pay later) or Prepaid',
   invalid_dues: 'Opening dues must be an amount in rupees (up to ₹1,00,000)',
   dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees',
+  balance_needs_plan: 'Opening meals for a monthly customer need a plan (to price them), or put the amount in the dues column',
 };
 
 export type BillingModeValue = 'monthly' | 'prepaid';
@@ -212,6 +214,9 @@ export function validateImportRows(rows: ImportRow[], planNames: string[], defau
         if ((billing || defaultBilling) !== 'monthly' && Number(r.dues) !== 0) errors.push('dues_need_monthly');
       } else errors.push('invalid_dues');
     }
+    // A monthly customer's opening meals become rupees at the plan price: no plan, no price.
+    if ((billing || defaultBilling) === 'monthly' && r.balance && /^-?\d{1,4}$/.test(r.balance) && Number(r.balance) !== 0
+        && !r.plan?.trim()) errors.push('balance_needs_plan');
     const num = /^-?\d+(\.\d+)?$/;
     if (Boolean(r.lat) !== Boolean(r.lng) || (r.lat && !(num.test(r.lat) && num.test(r.lng ?? '')))) {
       errors.push('invalid_location');

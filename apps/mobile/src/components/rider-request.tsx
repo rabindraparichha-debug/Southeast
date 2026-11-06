@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SLOT_LABEL, addDays, formatServiceDate, istDate } from '@tiffin/core';
 import type { MealSlot } from '@tiffin/db';
 import { supabase } from '@/lib/supabase';
-import { ALL_STATUSES, friendlyErrorFor, isOfflineError, newClientOp, requestDates, type ChangeRequestRow } from '@/lib/money';
+import { act } from '@/lib/rider-store';
+import { ALL_STATUSES, friendlyErrorFor, newClientOp, requestDates, type ChangeRequestRow } from '@/lib/money';
 import { t } from '@/i18n';
 import { Button, Card, Chip, ErrorText, Input, Label, Muted } from './ui';
 import { colors, radius, space } from './theme';
@@ -14,12 +15,14 @@ type Length = 3 | 7 | 14 | null; // pause length in days; null = until resumed
 /**
  * At the door a customer says "skip tomorrow" or "pause next week" or "deliver to my new flat".
  * The rider writes it down here; nothing changes until the owner or a manager approves it
- * (rider_request_change, D-117). One idempotency key per form, so a retried send counts once.
+ * (rider_request_change, D-117). It goes through the rider offline queue (act()), like every rider
+ * write: saved on the phone at once, sent when there is internet, and never counted twice (the
+ * queue's client id is the request's idempotency key). A refusal lands in "needs attention".
  * Office stops (several customers) are left to the office's billing contact.
  */
 export function RiderRequestCard({ stop, run }: {
   stop: { id: string; customer_id: string; name: string; office?: boolean };
-  run: { kitchen_id: string };
+  run: { id: string; kitchen_id: string };
 }) {
   const today = istDate();
   const [open, setOpen] = useState(false);
@@ -57,18 +60,17 @@ export function RiderRequestCard({ stop, run }: {
     setError('');
     if (kind === 'address' && !note.trim()) return setError(t('riderRequest.addressNeeded'));
     setBusy(true);
-    const { data, error: e } = await supabase.rpc('rider_request_change', {
-      p_stop: stop.id, p_type: kind, p_from: from, p_to: to ?? undefined,
-      p_slot: kind === 'address' ? undefined : slot ?? undefined,
-      p_note: note.trim() || undefined, p_client_op: clientOp,
+    const res = await act({
+      op: clientOp, kind: 'request', runId: run.id, stopId: stop.id,
+      args: {
+        p_type: kind, p_from: from, p_to: to ?? undefined,
+        p_slot: kind === 'address' ? undefined : slot ?? undefined,
+        p_note: note.trim() || undefined,
+      },
     });
     setBusy(false);
-    if (e) {
-      // Keep the form and its key: sending again later cannot create a second request.
-      return setError(isOfflineError(e) ? t('riderRequest.offline') : friendlyErrorFor(e, 'rider_request'));
-    }
-    const res = data as unknown as { duplicate: boolean };
-    setSent(res.duplicate ? t('riderRequest.alreadySent') : t('riderRequest.sent'));
+    if (res.error) return setError(friendlyErrorFor({ message: res.error }, 'rider_request'));
+    setSent(t('riderRequest.queued'));
     setOpen(false);
     setNote('');
     setClientOp(newClientOp());

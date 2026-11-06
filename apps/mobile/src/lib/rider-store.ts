@@ -246,7 +246,13 @@ async function send(q: QueuedOp): Promise<SendResult> {
         ? supabase.rpc('finish_run', { p_run: q.runId, ...common })
         : q.kind === 'complete'
           ? supabase.rpc('complete_stop', completeStopArgs(q) as { p_stop: string; p_proof: 'otp' | 'photo' | 'none' })
-          : supabase.rpc('fail_stop', {
+          : q.kind === 'request'
+            // A customer's change written down at the door; the queue's client id is its idempotency key.
+            ? supabase.rpc('rider_request_change', {
+                ...(q.args as { p_type: 'skip' | 'pause' | 'address'; p_from: string }),
+                p_stop: q.stopId!, p_client_op: q.op,
+              })
+            : supabase.rpc('fail_stop', {
               ...(q.args as { p_reason: 'not_home' }),
               p_stop: q.stopId!, ...common, p_client_op: q.op, p_offline: q.offline,
             });

@@ -48,11 +48,14 @@ export function stripPhones<T>(value: T): T {
   return value;
 }
 
-/** What is saved: only the owner's copies keep phone numbers. */
+/** Owners and managers see full numbers (D-136); everyone else's copy never holds one. */
+const keepsPhones = (role: string) => role === 'owner' || role === 'manager';
+
+/** What is saved: only the owner's and manager's copies keep phone numbers. */
 export function makeEntry<T>(scope: CacheScope, data: T, now: Date = new Date()): CacheEntry<T> {
   return {
     v: 1, userId: scope.userId, kitchenId: scope.kitchenId, role: scope.role, savedAt: now.toISOString(),
-    data: scope.role === 'owner' ? data : stripPhones(data),
+    data: keepsPhones(scope.role) ? data : stripPhones(data),
   };
 }
 
@@ -71,8 +74,8 @@ export function readEntry<T>(raw: string | null | undefined, scope: CacheScope, 
   if (e.v !== 1 || e.userId !== scope.userId || e.kitchenId !== scope.kitchenId || e.role !== scope.role) return null;
   const at = Date.parse(String(e.savedAt));
   if (!Number.isFinite(at) || now.getTime() - at > maxAgeMs) return null;
-  // Belt and braces: a copy read by anyone but the owner never shows a phone number.
-  return { ...(e as CacheEntry<T>), data: scope.role === 'owner' ? (e.data as T) : stripPhones(e.data as T) };
+  // Belt and braces: a copy read by anyone but the owner or a manager never shows a phone number.
+  return { ...(e as CacheEntry<T>), data: keepsPhones(scope.role) ? (e.data as T) : stripPhones(e.data as T) };
 }
 
 /** True when the request never reached the server (no signal or timed out), as in the rider queue. */

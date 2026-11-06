@@ -396,8 +396,10 @@ Mobile (branch `wave2/mobile`, apps/mobile only):
 
 Still to do (UI agents): item 27 hides Phase 2 screens behind the flags.
 
+Merged with wave 1, login and screens on branch `wave2/integrated`; review fixes in
+`20261108000900_wave2_review_fixes.sql` (D-136 "Review fixes"; tests `16_wave2_review.test.sql`).
+
 Known gaps:
-- The production sheet at the lock still goes to owners only (needs the wave-1 `lock_slot`).
 - A rider request raises no WhatsApp alert (would need a Meta template); owners see the list.
 - WhatsApp from a shared phone always talks about the oldest customer on it (Phase 2).
 - The customer page and bot still show prepaid meal balances for monthly customers (Phase 2 screens; the context now carries `billing_mode` and `balance_paise`).

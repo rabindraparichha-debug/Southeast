@@ -41,10 +41,15 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-0000000
 
 select is(public.invite_member('10000000-0000-4000-a000-00000000000a', '90000 00102', 'staff', 'New cook') ->> 'status',
   'invited', 'unknown phone gets a pending invite');
+-- An existing account is never added directly (anyone can create an account for a number): it gets a
+-- pending invite, claimed at their next sign-in with a code (claim_invites).
 select is(public.invite_member('10000000-0000-4000-a000-00000000000a', '+91 90000 00012', 'rider', 'Mamata') ->> 'status',
-  'added', 'existing user (kitchen B staff) is added directly');
-select throws_ok($$select public.invite_member('10000000-0000-4000-a000-00000000000a', '+919000000012', 'rider')$$,
-  '23505', 'already_member', 'cannot add the same person twice');
+  'invited', 'existing user (kitchen B staff) gets a pending invite, not a membership');
+select is((select count(*) from public.members m
+           where m.kitchen_id = '10000000-0000-4000-a000-00000000000a' and m.user_id = '00000000-0000-4000-a000-000000000012'), 0::bigint,
+  'not a member of kitchen A until they claim it');
+select throws_ok($$select public.invite_member('10000000-0000-4000-a000-00000000000a', '+919000000002', 'rider')$$,
+  '23505', 'already_member', 'cannot invite someone already in the team');
 select throws_ok($$select public.invite_member('10000000-0000-4000-a000-00000000000a', '12345', 'staff')$$,
   '22023', 'invalid_phone', 'invalid phone rejected');
 select throws_ok($$select public.invite_member('10000000-0000-4000-a000-00000000000a', '9000000103', 'owner')$$,

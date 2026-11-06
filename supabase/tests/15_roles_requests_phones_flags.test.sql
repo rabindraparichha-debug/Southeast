@@ -86,6 +86,9 @@ select throws_ok($$select public.rider_request_change((select v from rx where k 
   '22023', 'date_in_past', 'not for past dates');
 select throws_ok($$select public.rider_request_change((select v from rx where k = 'door_stop'), 'address', '2026-11-12')$$,
   '22023', 'note_required', 'an address request needs the new address in the note');
+-- Review fix: 'revoke' is the vendor's Undo; a rider request of that type could never be approved.
+select throws_ok($$select public.rider_request_change((select v from rx where k = 'door_stop'), 'revoke', '2026-11-13')$$,
+  '22023', 'invalid_type', 'riders request only skip, pause, resume, cancel or a new address');
 insert into req select 'two', public.rider_request_change((select v from rx where k = 'two_stop'), 'pause', '2026-11-14', '2026-11-20');
 insert into req select 'addr', public.rider_request_change((select v from rx where k = 'door_stop'), 'address', '2026-11-12',
   p_note => 'Moved to Plot 9, Patia');
@@ -137,7 +140,7 @@ select is((select status || '/' || (change_id is not null)::text || '/' || decid
   'approved/true/c1500000-0000-4000-c000-000000000002', 'approved, linked to the schedule change, decided by the manager');
 select is((select channel::text || '/' || requested_by::text from public.schedule_changes
            where id = (select change_id from public.change_requests where id = (select (r ->> 'request_id')::uuid from req where k = 'skip'))),
-  'rider/c1500000-0000-4000-c000-000000000004', 'the schedule change is recorded as the rider''s, channel rider');
+  'rider/c1500000-0000-4000-c000-000000000002', 'the schedule change is recorded with channel rider, made by the approver (the manager)');
 select is((select status::text || '/' || skip_reason from public.meal_orders where subscription_id = (select v from rx where k = 'door_sub')
            and service_date = '2026-11-13'), 'skipped/skip', 'Friday''s meal is skipped');
 select is((select count(*) from public.meal_orders where subscription_id = (select v from rx where k = 'two_sub2')

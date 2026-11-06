@@ -114,6 +114,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 
 **Money (M3)**
 - **Billing mode (D-115, D-136):** `customers.billing_mode` is `monthly` (default from `kitchen_settings.default_billing_mode`; pay later, never suspended or cancelled automatically) or `prepaid` (meal balance, low balance, suspend, grace cancel).
+  - Owed meals are valued only by `private.recent_meals_value` (newest debt rows at their own price, the rest at the price per meal). A mode switch carries dues in rupees on its conversion row; never value meal debts anywhere else.
   - Monthly: the rupee balance Σ `amount_paise` is the truth; dues = −that. Payments carry 0 meals; credits are valued by the trigger `balance_entries_value_monthly`; adjustments take `p_amount_paise`.
   - Never value dues or statements with today's plan price: every meal carries its own `amount_paise`. `private.customer_unit_price` is only for turning rupees into meals.
   - Switch modes only with `set_billing_mode` (converts the balance once). Anything that suspends, cancels, reminds or flags on a low balance must skip monthly customers.
@@ -157,6 +158,7 @@ pnpm --filter @tiffin/mobile typecheck && pnpm --filter @tiffin/mobile lint
 - Leads and vendor applications belong to the platform: admin-only RLS; vendors see a customer only once the lead picks their kitchen.
 - All lead writes go through `private.upsert_lead()` (one open lead per phone) and `private.convert_lead()` (the only place that creates `platform_sourced` customers). Funnel stages after matching are set only by real events (the recharge trigger), never by hand.
 - Matching is `private.match_kitchens()`; change its rules there and in `docs/DECISIONS.md` D-078.
+- While the `customer_whatsapp` flag is off the webhook sends no bot replies (`wa_receive` returns `customer_messages: false`) and `wa_claim_outbox` cancels customer, lead and applicant rows. Integration suites that drive the bot call `setCustomerWhatsapp(true)` (reset after the run by `tests/integration/global-setup.ts`).
 - Unknown WhatsApp numbers go to `_shared/lead-bot.ts` (customer qualification, or vendor sign-up); unit-test flows in `tests/integration/lead-bot.test.ts`.
 - Outbox recipients can be `lead` or `vendor_application`; they need opt-in outside the 24 h window like customers.
 - Public anon RPCs (`submit_lead`, `lead_choose`, `kitchen_profile`, `kitchen_directory`, `submit_vendor_application`, `portal_review`) must validate everything themselves.

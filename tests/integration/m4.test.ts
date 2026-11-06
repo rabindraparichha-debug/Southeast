@@ -2,7 +2,7 @@
 // the outbox worker and the customer page. WHATSAPP_MODE=mock (nothing is sent to Meta).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { hmacSha256Hex } from '../../supabase/functions/_shared/razorpay.ts';
-import { KITCHEN_A, anonClient, env, loginAs, type Client } from './helpers';
+import { KITCHEN_A, anonClient, env, loginAs, setCustomerWhatsapp, type Client } from './helpers';
 
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET ?? 'local-dev-app-secret';
 const ANKIT = '919861000002'; // seed customer of kitchen A
@@ -31,6 +31,8 @@ describe('M4: WhatsApp through the webhook', () => {
 
   beforeAll(async () => {
     owner = await loginAs('+919000000001');
+    // The bot answers customers only with customer WhatsApp on (Phase 2 flag; reset after the run).
+    await setCustomerWhatsapp(true);
   });
 
   async function lastBotReply(): Promise<string> {
@@ -82,11 +84,9 @@ describe('M4: WhatsApp through the webhook', () => {
   });
 
   it('vendor reply is delivered by the outbox worker into the conversation', async () => {
-    // Customer WhatsApp is a Phase 2 flag (off by default: customer messages are stored as cancelled).
-    const admin = await loginAs('+919000000099');
-    expect((await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: true })).error).toBeNull();
+    // Customer WhatsApp is on for this suite (beforeAll): with it off the row would be stored as
+    // cancelled, and the worker would not send rows queued earlier either.
     const sent = await owner.client.rpc('send_vendor_message', { p_conversation: conversationId, p_body: 'Namaskar Ankit, see you tomorrow.' });
-    await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: false });
     expect(sent.error).toBeNull();
     const res = await fetch(`${env().url}/functions/v1/whatsapp-outbox`, {
       method: 'POST', headers: { apikey: env().anonKey, Authorization: `Bearer ${owner.accessToken}` },

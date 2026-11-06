@@ -45,6 +45,9 @@ describe('screen copies: keys and phone numbers', () => {
     expect(forStaff).toMatchObject({ v: 1, userId: 'u-staff', kitchenId: 'k-1', role: 'staff', savedAt: now.toISOString() });
     const forOwner = makeEntry(owner, [customer], now);
     expect(forOwner.data[0]?.phone).toBe('+919861000001');
+    // The manager is the owner's deputy and sees full numbers (D-136); the accountant does not.
+    expect(makeEntry({ ...owner, role: 'manager' }, [customer], now).data[0]?.phone).toBe('+919861000001');
+    expect(JSON.stringify(makeEntry({ ...staff, role: 'accountant' }, [customer], now))).not.toMatch(/9861|0001/);
   });
 });
 

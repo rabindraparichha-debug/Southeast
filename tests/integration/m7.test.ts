@@ -3,7 +3,7 @@
 // through the lead-intake Edge Function. Mock Razorpay and WhatsApp. Needs a fresh `pnpm db:reset`.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { hmacSha256Hex, mockEvent } from '../../supabase/functions/_shared/razorpay.ts';
-import { anonClient, env, loginAs, type Client } from './helpers';
+import { anonClient, env, loginAs, setCustomerWhatsapp, type Client } from './helpers';
 
 const APP_SECRET = process.env.WHATSAPP_APP_SECRET ?? 'local-dev-app-secret';
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET ?? 'local-dev-webhook-secret';
@@ -45,6 +45,8 @@ describe('M7: acquisition over the API', () => {
   // Its own live kitchen in Patia (test files run in parallel; kitchen A's counts stay untouched).
   beforeAll(async () => {
     [admin, owner] = await Promise.all([loginAs('+919000000099'), loginAs('+919000000103')]);
+    // The lead bot answers only with customer WhatsApp on (Phase 2 flag; reset after the run).
+    await setCustomerWhatsapp(true);
     const { data: kitchen, error } = await owner.client.rpc('create_kitchen', { p_name: `Lead IT ${run}`, p_area: 'Patia' });
     expect(error).toBeNull();
     kitchenId = (kitchen as { id: string }).id;

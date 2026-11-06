@@ -128,6 +128,8 @@ const MESSAGES: Record<string, string> = {
   invalid_billing: 'Billing must be monthly (pay later) or prepaid.',
   invalid_dues: 'Opening dues must be an amount in rupees, up to ₹1,00,000.',
   dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees. Give prepaid customers an opening balance in meals.',
+  balance_needs_plan: 'Opening meals for a monthly (pay later) customer need a plan, so they can be priced. Add the plan, or put the amount in the dues column (minus for an advance).',
+  billing_mode_changed: 'This customer’s billing changed after the payment, so it cannot be voided. Record a correction (adjustment) instead.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).

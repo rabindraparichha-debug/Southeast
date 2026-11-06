@@ -73,10 +73,10 @@ export default async function StatementPage({ params, searchParams }: PageProps<
   const summary: [string, string][] = [
     ['Opening balance', monthly ? rupeeBalance(st.opening.paise) : `${mealBalance(st.opening.meals)} meals`],
     [`Meals (${t.meals_charged})`, formatPaise(-t.charged_paise)],
-    ['Paid', signed(t.paid_paise)],
+    // paid_paise is net of voided payments (a voided payment was never paid).
+    [t.voided_paise ? `Paid (after ${formatPaise(t.voided_paise)} voided)` : 'Paid', signed(t.paid_paise)],
     ...(t.credit_meals || t.credit_paise ? [[`Free meals (${t.credit_meals})`, signed(t.credit_paise)] as [string, string]] : []),
     ...(t.refund_paise ? [['Refunded', formatPaise(-t.refund_paise)] as [string, string]] : []),
-    ...(t.voided_paise ? [['Voided payments', formatPaise(-t.voided_paise)] as [string, string]] : []),
     ...(t.adjust_paise ? [['Adjustments', signed(t.adjust_paise)] as [string, string]] : []),
     ['Closing balance', monthly ? rupeeBalance(st.closing.paise) : `${mealBalance(st.closing.meals)} meals`],
   ];

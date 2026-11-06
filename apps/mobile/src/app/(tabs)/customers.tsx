@@ -80,9 +80,12 @@ export default function Customers() {
             <Pressable style={styles.item}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}{item.platform_sourced ? <Text style={styles.platform}>  {t('customers.platform')}</Text> : null}</Text>
-                <Text style={styles.sub} numberOfLines={1}>
-                  {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}
-                </Text>
+                {/* Accountants see no addresses (D-136; the server sends none either). */}
+                {kitchen.role !== 'accountant' && (
+                  <Text style={styles.sub} numberOfLines={1}>
+                    {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}
+                  </Text>
+                )}
               </View>
               <View style={{ alignItems: 'flex-end', gap: 2 }}>
                 <Text style={styles.sub}>{formatPhone(item.phone)}</Text>

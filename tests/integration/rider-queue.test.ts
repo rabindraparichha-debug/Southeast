@@ -90,10 +90,11 @@ describe('reading the saved queue', () => {
 const NOW = Date.parse('2026-11-06T07:00:00.000Z');
 
 // Every code the rider RPCs raise for a request that can never succeed as it is
-// (start_run, complete_stop, fail_stop, finish_run, private.require_run_access).
+// (start_run, complete_stop, fail_stop, finish_run, rider_request_change, private.require_run_access).
 const BUSINESS = [
   'not_found', 'forbidden', 'wrong_tiffin', 'invalid_client_op', 'proof_required', 'photo_required', 'invalid_photo',
   'invalid_amount', 'otp_locked', 'reason_required', 'note_required', 'stops_pending',
+  'invalid_type', 'date_required', 'date_in_past', 'invalid_range', 'range_too_long',
 ];
 
 // What supabase-js hands back for temporary failures: these must never drop the action.
