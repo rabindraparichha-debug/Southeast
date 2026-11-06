@@ -75,3 +75,44 @@ export type ReactivateResult = { subscription_id: string; status: SubscriptionSt
 
 /** public.set_kitchen_closure / remove_kitchen_closure result. */
 export type ClosureResult = { dry_run: boolean; closure_id?: string; service_date: string; slot: MealSlot | null; orders: number; meals: number };
+
+// ---------------------------------------------------------------------------
+// Wave 4: onboarding and founder support
+// ---------------------------------------------------------------------------
+
+/** public.onboarding_status: what "Set up your kitchen" shows (D-126). */
+export type OnboardingStatus = {
+  phone_confirmed: boolean;
+  memberships: number;
+  pending_invites: number;
+  can_create_kitchen: boolean;
+  basis: 'open' | 'admin' | 'owner' | 'approved' | 'allowed' | null;
+  application: { status: Database['public']['Enums']['vendor_app_status']; approved: boolean } | null;
+};
+
+export type AdminActionRow = {
+  id: number; at: string; action: string; target: string | null; reason: string | null;
+  before: Record<string, unknown> | null; after: Record<string, unknown> | null; admin_phone_last4: string | null;
+};
+
+/** public.admin_kitchen_detail result. Phones are masked (reveal: admin_reveal_member_phone). */
+export type AdminKitchenDetail = {
+  kitchen: { id: string; name: string; slug: string; area: string | null; address: string | null; status: KitchenStatus; fssai_no: string | null; created_at: string };
+  owner: { user_id: string; member_id: string | null; name: string | null; phone: string | null; last_sign_in_at: string | null } | null;
+  members: { member_id: string; user_id: string; role: MemberRole; name: string | null; phone: string | null; joined_at: string; last_sign_in_at: string | null }[];
+  invites: { id: string; role: MemberRole; name: string | null; phone: string; created_at: string }[];
+  application: { id: string; status: string; approved_at: string | null; source: string; created_at: string } | null;
+  signals: {
+    plans: number; customers: number; live_subscriptions: number; routes: number; routes_without_rider: number; staff: number;
+    riders: number; credit_limit_meals: number | null; grace_days: number | null; meals_7d: number; last_lock: string | null;
+    last_activity: string | null; open_complaints: number; open_engine_errors: number;
+  };
+  actions: AdminActionRow[];
+};
+
+/** public.set_plan_price result. */
+export type PlanPriceResult = { id?: string; plan_id: string; price_per_meal_paise: number; effective_from: string; scheduled: boolean };
+
+/** "Export my kitchen" parts (public.export_kitchen). */
+export type ExportPart = 'customers' | 'subscriptions' | 'payments' | 'balance_entries' | 'meal_orders';
+export type ExportPage = { part: ExportPart; rows: Record<string, unknown>[]; next_offset: number | null };

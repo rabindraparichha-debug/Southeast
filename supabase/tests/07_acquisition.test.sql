@@ -238,7 +238,9 @@ select set_config('app.now', '2026-11-03 11:00:00+05:30', true);
 select ok((private.growth_tick() ->> 'vendor_nudges')::int >= 1, 'day 1: a nudge');
 select is((select payload ->> 'next_step' from public.notifications_outbox where template = 'vendor_nudge'
            and recipient_id = (select (v #>> '{}')::uuid from t where k = 'app')), 'signup', 'telling them to sign up');
--- The applicant signs up in the app with the same number (they are user f2…02).
+-- The platform team approves the application (wave 4 gate), then the applicant signs up in the app
+-- with the same number (they are user f2…02).
+update public.vendor_applications set approved_at = now() where id = (select (v #>> '{}')::uuid from t where k = 'app');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f2000000-0000-4000-f000-000000000002","role":"authenticated"}', true);
 insert into t select 'kitchen', to_jsonb(public.create_kitchen('Gita''s Kitchen', p_area => 'Khandagiri'));

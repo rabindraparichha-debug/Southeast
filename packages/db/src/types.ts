@@ -121,6 +121,51 @@ export type Database = {
           },
         ];
       };
+      admin_actions: {
+        Row: {
+          action: string;
+          admin_id: string;
+          after: Json | null;
+          before: Json | null;
+          created_at: string;
+          id: number;
+          kitchen_id: string | null;
+          reason: string | null;
+          target: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          action: string;
+          admin_id: string;
+          after?: Json | null;
+          before?: Json | null;
+          created_at?: string;
+          id?: never;
+          kitchen_id?: string | null;
+          reason?: string | null;
+          target?: string | null;
+        };
+        Update: {
+          action?: string;
+          admin_id?: string;
+          after?: Json | null;
+          before?: Json | null;
+          created_at?: string;
+          id?: never;
+          kitchen_id?: string | null;
+          reason?: string | null;
+          target?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'admin_actions_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       areas: {
         Row: {
           aliases: string[];
@@ -341,6 +386,7 @@ export type Database = {
           escalated_at: string | null;
           id: string;
           kitchen_id: string;
+          logged_by: string | null;
           meal_order_id: string | null;
           photo_url: string | null;
           refund_entry_id: string | null;
@@ -348,6 +394,7 @@ export type Database = {
           resolved_at: string | null;
           responded_at: string | null;
           status: string;
+          subscription_id: string | null;
           updated_at: string;
         };
         ComputedFields: never;
@@ -362,6 +409,7 @@ export type Database = {
           escalated_at?: string | null;
           id?: string;
           kitchen_id: string;
+          logged_by?: string | null;
           meal_order_id?: string | null;
           photo_url?: string | null;
           refund_entry_id?: string | null;
@@ -369,6 +417,7 @@ export type Database = {
           resolved_at?: string | null;
           responded_at?: string | null;
           status?: string;
+          subscription_id?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -382,6 +431,7 @@ export type Database = {
           escalated_at?: string | null;
           id?: string;
           kitchen_id?: string;
+          logged_by?: string | null;
           meal_order_id?: string | null;
           photo_url?: string | null;
           refund_entry_id?: string | null;
@@ -389,6 +439,7 @@ export type Database = {
           resolved_at?: string | null;
           responded_at?: string | null;
           status?: string;
+          subscription_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -433,6 +484,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'balance_entries';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'complaints_subscription_fk';
+            columns: ['subscription_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'subscriptions';
+            referencedColumns: ['id', 'kitchen_id'];
           },
         ];
       };
@@ -1454,6 +1512,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'items_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      kitchen_close_requests: {
+        Row: {
+          created_at: string;
+          id: string;
+          kitchen_id: string;
+          reason: string | null;
+          requested_by: string;
+          resolution_note: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          status: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          kitchen_id: string;
+          reason?: string | null;
+          requested_by: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          kitchen_id?: string;
+          reason?: string | null;
+          requested_by?: string;
+          resolution_note?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'kitchen_close_requests_kitchen_id_fkey';
             columns: ['kitchen_id'];
             isOneToOne: false;
             referencedRelation: 'kitchens';
@@ -2716,6 +2819,54 @@ export type Database = {
           },
         ];
       };
+      plan_prices: {
+        Row: {
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          created_at: string;
+          created_by: string | null;
+          effective_from: string;
+          id: string;
+          kitchen_id: string;
+          plan_id: string;
+          price_per_meal_paise: number;
+          seq: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          effective_from: string;
+          id?: string;
+          kitchen_id: string;
+          plan_id: string;
+          price_per_meal_paise: number;
+          seq?: never;
+        };
+        Update: {
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          effective_from?: string;
+          id?: string;
+          kitchen_id?: string;
+          plan_id?: string;
+          price_per_meal_paise?: number;
+          seq?: never;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'plan_prices_plan_id_kitchen_id_fkey';
+            columns: ['plan_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'plans';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+        ];
+      };
       plans: {
         Row: {
           active: boolean;
@@ -3800,8 +3951,41 @@ export type Database = {
           },
         ];
       };
+      vendor_allowed_phones: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          id: string;
+          note: string;
+          phone_enc: string;
+          phone_hash: string;
+          phone_last4: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          note: string;
+          phone_enc: string;
+          phone_hash: string;
+          phone_last4: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          note?: string;
+          phone_enc?: string;
+          phone_hash?: string;
+          phone_last4?: string;
+        };
+        Relationships: [];
+      };
       vendor_applications: {
         Row: {
+          approved_at: string | null;
+          approved_by: string | null;
           area: string | null;
           bot_step: string | null;
           campaign: string | null;
@@ -3828,6 +4012,8 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          approved_at?: string | null;
+          approved_by?: string | null;
           area?: string | null;
           bot_step?: string | null;
           campaign?: string | null;
@@ -3853,6 +4039,8 @@ export type Database = {
           whatsapp_opt_in?: boolean;
         };
         Update: {
+          approved_at?: string | null;
+          approved_by?: string | null;
           area?: string | null;
           bot_step?: string | null;
           campaign?: string | null;
@@ -4045,7 +4233,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_actions_list: { Args: { p_kitchen?: string; p_limit?: number }; Returns: Json };
       admin_ad_conversions: { Args: { p_limit?: number }; Returns: Json };
+      admin_add_platform_admin: { Args: { p_phone: string; p_reason: string }; Returns: string };
+      admin_allow_vendor_phone: { Args: { p_note: string; p_phone: string }; Returns: string };
       admin_assign_lead: {
         Args: { p_kitchen: string; p_lead: string; p_plan?: string };
         Returns: Json;
@@ -4061,6 +4252,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_close_requests: { Args: { p_status?: string }; Returns: Json };
       admin_commission_report: { Args: { p_from: string; p_to: string }; Returns: Json };
       admin_complaint_scores: { Args: { p_days?: number }; Returns: Json };
       admin_create_lead: {
@@ -4089,6 +4281,7 @@ export type Database = {
         Args: { p_rows: Json; p_source: Database['public']['Enums']['lead_source'] };
         Returns: Json;
       };
+      admin_kitchen_detail: { Args: { p_kitchen: string }; Returns: Json };
       admin_kitchens: { Args: Record<PropertyKey, never>; Returns: Json };
       admin_lead_detail: { Args: { p_lead: string }; Returns: Json };
       admin_leads: {
@@ -4101,7 +4294,26 @@ export type Database = {
         Returns: Json;
       };
       admin_match_lead: { Args: { p_lead: string }; Returns: Json };
+      admin_phone_change_check: {
+        Args: { p_new_phone: string; p_reason: string; p_user: string };
+        Returns: Json;
+      };
+      admin_phone_change_done: {
+        Args: { p_new_phone: string; p_old_last4?: string; p_reason: string; p_user: string };
+        Returns: Json;
+      };
+      admin_platform_admins: { Args: Record<PropertyKey, never>; Returns: Json };
+      admin_remove_platform_admin: {
+        Args: { p_reason: string; p_user: string };
+        Returns: undefined;
+      };
+      admin_remove_vendor_phone: { Args: { p_id: string; p_reason?: string }; Returns: undefined };
+      admin_resolve_close_request: {
+        Args: { p_id: string; p_note?: string; p_status: string };
+        Returns: undefined;
+      };
       admin_reveal_lead_phone: { Args: { p_lead: string }; Returns: string };
+      admin_reveal_member_phone: { Args: { p_kitchen?: string; p_user: string }; Returns: string };
       admin_reveal_vendor_phone: { Args: { p_id: string }; Returns: string };
       admin_reviews: { Args: { p_kitchen?: string; p_limit?: number }; Returns: Json };
       admin_set_commission: { Args: { p_bps: number; p_kitchen: string }; Returns: undefined };
@@ -4115,7 +4327,15 @@ export type Database = {
         Returns: undefined;
       };
       admin_set_platform_flag: { Args: { p_enabled: boolean; p_key: string }; Returns: undefined };
+      admin_set_vendor_approval: {
+        Args: { p_approved?: boolean; p_id: string; p_reason?: string };
+        Returns: undefined;
+      };
       admin_switch_requests: { Args: { p_status?: string }; Returns: Json };
+      admin_transfer_ownership: {
+        Args: { p_kitchen: string; p_member: string; p_old_owner?: string; p_reason?: string };
+        Returns: Json;
+      };
       admin_update_vendor_application: {
         Args: {
           p_id: string;
@@ -4140,6 +4360,7 @@ export type Database = {
         Args: { p_status?: Database['public']['Enums']['vendor_app_status'] };
         Returns: Json;
       };
+      admin_vendor_phones: { Args: Record<PropertyKey, never>; Returns: Json };
       ads_claim_conversions: {
         Args: { p_limit?: number };
         Returns: {
@@ -4171,6 +4392,7 @@ export type Database = {
         Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
         Returns: undefined;
       };
+      cancel_plan_price: { Args: { p_id: string }; Returns: undefined };
       cancel_stock_take: { Args: { p_stock_take: string }; Returns: undefined };
       change_feed: {
         Args: { p_kitchen: string; p_limit?: number; p_since?: string };
@@ -4345,6 +4567,10 @@ export type Database = {
         }[];
       };
       erase_customer: { Args: { p_customer: string }; Returns: undefined };
+      export_kitchen: {
+        Args: { p_kitchen: string; p_limit?: number; p_offset?: number; p_part: string };
+        Returns: Json;
+      };
       fail_stop: {
         Args: {
           p_at?: string;
@@ -4422,6 +4648,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      log_complaint: {
+        Args: { p_category: string; p_customer: string; p_note?: string; p_subscription?: string };
+        Returns: string;
+      };
       mark_conversation_read: { Args: { p_conversation: string }; Returns: undefined };
       mark_refund_paid: {
         Args: {
@@ -4440,6 +4670,7 @@ export type Database = {
       notebook_import_context: { Args: { p_kitchen: string; p_path: string }; Returns: Json };
       office_statement: { Args: { p_month: string; p_office: string }; Returns: Json };
       offices_list: { Args: { p_kitchen: string }; Returns: Json };
+      onboarding_status: { Args: Record<PropertyKey, never>; Returns: Json };
       optimize_route: { Args: { p_route: string }; Returns: Json };
       packing_list: {
         Args: {
@@ -4621,6 +4852,7 @@ export type Database = {
       };
       remove_member: { Args: { p_member: string }; Returns: undefined };
       reorder_run: { Args: { p_run: string; p_stop_ids: string[] }; Returns: undefined };
+      request_kitchen_close: { Args: { p_kitchen: string; p_reason?: string }; Returns: string };
       request_schedule_change: {
         Args: {
           p_address?: string;
@@ -4736,6 +4968,10 @@ export type Database = {
       set_payout_account: {
         Args: { p_account_id: string; p_kitchen: string; p_kyc_status: string };
         Returns: undefined;
+      };
+      set_plan_price: {
+        Args: { p_from?: string; p_plan: string; p_price_paise: number };
+        Returns: Json;
       };
       set_recipe_line: {
         Args: {
@@ -5053,6 +5289,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      withdraw_kitchen_close: { Args: { p_kitchen: string }; Returns: undefined };
     };
     Enums: {
       balance_entry_type: 'recharge' | 'meal' | 'credit' | 'refund' | 'adjust';
