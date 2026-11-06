@@ -424,10 +424,10 @@ select is((select price_per_meal_paise from public.plans where id = '85600000-00
 select is(private.apply_plan_prices(), 0, 'running it again changes nothing');
 -- Dues for meals already eaten should keep their own prices once the new price starts: 2 customers
 -- owe Tue + Wed at ₹70 and Thu at ₹80. On this base private.dues values every owed meal at today's
--- plan price; wave 2's ledger-valued private.dues fixes it (merge prerequisite, D-139).
+-- plan price; wave 2's ledger-valued private.dues fixes it (merge prerequisite, D-144).
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000011","role":"authenticated","amr":[{"method":"otp","timestamp":0}]}', true);
-select todo('dues use today''s plan price until wave 2''s private.dues lands (D-139)', 1);
+select todo('dues use today''s plan price until wave 2''s private.dues lands (D-144)', 1);
 select is((select sum(amount_owed_paise) from public.dues_list('85500000-0000-4000-f000-000000000001')),
   (2 * 2 * 7000 + 2 * 8000)::bigint, 'after the new price starts, dues for meals already eaten keep their prices');
 reset role;

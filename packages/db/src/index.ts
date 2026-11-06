@@ -80,7 +80,7 @@ export type ClosureResult = { dry_run: boolean; closure_id?: string; service_dat
 // Wave 4: onboarding and founder support
 // ---------------------------------------------------------------------------
 
-/** public.onboarding_status: what "Set up your kitchen" shows (D-126). */
+/** public.onboarding_status: what "Set up your kitchen" shows (D-131). */
 export type OnboardingStatus = {
   /** A phone proven in this session (one-time code login). */
   phone_confirmed: boolean;

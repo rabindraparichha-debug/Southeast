@@ -465,7 +465,7 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Vendor approval gate (wave 4), local only
 -- ---------------------------------------------------------------------------
--- New kitchens need an approved application or an allowed number (D-126). The spare test numbers
+-- New kitchens need an approved application or an allowed number (D-131). The spare test numbers
 -- may create kitchens, except +919000000155 … +919000000159, which the onboarding tests use to
 -- check the refusal and the admin approval flow.
 insert into public.vendor_allowed_phones (phone_enc, phone_hash, phone_last4, note)

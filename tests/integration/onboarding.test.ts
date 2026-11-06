@@ -60,7 +60,7 @@ describe('Wave 4: approval gate and onboarding', () => {
     expect(self.error?.message).toBe('forbidden');
   });
 
-  it('a phone + password sign-up never counts as a proven phone (D-134)', async () => {
+  it('a phone + password sign-up never counts as a proven phone (D-139)', async () => {
     // +919000000149 is on the seed's allowed list. With phone confirmations on, a password sign-up
     // gets no session until the number is proven with a code; even if it did, the gate would refuse it.
     const { url, anonKey } = env();

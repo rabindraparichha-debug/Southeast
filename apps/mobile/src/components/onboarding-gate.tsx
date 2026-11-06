@@ -31,7 +31,7 @@ async function fetchGate(): Promise<{ gate: Gate; joined: boolean }> {
 }
 
 /**
- * Wave 4 (D-126): "Set up your kitchen" shows the create form only to approved numbers. An invited
+ * Wave 4 (D-131): "Set up your kitchen" shows the create form only to approved numbers. An invited
  * staff member or rider is joined to their kitchen and sent there; when the check fails or an invite
  * is still waiting (slow network) they get a retry, never the form.
  */

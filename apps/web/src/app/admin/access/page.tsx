@@ -14,7 +14,7 @@ type AllowedPhone = { id: string; phone: string; note: string; created_at: strin
 type PlatformAdmin = { user_id: string; name: string | null; phone: string | null; since: string; last_sign_in_at: string | null; is_me: boolean };
 type CloseRequest = { id: string; kitchen_id: string; kitchen: string; kitchen_status: string; reason: string | null; created_at: string; requested_by_last4: string | null };
 
-// Who may create kitchens (D-126), who runs the platform, kitchens asking to close, and the log of
+// Who may create kitchens (D-131), who runs the platform, kitchens asking to close, and the log of
 // everything the platform team did.
 export default async function AdminAccessPage() {
   await requireAdmin();

@@ -1,6 +1,6 @@
 -- Wave 4 (onboarding) review fixes.
 --
---  1. A proven phone (D-134). phone_confirmed_at alone is not proof: with phone confirmations off,
+--  1. A proven phone (D-139). phone_confirmed_at alone is not proof: with phone confirmations off,
 --     a phone + password sign-up is stamped confirmed without any code. A phone counts for the
 --     approval gate only when this session was signed in with a one-time code (JWT amr 'otp', the
 --     same rule as wave 2's claim_invites). A password set by whoever registered the number first
@@ -9,17 +9,17 @@
 --     replaced by a random one and its other sessions end (private.secure_account). GoTrue gives
 --     OTP-created accounts a random password too, so a password cannot be told apart in SQL.
 --  2. The 'owner' basis counts only owners of a kitchen that is not suspended and not closed
---     (D-135): a suspended vendor cannot start a fresh kitchen to get around the suspension.
+--     (D-140): a suspended vendor cannot start a fresh kitchen to get around the suspension.
 --  3. onboarding_status: proven phone, 'apply_open' (the public application form is switched on)
 --     and 'login_with_code' (the number is confirmed but this login is not a one-time code).
---  4. Phone change (D-136): admin_phone_change_check records a pending change (old last 4 read on
+--  4. Phone change (D-141): admin_phone_change_check records a pending change (old last 4 read on
 --     the server); admin_phone_change_done(change) consumes it, so nothing the caller sends ends up
 --     in admin_actions and nothing is logged for a phone that did not change through this flow.
 --     admin_sign_out_user signs a person out everywhere on its own (retry, or a stolen phone).
---  5. Owner-only areas check the exact owner role (D-137): export_kitchen, close requests and the
+--  5. Owner-only areas check the exact owner role (D-142): export_kitchen, close requests and the
 --     admin_actions / kitchen_close_requests policies. Wave 2 makes '{owner}' include managers.
 --  6. 'open_vendor_signup' is switched with admin_set_vendor_signup (reason, admin_actions).
---  7. Vendor applicants are nudged to log in only once they may create a kitchen (D-138), and
+--  7. Vendor applicants are nudged to log in only once they may create a kitchen (D-143), and
 --     applications already in 'onboarding' or 'live' are approved by this migration.
 --  8. set_plan_price reports the meals of the start date that are already counted at the old price.
 

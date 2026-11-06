@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { SupportLink } from '@/components/support-link';
 import { SignOutButton } from '@/components/sign-out-button';
 
-// Decides what "Set up your kitchen" shows (wave 4, D-126):
+// Decides what "Set up your kitchen" shows (wave 4, D-131):
 //  * invited staff and riders are joined to their kitchen and sent there (never offered a new one);
 //  * if the invite check fails or an invite is still waiting (slow network), a retry, not the form;
 //  * numbers the Tiffin team has not approved see how to get approved instead of the form.
