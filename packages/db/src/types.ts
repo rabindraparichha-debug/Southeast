@@ -166,6 +166,46 @@ export type Database = {
           },
         ];
       };
+      ai_usage: {
+        Row: {
+          calls: number;
+          conversation_id: string;
+          day: string;
+          kitchen_id: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          calls?: number;
+          conversation_id: string;
+          day: string;
+          kitchen_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          calls?: number;
+          conversation_id?: string;
+          day?: string;
+          kitchen_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ai_usage_conversation_id_fkey';
+            columns: ['conversation_id'];
+            isOneToOne: false;
+            referencedRelation: 'conversations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ai_usage_kitchen_id_fkey';
+            columns: ['kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'kitchens';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       areas: {
         Row: {
           aliases: string[];
@@ -4445,6 +4485,10 @@ export type Database = {
       admin_ad_conversions: { Args: { p_limit?: number }; Returns: Json };
       admin_add_platform_admin: { Args: { p_phone: string; p_reason: string }; Returns: string };
       admin_allow_vendor_phone: { Args: { p_note: string; p_phone: string }; Returns: string };
+      admin_assign_complaint: {
+        Args: { p_admin?: string; p_complaint: string; p_note?: string };
+        Returns: Json;
+      };
       admin_assign_lead: {
         Args: { p_kitchen: string; p_lead: string; p_plan?: string };
         Returns: Json;
@@ -4504,6 +4548,7 @@ export type Database = {
         Returns: Json;
       };
       admin_match_lead: { Args: { p_lead: string }; Returns: Json };
+      admin_note_complaint: { Args: { p_complaint: string; p_note: string }; Returns: undefined };
       admin_phone_change_check: {
         Args: { p_new_phone: string; p_reason: string; p_user: string };
         Returns: Json;
@@ -4515,9 +4560,18 @@ export type Database = {
         Returns: undefined;
       };
       admin_remove_vendor_phone: { Args: { p_id: string; p_reason?: string }; Returns: undefined };
+      admin_requeue_mock_conversions: { Args: Record<PropertyKey, never>; Returns: number };
       admin_resolve_close_request: {
         Args: { p_id: string; p_note?: string; p_status: string };
         Returns: undefined;
+      };
+      admin_resolve_complaint: {
+        Args: { p_complaint: string; p_note: string };
+        Returns: undefined;
+      };
+      admin_reveal_complaint_phone: {
+        Args: { p_complaint: string; p_who: string };
+        Returns: string;
       };
       admin_reveal_lead_phone: { Args: { p_lead: string }; Returns: string };
       admin_reveal_member_phone: { Args: { p_kitchen?: string; p_user: string }; Returns: string };
@@ -4600,6 +4654,10 @@ export type Database = {
       attach_payment_link: {
         Args: { p_expires_at: string; p_link_id: string; p_payment: string; p_short_url: string };
         Returns: undefined;
+      };
+      cancel_payment_link_record: {
+        Args: { p_error?: string; p_payment: string };
+        Returns: boolean;
       };
       cancel_plan_price: { Args: { p_id: string }; Returns: undefined };
       cancel_stock_take: { Args: { p_stock_take: string }; Returns: undefined };
