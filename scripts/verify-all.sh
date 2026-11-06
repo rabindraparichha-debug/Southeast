@@ -448,7 +448,11 @@ pgtap_results() { # "<file> <status>" for each test file pg_prove reported, in o
       rest = substr($0, RSTART + RLENGTH); sub(/^ +/, "", rest); sub(/ +$/, "", rest)
       if (!(f in st)) { order[++n] = f; st[f] = "" }
       if (rest != "") st[f] = rest
+      pending = (st[f] == "") ? f : ""
+      next
     }
+    # A test that prints diag() lines gets its result on a later line of its own ("ok", "Failed …").
+    pending != "" && /^(ok|Failed|Dubious|skipped)/ { st[pending] = $0; pending = "" }
     END { for (i = 1; i <= n; i++) print order[i] " " (st[order[i]] == "" ? "no result" : st[order[i]]) }'
 }
 

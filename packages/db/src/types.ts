@@ -1496,6 +1496,34 @@ export type Database = {
           },
         ];
       };
+      engine_heartbeats: {
+        Row: {
+          created_at: string;
+          job: string;
+          last_duration_ms: number | null;
+          last_ok_at: string | null;
+          last_result: Json | null;
+          ok_count: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          job: string;
+          last_duration_ms?: number | null;
+          last_ok_at?: string | null;
+          last_result?: Json | null;
+          ok_count?: number;
+        };
+        Update: {
+          created_at?: string;
+          job?: string;
+          last_duration_ms?: number | null;
+          last_ok_at?: string | null;
+          last_result?: Json | null;
+          ok_count?: number;
+        };
+        Relationships: [];
+      };
       festival_specials: {
         Row: {
           addon_price_paise: number | null;
@@ -4065,6 +4093,31 @@ export type Database = {
           },
         ];
       };
+      storage_purge_queue: {
+        Row: {
+          bucket: string;
+          kitchen_id: string | null;
+          name: string;
+          queued_at: string;
+          reason: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          bucket: string;
+          kitchen_id?: string | null;
+          name: string;
+          queued_at?: string;
+          reason: string;
+        };
+        Update: {
+          bucket?: string;
+          kitchen_id?: string | null;
+          name?: string;
+          queued_at?: string;
+          reason?: string;
+        };
+        Relationships: [];
+      };
       subscription_events: {
         Row: {
           actor_id: string | null;
@@ -4739,6 +4792,7 @@ export type Database = {
         Returns: undefined;
       };
       admin_set_platform_flag: { Args: { p_enabled: boolean; p_key: string }; Returns: undefined };
+      admin_set_retention: { Args: { p_enabled?: boolean; p_values?: Json }; Returns: Json };
       admin_set_vendor_approval: {
         Args: { p_approved?: boolean; p_id: string; p_reason?: string };
         Returns: undefined;
@@ -5002,6 +5056,7 @@ export type Database = {
           since: string;
         }[];
       };
+      engine_health: { Args: Record<PropertyKey, never>; Returns: Json };
       erase_customer: { Args: { p_customer: string }; Returns: undefined };
       export_dues_aging_csv: { Args: { p_kitchen: string }; Returns: string };
       export_kitchen: {
@@ -5035,6 +5090,14 @@ export type Database = {
         Returns: Json;
       };
       finish_run: { Args: { p_at?: string; p_run: string }; Returns: undefined };
+      freeze_slot: {
+        Args: {
+          p_date: string;
+          p_kitchen: string;
+          p_slot: Database['public']['Enums']['meal_slot'];
+        };
+        Returns: Json;
+      };
       import_customers: {
         Args: {
           p_batch?: string;
@@ -5125,6 +5188,17 @@ export type Database = {
       office_statement: { Args: { p_month: string; p_office: string }; Returns: Json };
       offices_list: { Args: { p_kitchen: string }; Returns: Json };
       onboarding_status: { Args: Record<PropertyKey, never>; Returns: Json };
+      ops_expired_objects: {
+        Args: { p_limit?: number; p_now?: string; p_prefix?: string };
+        Returns: {
+          bucket: string;
+          name: string;
+          reason: string;
+        }[];
+      };
+      ops_health: { Args: Record<PropertyKey, never>; Returns: Json };
+      ops_heartbeat: { Args: { p_job: string; p_result?: Json }; Returns: undefined };
+      ops_mark_purged: { Args: { p_bucket: string; p_names: string[] }; Returns: number };
       optimize_route: { Args: { p_route: string }; Returns: Json };
       packing_list: {
         Args: {
