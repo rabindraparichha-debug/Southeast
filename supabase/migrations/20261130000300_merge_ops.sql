@@ -19,6 +19,9 @@
 --      changed keys and are scrubbed on erasure.
 --   3. private.customer_erased_cleanup: also blanks those notes for the erased customer (held-back apps
 --      asked at merge: summary.note / summary.stop_label of rider_sync_rejects, matched on customer_id).
+--      A conversation shared with a sibling (D-118) moves to the oldest live customer on that phone
+--      (wave 2's relink rule) instead of being unlinked: ops' trigger runs before wave 2's
+--      customers_relink_conversations, which would otherwise find nothing left to move.
 
 -- 1. Engine jobs: ops' list + wave 4's tiffin-plan-prices.
 create or replace function private.engine_jobs()
@@ -158,11 +161,20 @@ begin
         and (c.customer_id = new.id or (old.phone_hash is not null and c.wa_phone_hash = old.phone_hash))
     loop
       if r.shared then
-        update public.conversations
-        set customer_id = case when customer_id = new.id then null else customer_id end,
-            contact_name = case when customer_id = new.id then null else contact_name end,
-            state = case when customer_id = new.id then '{}'::jsonb else state end
-        where id = r.id;
+        -- Wave 2 (D-118, 20261108000900 §10): the chat moves to the oldest live customer still on that
+        -- phone (as private.relink_conversations does), with ops' clean slate (no name, no bot state).
+        -- Done here because this trigger runs before customers_relink_conversations, which only moves
+        -- conversations still linked to the erased customer.
+        update public.conversations cv
+        set customer_id = case when cv.customer_id = new.id
+                               then (select o.id from public.customers o
+                                     where o.kitchen_id = cv.kitchen_id and o.id <> new.id and o.deleted_at is null
+                                       and o.phone_hash = cv.wa_phone_hash
+                                     order by o.created_at, o.id limit 1)
+                               else cv.customer_id end,
+            contact_name = case when cv.customer_id = new.id then null else cv.contact_name end,
+            state = case when cv.customer_id = new.id then '{}'::jsonb else cv.state end
+        where cv.id = r.id;
       else
         update public.complaints set conversation_id = null where conversation_id = r.id;
         delete from public.conversations where id = r.id;  -- messages go with it (on delete cascade)

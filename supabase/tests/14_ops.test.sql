@@ -416,7 +416,8 @@ select ok((select count(*) from public.audit_log where table_name = 'leads' and 
 select is((select row(count(*), coalesce(sum(meals), 0))::text from public.balance_entries where customer_id = (select v from ids where k = 'c1')),
   (select row(entries, meals)::text from before_erase), 'the ledger is unchanged');
 
--- D-118 (wave 2) lets family members share a phone: then the chat is unlinked, not deleted.
+-- D-118 (wave 2) lets family members share a phone: then the chat is not deleted. Merge (wave 2's relink rule):
+-- it moves to the other customer on that phone, with no WhatsApp name or bot state left from the erased one.
 drop index if exists public.customers_kitchen_phone_idx;
 insert into ids select 'c4', private.insert_customer('31400000-0000-4000-e300-000000000001', 'Sibling Second', '+919131401003', 'veg', 'en', null,
   '{"line1": "Plot 9 Lake View"}', 'vendor', 'vendor');
@@ -427,8 +428,9 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-e300-000000000001","role":"authenticated"}', true);
 select lives_ok($$ select public.erase_customer((select v from ids where k = 'c3')) $$, 'a customer sharing a phone is erased');
 reset role;
-select is((select row(customer_id, contact_name)::text from public.conversations where id = '71400000-0000-4000-e300-000000000002'), '(,)',
-  'the shared number''s chat stays for the other customer, unlinked from the erased one');
+select is((select row(customer_id, contact_name)::text from public.conversations where id = '71400000-0000-4000-e300-000000000002'),
+  (select row(v, null::text)::text from ids where k = 'c4'),
+  'the shared number''s chat stays for the other customer, moved to them and cleared of the erased one''s name');
 
 -- ===========================================================================
 -- Retention

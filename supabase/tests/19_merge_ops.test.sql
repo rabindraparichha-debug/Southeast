@@ -137,5 +137,24 @@ select is((select count(*) from public.audit_log a where a.table_name in ('chang
            and (a.before::text ~ '(Cuttack|Esha)' or a.after::text ~ '(Cuttack|Esha)')), 0::bigint,
   'no audit row still names her or her notes');
 
+-- Shared phone (wave 2, D-118): erasing the elder sibling moves the chat to the younger one (wave 2)
+-- with a clean slate (ops: no WhatsApp name, no bot state).
+insert into ids values ('elder', private.insert_customer('e1900000-0000-4000-e000-00000000000a', 'Elder Sib', '+919319100009', 'veg', 'en',
+  null, '{"line1":"Flat 11","area":"Patia"}', 'vendor', 'vendor'));
+insert into ids values ('younger', private.insert_customer('e1900000-0000-4000-e000-00000000000a', 'Younger Sib', '+919319100009', 'veg', 'en',
+  null, '{"line1":"Flat 11","area":"Patia"}', 'vendor', 'vendor'));
+insert into public.conversations (kitchen_id, customer_id, wa_phone_hash, phone_enc, phone_last4, contact_name, state)
+values ('e1900000-0000-4000-e000-00000000000a', (select v from ids where k = 'elder'), private.phone_hash('+919319100009'),
+        private.encrypt_phone('+919319100009'), '0009', 'Elder on WhatsApp', '{"flow":"skip"}');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"e1900000-0000-4000-e000-000000000001","role":"authenticated"}', true);
+select lives_ok($$ select public.erase_customer((select v from ids where k = 'elder')) $$, 'the owner erases the elder sibling');
+reset role;
+select set_config('request.jwt.claims', '', true);
+select is((select (customer_id = (select v from ids where k = 'younger'))::text || '/' || coalesce(contact_name, '-') || '/' || state::text
+           from public.conversations where kitchen_id = 'e1900000-0000-4000-e000-00000000000a'
+             and wa_phone_hash = private.phone_hash('+919319100009')),
+  'true/-/{}', 'the chat moves to the younger sibling (wave 2) with no name or bot state left (ops)');
+
 select * from finish();
 rollback;
