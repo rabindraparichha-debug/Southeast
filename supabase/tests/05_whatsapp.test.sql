@@ -14,6 +14,8 @@ insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at, c
 insert into public.kitchens (id, name, slug, owner_id, weekly_off) values
   ('80000000-0000-4000-f000-000000000001', 'WhatsApp Kitchen', 'whatsapp-kitchen', 'f0000000-0000-4000-f000-000000000001', '{7}');
 insert into public.kitchen_settings (kitchen_id, broadcast_cap_monthly) values ('80000000-0000-4000-f000-000000000001', 1);
+-- Customer WhatsApp is a Phase 2 flag (off by default); this suite tests it switched on.
+update public.platform_settings set enabled = true where key = 'customer_whatsapp';
 insert into public.kitchen_payout_accounts (kitchen_id) values ('80000000-0000-4000-f000-000000000001');
 insert into public.members (kitchen_id, user_id, role) values
   ('80000000-0000-4000-f000-000000000001', 'f0000000-0000-4000-f000-000000000001', 'owner'),

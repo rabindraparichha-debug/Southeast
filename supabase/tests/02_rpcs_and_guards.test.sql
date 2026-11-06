@@ -56,8 +56,11 @@ select lives_ok($$select public.set_member_role(
     (select id from public.members where user_id = '00000000-0000-4000-a000-000000000003'), 'staff')$$,
   'owner can change rider to staff');
 
--- The seeded rider invite for +919000000100 is claimed on that user's first login.
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-000000000100","role":"authenticated"}', true);
+-- The seeded rider invite for +919000000100 is claimed on that user's first login, and only when the
+-- session was signed in with a one-time code (a password sign-up is "confirmed" without one).
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-000000000100","role":"authenticated","amr":[{"method":"password","timestamp":1}]}', true);
+select is(public.claim_invites(), 0, 'a session without a one-time code claims nothing');
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-b000-000000000100","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}', true);
 select is(public.claim_invites(), 1, 'pending invite claimed');
 select is((select role::text from public.members where user_id = '00000000-0000-4000-b000-000000000100'), 'rider',
   'claimed invite becomes a rider membership');
@@ -77,8 +80,11 @@ select throws_ok($$select public.create_customer('10000000-0000-4000-a000-000000
   '22023', 'consent_required', 'consent is required');
 select throws_ok($$select public.create_customer('10000000-0000-4000-a000-00000000000a', 'Bad Phone', '12345', true)$$,
   '22023', 'invalid_phone', 'invalid phone rejected');
+select throws_ok($$select public.create_customer('10000000-0000-4000-a000-00000000000a', 'subhashree  MOHANTY', '098610 00001', true)$$,
+  '23505', 'already_exists', 'same phone and same name in the same kitchen rejected (any format)');
+-- D-118: another person on the same phone needs the vendor's confirmation.
 select throws_ok($$select public.create_customer('10000000-0000-4000-a000-00000000000a', 'Dup', '098610 00001', true)$$,
-  '23505', 'already_exists', 'duplicate phone in the same kitchen rejected (any format)');
+  '23505', 'phone_in_use', 'a shared phone with a different name needs confirmation');
 select lives_ok($$select public.create_customer('10000000-0000-4000-a000-00000000000a', 'Mitali Kar', '+91-98765-00001', true,
   'jain', 'or', 'Less spicy', '{"line1":"Flat 3B","area":"Patia","landmark":"Near water tank","lat":20.355,"lng":85.82}')$$,
   'owner creates a customer with address');
@@ -124,7 +130,7 @@ select public.import_customers(
       case i
         when 10 then jsonb_build_object('name', 'Bad Phone', 'phone', '12345')
         when 25 then jsonb_build_object('name', '', 'phone', '9777000025')
-        when 40 then jsonb_build_object('name', 'Duplicate Of Row 1', 'phone', '9777000001')
+        when 40 then jsonb_build_object('name', 'import customer 1', 'phone', '9777000001')
         else jsonb_build_object(
           'name', 'Import Customer ' || i,
           'phone', '9777' || lpad(i::text, 6, '0'),
@@ -196,6 +202,69 @@ select lives_ok($$select public.set_kitchen_status('10000000-0000-4000-a000-0000
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000001","role":"authenticated"}', true);
 select throws_ok($$select public.set_kitchen_status('10000000-0000-4000-a000-00000000000a', 'suspended')$$,
   '42501', 'forbidden', 'only platform admins change kitchen status');
+
+-- ===========================================================================
+-- Manager and accountant (D-117), staff, rider and another kitchen on the new money RPCs
+-- ===========================================================================
+set local role authenticated;
+create temp table rc (k text primary key, v uuid);
+grant all on rc to authenticated;
+insert into rc select 'ipsita', id from public.customers where name = 'Ipsita Panda';
+insert into rc select 'ipsita_sub', s.id from public.subscriptions s join public.customers c on c.id = s.customer_id where c.name = 'Ipsita Panda';
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000110","role":"authenticated"}', true);
+select lives_ok($$select public.create_customer('10000000-0000-4000-a000-00000000000a', 'Manager Added', '9876511110', true)$$,
+  'manager adds a customer');
+select lives_ok($$select public.record_payment((select v from rc where k = 'ipsita'), 20000, 'cash')$$, 'manager records cash');
+select lives_ok($$select public.request_schedule_change((select v from rc where k = 'ipsita_sub'), 'skip', (current_date + 3), null, null, null,
+  false, null, true)$$, 'manager previews a customer change');
+select lives_ok($$select public.dues_list('10000000-0000-4000-a000-00000000000a')$$, 'manager reads dues');
+select throws_ok($$select public.invite_member('10000000-0000-4000-a000-00000000000a', '9000000118', 'staff')$$,
+  '42501', 'forbidden', 'manager cannot invite (owner only)');
+select throws_ok($$select public.set_member_role((select id from public.members where user_id = '00000000-0000-4000-a000-000000000002'), 'rider')$$,
+  '42501', 'forbidden', 'manager cannot change roles (owner only)');
+select throws_ok($$select public.commission_statement('10000000-0000-4000-a000-00000000000a', '2026-01-01', '2026-12-31')$$,
+  '42501', 'forbidden', 'manager cannot read the commission statement (owner only)');
+select throws_ok($$select public.send_broadcast('10000000-0000-4000-a000-00000000000a', 'Holiday tomorrow')$$,
+  '42501', 'forbidden', 'manager cannot broadcast to customers (owner only)');
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000111","role":"authenticated"}', true);
+select lives_ok($$select public.dues_list('10000000-0000-4000-a000-00000000000a')$$, 'accountant reads dues');
+select lives_ok($$select public.money_report('10000000-0000-4000-a000-00000000000a', current_date - 30, current_date)$$,
+  'accountant reads the money report');
+select lives_ok($$select public.customer_statement((select v from rc where k = 'ipsita'), current_date)$$, 'accountant reads a statement');
+select lives_ok($$select public.monthly_bills('10000000-0000-4000-a000-00000000000a', current_date)$$, 'accountant reads the month''s bills');
+select lives_ok($$select public.export_payments_csv('10000000-0000-4000-a000-00000000000a', current_date - 30, current_date)$$,
+  'accountant exports payments');
+select lives_ok($$select public.register_sheet('10000000-0000-4000-a000-00000000000a', current_date - 3, 7)$$, 'accountant prints the register');
+select throws_ok($$select public.record_payment((select v from rc where k = 'ipsita'), 20000, 'cash')$$, '42501', 'forbidden',
+  'accountant cannot record payments');
+select throws_ok($$select public.void_payment((select id from public.payments where customer_id = (select v from rc where k = 'ipsita') limit 1), 'x')$$,
+  '42501', 'forbidden', 'accountant cannot void payments');
+select throws_ok($$select public.add_balance_entry((select v from rc where k = 'ipsita'), 'credit', 1, 'x')$$, '42501', 'forbidden',
+  'accountant cannot credit meals');
+select throws_ok($$select public.set_billing_mode((select v from rc where k = 'ipsita'), 'prepaid')$$, '42501', 'forbidden',
+  'accountant cannot change billing');
+select throws_ok($$select public.request_schedule_change((select v from rc where k = 'ipsita_sub'), 'skip', (current_date + 3))$$,
+  '42501', 'forbidden', 'accountant cannot change meals');
+select throws_ok($$select public.commission_statement('10000000-0000-4000-a000-00000000000a', '2026-01-01', '2026-12-31')$$,
+  '42501', 'forbidden', 'accountant cannot read the commission statement (owner only)');
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000002","role":"authenticated"}', true);
+select throws_ok($$select public.dues_list('10000000-0000-4000-a000-00000000000a')$$, '42501', 'forbidden', 'staff cannot read dues');
+select throws_ok($$select public.customer_statement((select v from rc where k = 'ipsita'), current_date)$$, '42501', 'forbidden',
+  'staff cannot read statements');
+select throws_ok($$select public.register_sheet('10000000-0000-4000-a000-00000000000a', current_date, 7)$$, '42501', 'forbidden',
+  'staff cannot print the money register');
+select throws_ok($$select public.export_dues_aging_csv('10000000-0000-4000-a000-00000000000a')$$, '42501', 'forbidden',
+  'staff cannot export dues');
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000011","role":"authenticated"}', true);
+select throws_ok($$select public.customer_statement((select v from rc where k = 'ipsita'), current_date)$$, '42501', 'forbidden',
+  'another kitchen''s owner cannot read the statement');
+select throws_ok($$select public.export_rider_cash_csv('10000000-0000-4000-a000-00000000000a', current_date - 7, current_date)$$,
+  '42501', 'forbidden', 'another kitchen''s owner cannot export rider cash');
+reset role;
 
 select * from finish();
 rollback;

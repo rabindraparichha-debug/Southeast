@@ -82,7 +82,11 @@ describe('M4: WhatsApp through the webhook', () => {
   });
 
   it('vendor reply is delivered by the outbox worker into the conversation', async () => {
+    // Customer WhatsApp is a Phase 2 flag (off by default: customer messages are stored as cancelled).
+    const admin = await loginAs('+919000000099');
+    expect((await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: true })).error).toBeNull();
     const sent = await owner.client.rpc('send_vendor_message', { p_conversation: conversationId, p_body: 'Namaskar Ankit, see you tomorrow.' });
+    await admin.client.rpc('admin_set_platform_flag', { p_key: 'customer_whatsapp', p_enabled: false });
     expect(sent.error).toBeNull();
     const res = await fetch(`${env().url}/functions/v1/whatsapp-outbox`, {
       method: 'POST', headers: { apikey: env().anonKey, Authorization: `Bearer ${owner.accessToken}` },

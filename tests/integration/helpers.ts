@@ -35,9 +35,11 @@ export async function loginAs(phone: string): Promise<{ client: Client; accessTo
   for (let attempt = 0; ; attempt++) {
     const { error } = await client.auth.signInWithOtp({ phone });
     if (!error) break;
-    // GoTrue enforces a short gap between OTP requests for the same phone.
-    if (attempt < 3 && /after \d+ seconds|rate limit/i.test(error.message)) {
-      await new Promise((r) => setTimeout(r, 6000));
+    // GoTrue enforces a short gap between OTP requests for the same phone (several suites log in
+    // the same seed users at once): wait as long as it asks, a few times.
+    const wait = /after (\d+) seconds/i.exec(error.message);
+    if (attempt < 8 && (wait || /rate limit/i.test(error.message))) {
+      await new Promise((r) => setTimeout(r, (wait ? Number(wait[1]) + 1 : 6) * 1000));
       continue;
     }
     throw error;

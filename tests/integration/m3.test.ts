@@ -49,7 +49,8 @@ describe('M3: payments, webhooks and refunds through the Edge Functions', () => 
     const { data: plan } = await owner.client.from('plans')
       .insert({ kitchen_id: kitchenId, name: 'Premium', slots: ['lunch'], price_per_meal_paise: 10000 }).select('id').single();
     const phone = `98${String(Date.now()).slice(-8)}`;
-    const { data: cust, error: cErr } = await owner.client.rpc('create_customer', { p_kitchen: kitchenId, p_name: 'Integration Payer', p_phone: phone, p_consent: true });
+    // A prepaid customer (meal balance, refunds of unused meals); monthly billing is covered in wave2.test.ts.
+    const { data: cust, error: cErr } = await owner.client.rpc('create_customer', { p_kitchen: kitchenId, p_name: 'Integration Payer', p_phone: phone, p_consent: true, p_billing_mode: 'prepaid' });
     expect(cErr).toBeNull();
     customerId = cust as string;
     const { data: sub, error: sErr } = await owner.client.from('subscriptions')

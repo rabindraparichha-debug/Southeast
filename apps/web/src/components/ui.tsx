@@ -105,7 +105,7 @@ export function Stat({ label, value, hint }: { label: string; value: ReactNode; 
 export const DIET_LABEL = { veg: 'Veg', nonveg: 'Non-veg', jain: 'Jain' } as const;
 export const DIET_TONE = { veg: 'green', nonveg: 'red', jain: 'amber' } as const;
 export const LANGUAGE_LABEL = { en: 'English', or: 'Odia', hi: 'Hindi' } as const;
-export const ROLE_LABEL = { owner: 'Owner', staff: 'Staff', rider: 'Rider' } as const;
+export const ROLE_LABEL = { owner: 'Owner', manager: 'Manager', accountant: 'Accountant', staff: 'Staff', rider: 'Rider' } as const;
 export const STATUS_TONE = {
   trial: 'blue', active: 'green', paused: 'gray', low_balance: 'amber', suspended: 'red', cancelled: 'gray',
 } as const;

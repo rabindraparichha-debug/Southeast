@@ -175,6 +175,7 @@ M1 creates the tenancy, customer, plan, import and audit tables. Each later mile
 ### D-022 Staff and rider visibility
 - Staff can see customer names, addresses, diet and notes (needed for packing), but not phone numbers, plans, prices or subscriptions.
 - Riders see nothing about customers until M5 gives them today's stops.
+- Managers and accountants (D-117, D-119): managers see what owners see except the owner-only areas; accountants see customer names with masked phones, plans, subscriptions and money, nothing else.
 
 ### D-023 Data erasure
 - `erase_customer()` scrubs name, phone, notes and address details. It keeps the row so payment records (M3) stay consistent.
@@ -683,3 +684,41 @@ Your instruction: "build P5 and P6", and for P6 "build both, switched off". Ever
 
 ### D-118 Customers may share a phone number (owner, 2026-11-06)
 - Several customers in one kitchen may share a phone (siblings, family phone). Phone search returns all of them; messages to that number are sent per customer. The one-open-lead-per-phone rule for platform leads is unchanged.
+
+### D-119 Vendor-first wave 2: defaults chosen while building D-115..D-118 (2026-11-06)
+Decisions taken in code; each can be changed. Migrations `20261108000100`–`20261108000800`.
+
+**Roles (D-117)**
+- **Manager = the owner's deputy.** Every `'{owner}'` check also accepts a manager (`private.expand_roles`), except the owner-only areas, which use `p_exact => true` (`private.require_role(k, '{owner}', true)`, `private.kitchen_ids('{owner}', true)`): inbox (D-060: conversations, messages, reply, close, mark read), broadcasts, settings (kitchen and kitchen settings updates, listing photos), members and invites (invite, revoke, change role, remove), the payout account, the commission statement and commission tables, and the audit log. So a manager also sees full phone numbers (and can reveal one, logged), handles refunds, edits plans and prices, pays suppliers and sees costs (the owner is away most days; someone must pay the vegetable seller), and can erase a customer (DPDP request). **New `'{owner}'` checks include managers by default**; mark owner-only ones with `true`.
+- **Accountant = reads money, writes nothing.** Customers (names; **phones masked**, like staff, no reveal and no full-number search), plans, subscriptions, the ledger, payments, refunds, receipts photos, dues, statements, bills, CSV exports, the register, the money report, refund preview, office statements, supplier dues / payments / purchases / items and the cost report. Not: addresses, kitchen orders, inbox, audit log, commission, any write.
+- **Owner alerts go to managers too:** `notify_owners`, stock alerts and the 22:00 summary. The production sheet queued by `private.lock_slot` is still owner-only (wave 1 redefines `lock_slot`; change `m.role = 'owner'` to `in ('owner', 'manager')` there).
+- **Invites:** owners can invite managers and accountants. `claim_invites` now also requires that the session was signed in with a one-time code (JWT `amr` method `otp`); `phone_confirmed_at` alone is set by a phone + password sign-up when confirmations are off.
+- **Rider requests:** a rider records skip / pause / resume / cancel / address (address: the new address in the note) on one of their own stops (`rider_request_change`, today's or yesterday's run, idempotent on `p_client_op`). Nothing changes until an owner or manager approves (`approve_change_request`, preview with `p_dry_run`), which runs `private.apply_change` with channel `rider`: lateness is judged at approval time by the slot cutoff. The subscription is the customer's only live one, else the one on the stop, else the approver picks. No WhatsApp alert for a new request (it would need a Meta-approved template); the owner sees pending requests in `change_requests_list`.
+
+**Billing (D-115)**
+- `kitchen_settings.default_billing_mode` defaults to `monthly`; new customers take it unless the vendor picks one. Platform-sourced customers (Phase 2 trial flow) default to `prepaid`. Customers that existed before the migration stay `prepaid`.
+- **Monthly ledger:** the rupee balance is Σ `amount_paise`. Meals are charged at their own price (frozen at the lock). Monthly payments carry **0 meals** (also rider cash and a confirmed payment, even if meals are typed). A free-meal credit for a monthly customer is worth that meal's price (the meal it refers to, else the price per meal). Adjustments are in rupees (`add_balance_entry(..., p_amount_paise)`: minus = owed, plus = advance).
+- **Dues:** monthly = −rupee balance; prepaid = −meal balance, valued at the newest owed meals' own prices. Dues reminders on day 1, 3 and 7 are for prepaid customers only (monthly customers settle at month end with a statement). Churn "balance out" is prepaid-only.
+- **Price per meal** (only to turn rupees into meals): the meal-weighted average of the customer's live plans (lunch ₹60 + dinner ₹40 → ₹50), else their latest plan.
+- **Switching mode** (`set_billing_mode`, owner or manager): monthly → prepaid turns the advance into whole meals at the price per meal (an amount under one meal stays only in rupees) and keeps its rupee value for FIFO refunds; prepaid → monthly values unused meals at what was paid (free meals at the price per meal) or the owed meals at their own prices.
+- **Refunds:** prepaid unchanged (FIFO meals). Monthly refunds part or all of the advance in rupees (`refund_unused_meals(..., p_amount_paise)`). The automatic refund on cancellation stays prepaid-only and has no setting: `private.unused_value` is 0 for monthly customers, so `private.refund_on_cancel` (not redefined) never refunds them.
+- **Statement month:** a meal belongs to the month of its service date (a 1st-of-month lunch is locked the evening before); every other ledger row to its IST date.
+- **Import:** optional `billing` (monthly / prepaid; pay later, postpaid, khata, advance) and `dues` (rupees, monthly only; negative = advance). A meals `balance` on a monthly row becomes a rupee advance at the plan price.
+
+**Payments (item 22)**
+- `p_client_op` is unique per kitchen; a retry returns the first payment, a key reused for another customer is refused (`invalid_client_op`). Same for purchases (per kitchen) and waste (per item).
+- Backdating: not in the future (10 minutes of clock skew allowed), at most 400 days back.
+- Void: only a `paid` cash / UPI / bank payment; online payments are refunded instead. One reversal row (`adjust`, `ref_type = payment_void`); the payment keeps `void_reason`, `voided_by`, `voided_at` (the audit row carries them). A void does not undo a referral reward or a lead-funnel stage that the payment triggered.
+
+**Shared phones (D-118)**
+- The same phone **and** the same name (case and spaces ignored) is the same person (`already_exists`, `duplicate_in_file`). A different name on a used phone needs the vendor's confirmation (`create_customer(..., p_allow_shared_phone)`, `update_customer` key `allow_shared_phone`), else `phone_in_use`. Import accepts it when the names differ.
+- WhatsApp keeps one conversation per kitchen and phone, linked to the **oldest** customer on that phone (deterministic); a sibling's customer page shares it but shows the sibling's own data; messages to any of them use that phone's 24-hour window. Choosing which sibling a WhatsApp chat is about is a Phase 2 item.
+- `convert_lead` is unchanged: a phone already in the chosen kitchen is `already_customer`, so the platform never claims a vendor's own customer.
+
+**Outbox and phase flags (item 13)**
+- Platform flags, all off: `customer_whatsapp`, `customer_portal`, `online_payments`, `marketplace`, `growth`, `extras`. Only `customer_whatsapp` (the outbox gate) and the crons check them so far; screens and RPCs follow in item 27.
+- While `customer_whatsapp` is off, messages to customers, leads and vendor applicants are stored as `cancelled` / `customer_messages_off`. Member alerts are not affected.
+- Every outbox row expires 48 hours after it is due (or queued, if later); the worker cancels expired rows (`expired`) instead of sending them.
+- Crons: `tiffin-growth` and `tiffin-ad-conversions` need `growth`; `tiffin-tomorrow-nudge` needs `customer_whatsapp`; `tiffin-escalate-complaints` needs `customer_whatsapp` or `customer_portal`; the weather job still alerts owners, and tells customers only with `customer_whatsapp`.
+
+**Test logins:** +91 90000 00110 (manager) and 00111 (accountant) of kitchen A; 00112–00119 are spare (00113–00115 are used by `tests/integration/wave2.test.ts`).

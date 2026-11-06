@@ -323,6 +323,36 @@ Known gaps:
 - **iOS needs** an Apple Developer account, an App Store Connect API key and an Expo token (docs/RELEASE.md).
 - **Google Ads conversion upload** runs in mock mode until the developer token and OAuth are set.
 
+## Vendor-first wave 2: money, roles, shared phones, phase flags (2026-11-06)
+
+From docs/VENDOR_FIRST_AUDIT.md "Recommended work order", with the owner's decisions D-115..D-118.
+Defaults chosen while building are in D-119. Built in parallel with wave 1 (items 2, 7, 8, 11, 12,
+14–19 and the app work), on branch `wave2/db`.
+
+| Item | Scope | Status | Where |
+|---|---|---|---|
+| 20 | Billing mode per customer with a rupee ledger: monthly pay-later by default, prepaid keeps the M3 rules; dues from each meal's own price; payments, rider cash, credits, refunds and import in rupees for monthly customers; mode switch with a one-time conversion | ✅ | `20261108000300_billing_mode.sql`, `…0500_shared_phones_customer_billing.sql`, `set_billing_mode`, seed (monthly zero-balance customers) |
+| 21 | Customer statement (by service date, reconciles with the ledger), bills for the month, CSV exports (payments, dues aging, rider cash), register built on the server | ✅ DB + register page | `…0600_statements_exports_register.sql`, `apps/web/src/app/print/register/page.tsx` |
+| 22 | Payments: idempotency key, backdating, void with reason (append-only reversal); idempotent purchases and waste | ✅ | `…0400_payment_void_backdate_idempotency.sql` |
+| 23 | Manager and accountant roles; owner-only areas; invites for the new roles; claim needs a code sign-in; rider change requests approved by owner or manager; owner alerts to managers | ✅ | `…0100_wave2_enum_values.sql`, `…0200_manager_accountant_roles.sql`, `…0700_rider_change_requests.sql` |
+| D-118 | Shared phones: no unique phone per kitchen; every phone lookup checked | ✅ | `…0500_shared_phones_customer_billing.sql` |
+| 13 | Outbox expiry, customer-message gate, phase-flag keys, flag-checked crons | ✅ | `…0800_outbox_expiry_phase_flags.sql` |
+
+Tests: `supabase/tests/14_billing.test.sql`, `15_roles_requests_phones_flags.test.sql`, manager and
+accountant sections in `01_rls_isolation` and `02_rpcs_and_guards`; `tests/integration/wave2.test.ts`;
+core import validation (`packages/core`).
+
+Still to do (UI agents): billing mode on customer forms and lists, rupee balances and statements on
+web and mobile, void and backdate buttons, the approvals list, manager and accountant navigation,
+CSV download buttons, the import columns in the wizard, mobile error texts in use. Item 27 hides
+Phase 2 screens behind the flags.
+
+Known gaps:
+- The production sheet at the lock still goes to owners only (needs the wave-1 `lock_slot`).
+- A rider request raises no WhatsApp alert (would need a Meta template); owners see the list.
+- WhatsApp from a shared phone always talks about the oldest customer on it (Phase 2).
+- The customer page and bot still show prepaid meal balances for monthly customers (Phase 2 screens; the context now carries `billing_mode` and `balance_paise`).
+
 ## Things to start outside code now
 These have external lead times:
 - Meta Business verification and WhatsApp number.

@@ -5,7 +5,7 @@ const MESSAGES: Record<string, string> = {
   not_authenticated: 'Please log in again.',
   not_found: 'This record no longer exists.',
   invalid_phone: 'Enter a valid 10-digit Indian mobile number.',
-  already_exists: 'A customer with this phone number already exists in your kitchen.',
+  already_exists: 'A customer with this name and phone number already exists in your kitchen.',
   already_member: 'This person is already in your team.',
   consent_required: 'Please confirm the customer agreed to be contacted.',
   name_required: 'Name is required.',
@@ -106,6 +106,15 @@ const MESSAGES: Record<string, string> = {
   unreadable_output: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   model_refused: 'The notebook page could not be read. Try a clearer, well-lit photo.',
   ai_error: 'Reading the photo failed. Try again in a minute.',
+  // Vendor-first wave 2: billing mode, payments, shared phones, rider requests
+  phone_in_use: 'Another customer already uses this phone number. Confirm that this is a different person sharing the number (for example a sibling).',
+  invalid_paid_at: 'The payment date cannot be in the future or more than 400 days ago.',
+  not_voidable: 'Only a paid cash, UPI or bank payment can be voided. Online payments are refunded instead.',
+  invalid_billing_mode: 'Choose monthly (pay later) or prepaid billing.',
+  subscription_required: 'This customer has more than one plan. Choose which plan the request is for.',
+  invalid_billing: 'Billing must be monthly (pay later) or prepaid.',
+  invalid_dues: 'Opening dues must be an amount in rupees, up to ₹1,00,000.',
+  dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees. Give prepaid customers an opening balance in meals.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -138,6 +147,10 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   health: { consent_required: 'Tick the box to confirm the customer agreed to share this health information.' },
   special: { already_exists: 'A special with this name already exists for that meal.' },
   office: { already_exists: 'An office with this name already exists.', invalid_payer: 'Choose who pays for this office (a customer of this kitchen).' },
+  // Vendor-first wave 2: retried saves (offline queue / double taps) that reuse a key for something else.
+  payment: { invalid_client_op: 'This payment was already saved for another customer. Refresh and try again.' },
+  stock: { invalid_client_op: 'This entry was already saved for another item. Refresh and try again.' },
+  rider_request: { invalid_client_op: 'This request was already saved for another stop. Refresh and try again.' },
 };
 
 /** friendlyError with screen-specific wording for codes like already_exists. */

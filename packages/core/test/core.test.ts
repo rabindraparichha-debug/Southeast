@@ -15,6 +15,7 @@ import {
   normalizePhone,
   rupeesToPaise,
   validateImportRows,
+  parseBilling,
   type ImportRow,
 } from '../src';
 
@@ -119,7 +120,7 @@ describe('validateImportRows', () => {
       const i = k + 1;
       if (i === 10) return { name: 'Bad Phone', phone: '12345' };
       if (i === 25) return { name: '', phone: '9777000025' };
-      if (i === 40) return { name: 'Dup', phone: '9777000001' };
+      if (i === 40) return { name: 'customer  1', phone: '9777000001' };
       return { name: `Customer ${i}`, phone: `9777${String(i).padStart(6, '0')}`, plan: 'Veg Lunch', start_date: '2026-11-02' };
     });
     expect(validateImportRows(rows, ['Veg Lunch'])).toEqual([
@@ -145,6 +146,44 @@ describe('validateImportRows', () => {
       { row: 4, errors: ['invalid_balance'] },
     ]);
     expect(guessMapping(['Name', 'Mobile', 'Meals left']).balance).toBe(2);
+  });
+
+  it('accepts a shared phone with another name (D-118) but not the same person twice', () => {
+    expect(
+      validateImportRows(
+        [
+          { name: 'Gyana Sethi', phone: '9862000001' },
+          { name: 'Tanmay Sethi', phone: '98620 00001' },
+          { name: 'gyana  sethi', phone: '+91 9862000001' },
+        ],
+        [],
+      ),
+    ).toEqual([{ row: 3, errors: ['duplicate_in_file'] }]);
+  });
+
+  it('validates billing mode and opening dues like the server', () => {
+    expect(
+      validateImportRows(
+        [
+          { name: 'A', phone: '9861000001', billing: 'Pay later', dues: '1250.50' },
+          { name: 'B', phone: '9861000002', billing: 'prepaid', dues: '100' },
+          { name: 'C', phone: '9861000003', billing: 'weekly' },
+          { name: 'D', phone: '9861000004', dues: 'abc' },
+          { name: 'E', phone: '9861000005', dues: '-300' },
+        ],
+        [],
+      ),
+    ).toEqual([
+      { row: 2, errors: ['dues_need_monthly'] },
+      { row: 3, errors: ['invalid_billing'] },
+      { row: 4, errors: ['invalid_dues'] },
+    ]);
+    expect(validateImportRows([{ name: 'F', phone: '9861000006', dues: '50' }], [], 'prepaid')).toEqual([
+      { row: 1, errors: ['dues_need_monthly'] },
+    ]);
+    expect(parseBilling('Khata')).toBe('monthly');
+    expect(parseBilling('')).toBe('');
+    expect(guessMapping(['Name', 'Mobile', 'Billing', 'Dues']).dues).toBe(3);
   });
 
   it('checks plan, date, qty, diet, language and location', () => {

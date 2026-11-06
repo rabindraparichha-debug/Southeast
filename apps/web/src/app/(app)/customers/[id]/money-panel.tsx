@@ -9,7 +9,7 @@ import { whatsappUrl } from '@/lib/whatsapp';
 import { Alert, Button, Card, Field, Input, Select } from '@/components/ui';
 import { METHOD_LABEL, PaymentStatus, RefundStatus } from '@/components/payment-badges';
 
-type Payment = { id: string; method: string; status: 'created' | 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled' | 'review'; amount_paise: number; meals: number; short_url: string | null; created_at: string };
+type Payment = { id: string; method: string; status: 'created' | 'pending' | 'paid' | 'failed' | 'expired' | 'cancelled' | 'review' | 'voided'; amount_paise: number; meals: number; short_url: string | null; created_at: string };
 type Refund = { id: string; meals: number; amount_paise: number; status: 'pending' | 'processing' | 'processed' | 'failed'; method: string | null; payment_id: string | null; created_at: string };
 
 type Props = {
