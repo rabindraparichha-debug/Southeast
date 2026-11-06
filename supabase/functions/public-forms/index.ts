@@ -2,13 +2,14 @@
 // Called from the browser with the anon key (supabase.functions.invoke('public-forms')).
 import { json } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { loadCaptchaConfig, verifyCaptcha, type CaptchaConfig } from '../_shared/turnstile.ts';
+import { loadCaptchaConfig, loadIpConfig, verifyCaptcha, type CaptchaConfig } from '../_shared/turnstile.ts';
 import { handlePublicForm } from './handler.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const env = (k: string) => Deno.env.get(k);
 const monitor = loadMonitorConfig(env);
+const ipConfig = loadIpConfig(env);
 
 Deno.serve(async (req) => {
   let captcha: CaptchaConfig;
@@ -38,5 +39,6 @@ Deno.serve(async (req) => {
       return { data: out, error: null };
     },
     report: (e) => void reportError(monitor, e, { fn: 'public-forms' }),
+    ip: ipConfig,
   });
 });

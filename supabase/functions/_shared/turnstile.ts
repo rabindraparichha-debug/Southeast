@@ -43,14 +43,35 @@ export async function verifyCaptcha(
 }
 
 /**
- * The caller's IP as seen by the Edge runtime: Cloudflare's header first (set by Cloudflare, not
- * the caller), then the first X-Forwarded-For entry, then X-Real-IP.
- * Best effort (a proxy header can be forged), so the database also limits per phone and overall.
+ * How to find the caller's IP behind the platform's proxies (D-148):
+ *   - Cloudflare's cf-connecting-ip first: Cloudflare sets it and overwrites any value the caller sent.
+ *   - Then X-Forwarded-For. Each proxy appends the address it saw, so only entries added by our own
+ *     proxies can be trusted. PUBLIC_FORMS_XFF_HOPS=N takes the N-th entry from the right (1 = the
+ *     address the last proxy saw); set it once the hosted header chain is known.
+ *   - Unset: the left-most entry (what the caller claims, so it can be forged and the per-IP limits
+ *     can be dodged; the per-phone, per-lead and overall limits and the CAPTCHA still apply), then
+ *     X-Real-IP.
  */
-export function clientIp(headers: Headers): string | null {
-  const pick = (v: string | null) => {
-    const ip = v?.split(',')[0]?.trim();
+export type IpConfig = { xffHops: number | null };
+
+export function loadIpConfig(env: Env): IpConfig {
+  const raw = env('PUBLIC_FORMS_XFF_HOPS')?.trim();
+  const n = raw && /^[0-9]+$/.test(raw) ? Number(raw) : NaN;
+  return { xffHops: Number.isInteger(n) && n >= 1 && n <= 10 ? n : null };
+}
+
+/** The caller's IP for rate limits (see IpConfig), or null when no usable header is present. */
+export function clientIp(headers: Headers, cfg: IpConfig = { xffHops: null }): string | null {
+  const valid = (v: string | undefined) => {
+    const ip = v?.trim();
     return ip && ip.length <= 64 && /^[0-9a-fA-F:.]+$/.test(ip) ? ip : null;
   };
-  return pick(headers.get('cf-connecting-ip')) ?? pick(headers.get('x-forwarded-for')) ?? pick(headers.get('x-real-ip'));
+  const cf = valid(headers.get('cf-connecting-ip')?.split(',')[0]);
+  if (cf) return cf;
+  const xff = (headers.get('x-forwarded-for') ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (cfg.xffHops !== null) {
+    // Only what our own proxies appended; a chain shorter than expected has no trustworthy entry.
+    return xff.length >= cfg.xffHops ? valid(xff[xff.length - cfg.xffHops]) : null;
+  }
+  return valid(xff[0]) ?? valid(headers.get('x-real-ip') ?? undefined);
 }

@@ -1894,6 +1894,7 @@ export type Database = {
           kitchen_id: string;
           lead_id: string;
           token_hash: string;
+          used_at: string | null;
         };
         ComputedFields: never;
         Insert: {
@@ -1902,6 +1903,7 @@ export type Database = {
           kitchen_id: string;
           lead_id: string;
           token_hash: string;
+          used_at?: string | null;
         };
         Update: {
           created_at?: string;
@@ -1909,6 +1911,7 @@ export type Database = {
           kitchen_id?: string;
           lead_id?: string;
           token_hash?: string;
+          used_at?: string | null;
         };
         Relationships: [
           {
@@ -3267,6 +3270,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           customer_id: string;
+          gateway_attempt: number;
           gateway_claimed_at: string | null;
           gateway_claimed_by: string | null;
           gateway_error: string | null;
@@ -3290,6 +3294,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           customer_id: string;
+          gateway_attempt?: number;
           gateway_claimed_at?: string | null;
           gateway_claimed_by?: string | null;
           gateway_error?: string | null;
@@ -3312,6 +3317,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           customer_id?: string;
+          gateway_attempt?: number;
           gateway_claimed_at?: string | null;
           gateway_claimed_by?: string | null;
           gateway_error?: string | null;

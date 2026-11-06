@@ -19,13 +19,17 @@
 --   * The website lead token expires after 24 hours (leads.token_expires_at).
 --   * submit_lead needs a location the visitor gives (a shared pin or a known area); it is used for
 --     matching even when an older enquiry on the same phone had a pin, so the shortlist and its
---     distances never come from someone else's location.
+--     distances never come from someone else's location. Likewise the area, budget and start date
+--     are the ones just submitted (an earlier enquiry's values are replaced, never merged in), and
+--     the answer echoes only the area this request gave: a stranger typing someone's number learns
+--     nothing stored on that number's lead.
 --   * lead_choose no longer converts the lead. It sends a confirmation link to the lead's phone on
 --     WhatsApp (template lead_confirm) and answers the same way whatever the number is: whether that
 --     phone is already the kitchen's customer is only shown to whoever holds the phone.
 --     lead_confirm(token) (anon, token-protected) then makes them the kitchen's customer
---     (private.convert_lead, unchanged) and returns the trial and the customer-page link; opening
---     the link again within 24 hours returns a fresh page link for the same booking.
+--     (private.convert_lead, unchanged) and returns the trial and the customer-page link. The
+--     confirmation is then used up: opening the link again shows the booking but issues no new
+--     page link (a forwarded message must not undo the owner revoking the customer's links).
 --   * lead_choose and lead_confirm re-check that the kitchen still takes platform customers.
 --   * A phone whose open lead already picked a kitchen no longer gets that kitchen back from
 --     submit_lead (anyone could type the number and learn which kitchen it chose): it gets an
@@ -52,7 +56,8 @@ create table public.lead_confirmations (
   kitchen_id uuid not null references public.kitchens (id),
   token_hash text not null unique,
   expires_at timestamptz not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  used_at timestamptz
 );
 alter table public.lead_confirmations enable row level security;
 revoke all on public.lead_confirmations from public, anon, authenticated;
@@ -187,8 +192,14 @@ begin
       'lat', v_lat, 'lng', v_lng, 'slots', to_jsonb(p_slots), 'diet', p_diet, 'budget_per_meal_paise', p_budget_paise,
       'start_date', p_start, 'language', p_language)),
     true, p_whatsapp_opt_in);
+  -- This enquiry replaces the earlier one's preferences (upsert_lead merges them): the shortlist and
+  -- the answer must never reflect what someone else stored on this number.
   update public.leads set token_hash = encode(extensions.digest(v_token, 'sha256'), 'hex'),
-                          token_expires_at = private.now() + interval '24 hours'
+                          token_expires_at = private.now() + interval '24 hours',
+                          area = coalesce(v_area.name, nullif(trim(p_area), '')),
+                          area_id = v_area.id,
+                          budget_per_meal_paise = p_budget_paise,
+                          start_date = p_start
   where id = v_id
   returning * into v_l;
   if private.lead_decided(v_l) then
@@ -198,7 +209,8 @@ begin
     v_kitchens := private.refresh_lead_matches(v_id);
     v_status := (select status::text from public.leads where id = v_id);
   end if;
-  return jsonb_build_object('token', v_token, 'status', v_status, 'area', v_l.area, 'kitchens', v_kitchens);
+  return jsonb_build_object('token', v_token, 'status', v_status, 'area', coalesce(v_area.name, nullif(trim(p_area), '')),
+                            'kitchens', v_kitchens);
 end;
 $$;
 
@@ -241,7 +253,7 @@ begin
   values (v_l.id, p_kitchen, encode(extensions.digest(v_confirm, 'sha256'), 'hex'), private.now() + interval '24 hours', private.now())
   on conflict (lead_id) do update
     set kitchen_id = excluded.kitchen_id, token_hash = excluded.token_hash, expires_at = excluded.expires_at,
-        created_at = excluded.created_at;
+        created_at = excluded.created_at, used_at = null;
   insert into public.notifications_outbox (channel, recipient_type, recipient_id, template, payload, dedupe_key)
   values ('whatsapp', 'lead', v_l.id, 'lead_confirm',
           jsonb_build_object('name', split_part(coalesce(nullif(trim(v_l.name), ''), 'there'), ' ', 1), 'kitchen_name', v_k.name,
@@ -266,33 +278,36 @@ declare
   v_k public.kitchens;
   v_s public.subscriptions;
   v_p public.plans;
-  v_token text;
+  v_result jsonb;
 begin
   perform private.require_feature('marketplace');
   select * into v_c from public.lead_confirmations
-  where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex') and expires_at > private.now();
+  where token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex') and expires_at > private.now()
+  for update;
   if v_c.lead_id is null then
     raise exception 'invalid_link' using errcode = '22023';
   end if;
   select * into v_l from public.leads where id = v_c.lead_id for update;
   select * into v_k from public.kitchens where id = v_c.kitchen_id;
-  -- Opened again: the same booking, with a fresh customer-page link.
-  if v_l.customer_id is not null then
+  -- Opened again (or the lead was converted another way): the booking, but no new customer-page
+  -- link. The page link went out with the first opening; minting one here would let a forwarded
+  -- message undo the owner revoking the customer's links.
+  if v_c.used_at is not null or v_l.customer_id is not null then
     if v_l.chosen_kitchen_id is distinct from v_c.kitchen_id then
       raise exception 'already_converted' using errcode = '22023';
     end if;
     select * into v_s from public.subscriptions where customer_id = v_l.customer_id order by created_at limit 1;
     select * into v_p from public.plans where id = v_s.plan_id;
-    v_token := private.issue_magic_link(v_l.customer_id, 14);
-    return jsonb_build_object('customer_id', v_l.customer_id, 'kitchen_name', v_k.name, 'plan_name', v_p.name,
-      'trial_meals', v_k.trial_meals, 'price_per_meal_paise', v_p.price_per_meal_paise,
-      'trial_amount_paise', v_k.trial_meals * v_p.price_per_meal_paise, 'portal_token', v_token,
-      'portal_url', private.public_web_url() || '/c/' || v_token);
+    return jsonb_build_object('already_confirmed', true, 'customer_id', v_l.customer_id, 'kitchen_name', v_k.name,
+      'plan_name', v_p.name, 'trial_meals', v_k.trial_meals, 'price_per_meal_paise', v_p.price_per_meal_paise,
+      'trial_amount_paise', v_k.trial_meals * v_p.price_per_meal_paise, 'portal_token', null, 'portal_url', null);
   end if;
   if not coalesce(v_k.accepts_platform_leads, false) then
     raise exception 'kitchen_not_available' using errcode = '22023';
   end if;
-  return private.convert_lead(v_c.lead_id, v_c.kitchen_id, null, 'web');
+  v_result := private.convert_lead(v_c.lead_id, v_c.kitchen_id, null, 'web');
+  update public.lead_confirmations set used_at = private.now() where lead_id = v_c.lead_id;
+  return v_result || jsonb_build_object('already_confirmed', false);
 end;
 $$;
 

@@ -169,20 +169,30 @@ export async function createPaymentLink(cfg: RazorpayConfig, input: LinkInput): 
   return { id: link.id, shortUrl: link.short_url, expiresAt: new Date(link.expire_by * 1000).toISOString() };
 }
 
-/** Request body for POST /payments/:id/refund (also built in mock mode, so tests can check it). */
-export function refundBody(amountPaise: number, refundId: string): Record<string, unknown> {
-  return { amount: amountPaise, speed: 'normal', reverse_all: 1, receipt: refundId, notes: { refund_id: refundId } };
+/**
+ * Request body for POST /payments/:id/refund (also built in mock mode, so tests can check it). The
+ * attempt number goes in the notes so the webhook can ignore a late refund.failed from an earlier,
+ * already failed attempt.
+ */
+export function refundBody(amountPaise: number, refundId: string, attempt = 1): Record<string, unknown> {
+  return { amount: amountPaise, speed: 'normal', reverse_all: 1, receipt: refundId, notes: { refund_id: refundId, attempt: String(attempt) } };
+}
+
+/** Razorpay's idempotency key for one attempt of a refund: the same key for a retry after an unclear answer. */
+export function refundIdempotencyKey(refundId: string, attempt = 1): string {
+  return `${refundId}-${attempt}`;
 }
 
 /**
- * Refunds an online payment (reversing the Route transfer). Our refund id is sent as Razorpay's
- * idempotency key (X-Refund-Idempotency) and receipt, so a retry after an unclear answer (a timeout)
- * cannot refund twice. The caller claims the refund row first (claim_refund_for_gateway).
+ * Refunds an online payment (reversing the Route transfer). The idempotency key (X-Refund-Idempotency)
+ * is our refund id plus the attempt number from claim_refund_for_gateway: a retry after an unclear
+ * answer (a timeout, then a stale claim) reuses it and cannot refund twice; a deliberate retry after a
+ * definite failure is a new attempt. The caller claims the refund row first.
  */
-export async function createRefund(cfg: RazorpayConfig, razorpayPaymentId: string, amountPaise: number, refundId: string): Promise<{ id: string }> {
-  const body = refundBody(amountPaise, refundId);
+export async function createRefund(cfg: RazorpayConfig, razorpayPaymentId: string, amountPaise: number, refundId: string, attempt = 1): Promise<{ id: string }> {
+  const body = refundBody(amountPaise, refundId, attempt);
   if (cfg.mode === 'mock') return { id: randomId('rfnd_mock_') };
-  return api<{ id: string }>(cfg, `/payments/${razorpayPaymentId}/refund`, body, { 'X-Refund-Idempotency': refundId });
+  return api<{ id: string }>(cfg, `/payments/${razorpayPaymentId}/refund`, body, { 'X-Refund-Idempotency': refundIdempotencyKey(refundId, attempt) });
 }
 
 /** Builds a webhook body shaped like Razorpay's, for mock mode and tests. */

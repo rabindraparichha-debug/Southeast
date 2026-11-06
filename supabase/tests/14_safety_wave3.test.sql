@@ -121,11 +121,16 @@ select ok(private.issue_magic_link((select id from public.customers where name =
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
 insert into t select 'link1', to_jsonb(public.customer_page_link((select (v #>> '{}')::uuid from t where k = 'eater')));
-select is((public.customer_page_links((select (v #>> '{}')::uuid from t where k = 'eater')) ->> 'live')::int, 3,
-  'the owner sees how many links are live (at most 3)');
+select is((public.customer_page_links((select (v #>> '{}')::uuid from t where k = 'eater')) ->> 'live')::int, 4,
+  'the owner sees how many links are live');
 reset role;
 select is((select count(*) from public.customer_magic_links l join public.customers c on c.id = l.customer_id
-           where c.name = 'Existing Eater' and l.revoked_at is null), 3::bigint, 'issuing more than 3 links revokes the oldest');
+           where c.name = 'Existing Eater' and l.revoked_at is null), 4::bigint,
+  'a new link never stops one already queued or sent (no automatic cap; payer reminders mint one per eater)');
+set local role anon;
+select lives_ok(format($$ select public.portal_get(%L) $$, (select v #>> '{}' from t where k = 'page')),
+  'the first link still opens after three more were issued');
+reset role;
 -- Each role is refused.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000001","role":"authenticated"}', true);
@@ -157,7 +162,7 @@ reset role;
 -- The owner revokes: the old link stops working at once.
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
-select is(public.revoke_customer_page_links((select (v #>> '{}')::uuid from t where k = 'eater')), 3, 'the owner revokes every live link');
+select is(public.revoke_customer_page_links((select (v #>> '{}')::uuid from t where k = 'eater')), 4, 'the owner revokes every live link');
 reset role;
 set local role anon;
 select throws_ok(format($$ select public.portal_get(%L) $$, (select v #>> '{}' from t where k = 'link1')), '28000', 'invalid_link',
@@ -224,9 +229,39 @@ reset role;
 update public.refunds set gateway_claimed_at = private.now() - interval '20 minutes' where id = '86000000-0000-4000-f000-000000000002';
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
-select lives_ok($$ select public.claim_refund_for_gateway('86000000-0000-4000-f000-000000000002') $$,
-  'a claim left without a Razorpay id for 15 minutes is stale and can be taken again');
+select is((public.claim_refund_for_gateway('86000000-0000-4000-f000-000000000002') ->> 'idempotency_key'),
+  '86000000-0000-4000-f000-000000000002-2',
+  'a claim left without a Razorpay id for 15 minutes is stale and can be taken again, with the same attempt (same Razorpay key)');
 reset role;
+select is(public.razorpay_process_event('evt_w3_rf_stale', jsonb_build_object('event', 'refund.failed', 'payload', jsonb_build_object(
+  'refund', jsonb_build_object('entity', jsonb_build_object('id', 'rfnd_old_attempt',
+    'notes', jsonb_build_object('refund_id', '86000000-0000-4000-f000-000000000002', 'attempt', '1')))))), 'refund_stale_attempt',
+  'a late refund.failed from an earlier attempt is ignored');
+select is((select status::text from public.refunds where id = '86000000-0000-4000-f000-000000000002'), 'processing',
+  'so the attempt in flight stays processing');
+-- Regression: Razorpay accepted the refund (rfnd_test_1), then refund.failed came. The retry must work.
+select is(public.razorpay_process_event('evt_w3_rf_failed', jsonb_build_object('event', 'refund.failed', 'payload', jsonb_build_object(
+  'refund', jsonb_build_object('entity', jsonb_build_object('id', 'rfnd_test_1',
+    'notes', jsonb_build_object('refund_id', '86000000-0000-4000-f000-000000000001', 'attempt', '1')))))), 'refund_failed',
+  'Razorpay reports the accepted refund failed');
+select is((select status::text || '/' || razorpay_refund_id from public.refunds where id = '86000000-0000-4000-f000-000000000001'),
+  'failed/rfnd_test_1', 'the refund is failed, still carrying the first attempt''s Razorpay id');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select is((public.claim_refund_for_gateway('86000000-0000-4000-f000-000000000001') ->> 'idempotency_key'),
+  '86000000-0000-4000-f000-000000000001-2', 'the owner retries: a new attempt, so a new Razorpay idempotency key');
+reset role;
+select is((select status::text || '/' || coalesce(razorpay_refund_id, 'none') from public.refunds where id = '86000000-0000-4000-f000-000000000001'),
+  'processing/none', 'the earlier attempt''s Razorpay id is cleared (the audit log keeps it)');
+select ok(public.release_refund_claim('86000000-0000-4000-f000-000000000001', 'BAD_REQUEST_ERROR'),
+  'a definite refusal of the retry releases the claim (it used to stay processing for good)');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f3000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select lives_ok($$ select public.mark_refund_paid('86000000-0000-4000-f000-000000000001', 'cash', 'paid at the door') $$,
+  'and the owner can then pay it in cash');
+reset role;
+select is((select status::text || '/' || method::text from public.refunds where id = '86000000-0000-4000-f000-000000000001'),
+  'processed/cash', 'the refund is settled in cash');
 
 -- ===========================================================================
 -- Item 39: public forms (rate limits, token expiry, no phone oracle)
@@ -282,6 +317,20 @@ set local role anon;
 select throws_ok(format($$ select public.lead_confirm(%L) $$, (select v ->> 'token' from t where k = 'known_confirm')), '23505', 'already_customer',
   'only whoever holds the phone learns it is already the kitchen''s customer');
 reset role;
+-- Regression: a stranger resubmitting someone's number with a pin and no area learns nothing stored.
+select set_config('request.headers', '{"x-tiffin-client-ip":"192.0.2.13"}', true);
+insert into t select 'victim', public.submit_lead('Victim', '9777300701', 'Patia', p_budget_paise => 9000, p_start => '2026-11-20',
+  p_consent => true);
+insert into t select 'stranger', public.submit_lead('Stranger', '9777300701', p_lat => 19.8140, p_lng => 85.8320, p_consent => true);
+reset role;
+select is((select v -> 'area' from t where k = 'victim'), '"Patia"'::jsonb, 'the visitor sees the area they typed');
+select is((select v -> 'area' from t where k = 'stranger'), 'null'::jsonb,
+  'a stranger typing the same number with a pin is not told the area from the earlier enquiry');
+select is((select coalesce(area, '-') || '/' || coalesce(budget_per_meal_paise::text, '-') || '/' || coalesce(start_date::text, '-')
+           from public.leads where phone_last4 = '0701' and status not in ('converted', 'renewed', 'lost')), '-/-/-',
+  'and the shortlist is built from what was just submitted, not the earlier budget or start date');
+set local role service_role;
+select set_config('request.headers', '{"x-tiffin-client-ip":"192.0.2.12"}', true);
 -- The website token expires after a day.
 select set_config('app.now', '2026-11-13 10:30:00+05:30', true);
 set local role service_role;
@@ -300,6 +349,21 @@ select throws_ok(format($$ select public.lead_confirm(%L) $$, (select v ->> 'tok
   'a kitchen that opted out after the pick is not converted into');
 reset role;
 update public.kitchens set accepts_platform_leads = true where id = '85000000-0000-4000-f000-000000000001';
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+insert into t select 'converted', public.lead_confirm((select v ->> 'token' from t where k = 'fresh_confirm'));
+reset role;
+select ok((select v ->> 'portal_token' from t where k = 'converted') is not null, 'the phone holder confirms and gets the customer page');
+insert into t select 'links_before', to_jsonb((select count(*) from public.customer_magic_links
+                                              where customer_id = (select (v ->> 'customer_id')::uuid from t where k = 'converted')));
+set local role anon;
+insert into t select 'reopened', public.lead_confirm((select v ->> 'token' from t where k = 'fresh_confirm'));
+reset role;
+select is((select (v ->> 'already_confirmed') || '/' || coalesce(v ->> 'portal_token', 'none') || '/' || (v ->> 'kitchen_name') from t where k = 'reopened'),
+  'true/none/Puri Rasoi', 'opening the confirmation link again shows the booking but hands out no new page link');
+select is((select count(*) from public.customer_magic_links where customer_id = (select (v ->> 'customer_id')::uuid from t where k = 'converted')),
+  (select (v #>> '{}')::bigint from t where k = 'links_before'),
+  'so a forwarded confirmation message cannot undo the owner revoking the customer''s links');
 
 -- ===========================================================================
 -- Item 33: vendor terms and the data processing agreement
@@ -418,6 +482,19 @@ begin
 end $$;
 select is((select string_agg(transfer_status, ',' order by tp.n) from tp join public.payments p on p.id = tp.id), 'pending,pending,pending',
   'a captured online payment waits for its Route transfer');
+do $$
+declare v_rec jsonb := private.payment_link_record((select id from public.customers where name = 'Existing Eater'), 2, null);
+begin
+  insert into tp values (4, (v_rec ->> 'payment_id')::uuid);
+  perform public.razorpay_process_event('evt_w3_paid_4', jsonb_build_object('event', 'payment_link.paid', 'payload', jsonb_build_object(
+    'payment_link', jsonb_build_object('entity', jsonb_build_object('id', 'plink_w3_4', 'reference_id', v_rec ->> 'payment_id', 'order_id', 'order_w3_4')),
+    'payment', jsonb_build_object('entity', jsonb_build_object('id', 'pay_w3_4', 'order_id', 'order_w3_4', 'amount', 16000, 'currency', 'INR')))));
+end $$;
+select is((select razorpay_order_id from public.payments where id = (select id from tp where n = 4)), 'order_w3_4',
+  'the paid event keeps the Razorpay order id');
+select is(public.razorpay_process_event('evt_w3_tr_order', jsonb_build_object('event', 'transfer.settled', 'payload', jsonb_build_object(
+  'transfer', jsonb_build_object('entity', jsonb_build_object('id', 'trf_w3_o4', 'source', 'order_w3_4'))))), 'transfer_settled',
+  'a payment link''s transfer without our notes (links made before the notes) is matched on its order id');
 select is(public.razorpay_process_event('evt_w3_tr_1', jsonb_build_object('event', 'transfer.processed', 'payload', jsonb_build_object(
   'transfer', jsonb_build_object('entity', jsonb_build_object('id', 'trf_w3_1', 'source', 'order_x', 'recipient', 'acc_Puri0001',
     'amount', 16000, 'notes', jsonb_build_object('payment_id', (select id from tp where n = 1))))))), 'transfer_processed',

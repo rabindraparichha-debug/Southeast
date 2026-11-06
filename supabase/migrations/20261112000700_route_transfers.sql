@@ -9,7 +9,11 @@
 --     transfer id, the account it actually went to (transfer_account) and any error.
 --   * razorpay_process_event handles transfer.processed / transfer.settled / transfer.failed /
 --     transfer.reversed (private.apply_transfer_event). The transfer carries our payment id in its
---     notes (routeTransfer in _shared/razorpay.ts); else it is matched on the Razorpay payment id.
+--     notes (routeTransfer in _shared/razorpay.ts); else it is matched on its source: the Razorpay
+--     order id (a payment link's transfers belong to its order, payments.razorpay_order_id, kept from
+--     the paid event and backfilled from stored webhook events) or the Razorpay payment id.
+--   * A late refund.failed from an earlier attempt of a refund (refund claims, 20261112000300) no
+--     longer fails the attempt now in flight.
 --   * A failed transfer alerts the kitchen's owners (template transfer_failed, Meta approval needed
 --     before WhatsApp is live) and shows in admin_route_transfers() for the platform team, as do
 --     transfers still pending a day after capture and transfers to another account than expected.
@@ -20,6 +24,20 @@ alter table public.payments
   add column transfer_account text,
   add column transfer_error text,
   add column transfer_updated_at timestamptz;
+-- payments.razorpay_order_id (M3) was never filled: the paid event now keeps it.
+create index payments_razorpay_order_idx on public.payments (razorpay_order_id) where razorpay_order_id is not null;
+
+-- Payments captured before this migration: the order id from the stored paid events (links created
+-- before the transfer notes existed are then still matched).
+update public.payments p
+set razorpay_order_id = coalesce(e.payload -> 'payload' -> 'payment' -> 'entity' ->> 'order_id',
+                                 e.payload -> 'payload' -> 'payment_link' -> 'entity' ->> 'order_id')
+from public.webhook_events e
+where e.provider = 'razorpay' and e.event_type in ('payment_link.paid', 'payment.captured')
+  and p.razorpay_order_id is null and p.razorpay_payment_id is not null
+  and e.payload -> 'payload' -> 'payment' -> 'entity' ->> 'id' = p.razorpay_payment_id
+  and coalesce(e.payload -> 'payload' -> 'payment' -> 'entity' ->> 'order_id',
+               e.payload -> 'payload' -> 'payment_link' -> 'entity' ->> 'order_id') is not null;
 create index payments_transfer_attention_idx on public.payments (transfer_status, paid_at)
   where transfer_status in ('pending', 'failed', 'reversed');
 
@@ -64,6 +82,7 @@ begin
   select * into v_p from public.payments p
   where (v_note_id is not null and p.id = v_note_id)
      or (p_transfer ->> 'source' is not null and p.razorpay_payment_id = p_transfer ->> 'source')
+     or (p_transfer ->> 'source' is not null and p.razorpay_order_id = p_transfer ->> 'source')
      or (p_transfer ->> 'id' is not null and p.razorpay_transfer_id = p_transfer ->> 'id')
   order by p.created_at desc
   limit 1
@@ -149,6 +168,13 @@ begin
     else 'ignored'
   end;
 
+  -- Keep the Razorpay order id: a payment link's Route transfer names it as its source.
+  if v_type in ('payment_link.paid', 'payment.captured') and v_payment is not null
+     and coalesce(v_pay ->> 'order_id', v_link ->> 'order_id') is not null then
+    update public.payments set razorpay_order_id = coalesce(v_pay ->> 'order_id', v_link ->> 'order_id')
+    where id = v_payment and razorpay_order_id is null;
+  end if;
+
   if v_type in ('payment_link.expired', 'payment_link.cancelled') and v_payment is not null then
     update public.payments set status = case when v_type = 'payment_link.expired' then 'expired' else 'cancelled' end::public.payment_status
     where id = v_payment and status = 'created';
@@ -160,6 +186,13 @@ begin
     limit 1;
     if v_refund is null then
       v_result := 'unmatched';
+    elsif v_type = 'refund.failed' and exists (
+            select 1 from public.refunds r where r.id = v_refund
+              and ((r.razorpay_refund_id is not null and r.razorpay_refund_id <> v_ref ->> 'id')
+                   or (v_ref -> 'notes' ->> 'attempt' ~ '^[0-9]+$'
+                       and (v_ref -> 'notes' ->> 'attempt')::integer <> r.gateway_attempt))) then
+      -- A late failure of an earlier attempt: the attempt now in flight is not failed by it.
+      v_result := 'refund_stale_attempt';
     else
       update public.refunds
       set status = case when v_type = 'refund.processed' then 'processed' else 'failed' end::public.refund_status,

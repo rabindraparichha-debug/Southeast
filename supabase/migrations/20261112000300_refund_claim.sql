@@ -8,16 +8,21 @@
 --   * claim_refund_for_gateway(refund) (owner): the same checks, then moves the row to 'processing'
 --     in the same statement (row lock). A second call gets 'refund_in_progress' and never reaches
 --     Razorpay. A claim with no Razorpay refund id after 15 minutes is stale (the function died
---     between the claim and Razorpay's answer) and can be claimed again; Razorpay also gets the
---     refund id as its idempotency key, so a retry after an unclear answer is not refunded twice.
---   * release_refund_claim(refund, error) (service role): Razorpay definitely refused it; the row
---     goes to 'failed' (and can be retried or paid in cash).
+--     between the claim and Razorpay's answer) and can be claimed again with the same attempt.
+--   * Attempts: claiming a 'pending' or 'failed' row starts a new attempt (gateway_attempt + 1) and
+--     clears the Razorpay refund id of an earlier, failed attempt (the audit log keeps it). Razorpay's
+--     idempotency key is '<refund id>-<attempt>': a retry after an unclear answer (stale claim) reuses
+--     the key, so it is not refunded twice; a deliberate retry after a definite failure is a new
+--     Razorpay request.
+--   * release_refund_claim(refund, error) (service role): Razorpay definitely refused the current
+--     attempt; the row goes to 'failed' (and can be retried or paid in cash).
 --   * mark_refund_submitted now also completes a claimed ('processing') row, and reports whether it did.
 
 alter table public.refunds
   add column gateway_claimed_at timestamptz,
   add column gateway_claimed_by uuid references auth.users (id),
-  add column gateway_error text;
+  add column gateway_error text,
+  add column gateway_attempt integer not null default 0;
 
 create or replace function public.claim_refund_for_gateway(p_refund uuid)
 returns jsonb
@@ -49,15 +54,21 @@ begin
                                                     where r.payment_id = v_p.id and r.id <> v_r.id and r.status <> 'failed'), 0) then
     raise exception 'refund_exceeds_payment' using errcode = '22023';
   end if;
+  -- A stale claim ('processing', no Razorpay id) keeps its attempt and key; anything else starts a new one.
   update public.refunds
   set status = 'processing', method = 'razorpay', gateway_claimed_at = private.now(), gateway_claimed_by = auth.uid(),
-      gateway_error = null
-  where id = p_refund;
-  return jsonb_build_object('refund_id', v_r.id, 'amount_paise', v_r.amount_paise, 'razorpay_payment_id', v_p.razorpay_payment_id);
+      gateway_error = null,
+      razorpay_refund_id = case when v_r.status = 'processing' then razorpay_refund_id end,
+      gateway_attempt = case when v_r.status = 'processing' then greatest(gateway_attempt, 1) else gateway_attempt + 1 end
+  where id = p_refund
+  returning * into v_r;
+  return jsonb_build_object('refund_id', v_r.id, 'amount_paise', v_r.amount_paise, 'razorpay_payment_id', v_p.razorpay_payment_id,
+    'attempt', v_r.gateway_attempt, 'idempotency_key', v_r.id::text || '-' || v_r.gateway_attempt);
 end;
 $$;
 
--- Razorpay definitely refused the refund (an error answer, not a timeout).
+-- Razorpay definitely refused the current attempt (an error answer, not a timeout). Only a claimed
+-- row that Razorpay has not accepted (no refund id for this attempt) is released.
 create or replace function public.release_refund_claim(p_refund uuid, p_error text)
 returns boolean
 language plpgsql
@@ -67,7 +78,7 @@ as $$
 begin
   update public.refunds
   set status = 'failed', gateway_claimed_at = null, gateway_error = left(coalesce(p_error, 'gateway_error'), 500)
-  where id = p_refund and status = 'processing' and razorpay_refund_id is null;
+  where id = p_refund and status = 'processing' and gateway_claimed_at is not null and razorpay_refund_id is null;
   return found;
 end;
 $$;

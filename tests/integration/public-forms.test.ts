@@ -3,8 +3,8 @@
 // refund idempotency key, and the outbox opt-in exception for the lead confirmation.
 import { describe, expect, it } from 'vitest';
 import { ACTIONS, handlePublicForm, statusFor, type PublicFormDeps } from '../../supabase/functions/public-forms/handler.ts';
-import { clientIp, loadCaptchaConfig, verifyCaptcha } from '../../supabase/functions/_shared/turnstile.ts';
-import { linkInputFromRecord, paymentLinkBody, RazorpayApiError, refundBody, routeTransfer } from '../../supabase/functions/_shared/razorpay.ts';
+import { clientIp, loadCaptchaConfig, loadIpConfig, verifyCaptcha } from '../../supabase/functions/_shared/turnstile.ts';
+import { linkInputFromRecord, paymentLinkBody, RazorpayApiError, refundBody, refundIdempotencyKey, routeTransfer } from '../../supabase/functions/_shared/razorpay.ts';
 import { CUSTOMER_TEMPLATES_WITHOUT_OPT_IN, renderOutbox } from '../../supabase/functions/_shared/templates.ts';
 
 const envOf = (vars: Record<string, string>) => (k: string) => vars[k];
@@ -62,6 +62,16 @@ describe('Turnstile config: on with a key, off only locally', () => {
     expect(clientIp(new Headers({ 'x-forwarded-for': "'; drop table x" }))).toBeNull();
     expect(clientIp(new Headers())).toBeNull();
   });
+  it('with PUBLIC_FORMS_XFF_HOPS, trusts only the entries our proxies appended (a forged left-most value is ignored)', () => {
+    const cfg = loadIpConfig(envOf({ PUBLIC_FORMS_XFF_HOPS: '1' }));
+    expect(cfg).toEqual({ xffHops: 1 });
+    expect(clientIp(new Headers({ 'x-forwarded-for': '6.6.6.6, 198.51.100.7' }), cfg)).toBe('198.51.100.7');
+    expect(clientIp(new Headers({ 'x-forwarded-for': '6.6.6.6, 198.51.100.7, 10.0.0.1' }), { xffHops: 2 })).toBe('198.51.100.7');
+    expect(clientIp(new Headers({ 'x-forwarded-for': '198.51.100.7' }), { xffHops: 2 })).toBeNull();
+    expect(clientIp(new Headers({ 'cf-connecting-ip': '203.0.113.9', 'x-forwarded-for': '6.6.6.6' }), cfg)).toBe('203.0.113.9');
+    expect(loadIpConfig(envOf({}))).toEqual({ xffHops: null });
+    expect(loadIpConfig(envOf({ PUBLIC_FORMS_XFF_HOPS: 'many' }))).toEqual({ xffHops: null });
+  });
 });
 
 describe('public-forms handler', () => {
@@ -113,8 +123,14 @@ describe('Razorpay: one link input on every path (commission included), transfer
   it('the transfer carries our payment id so transfer.* webhooks find it', () => {
     expect(routeTransfer(70000, 63000, 'acc_X', 'p-1')).toEqual({ account: 'acc_X', amount: 63000, currency: 'INR', on_hold: 0, notes: { payment_id: 'p-1' } });
   });
-  it('refunds send our refund id as receipt (and as the idempotency header)', () => {
-    expect(refundBody(5000, 'r-1')).toEqual({ amount: 5000, speed: 'normal', reverse_all: 1, receipt: 'r-1', notes: { refund_id: 'r-1' } });
+  it('refunds send our refund id as receipt and the attempt in the notes', () => {
+    expect(refundBody(5000, 'r-1')).toEqual({ amount: 5000, speed: 'normal', reverse_all: 1, receipt: 'r-1', notes: { refund_id: 'r-1', attempt: '1' } });
+    expect(refundBody(5000, 'r-1', 2)).toMatchObject({ receipt: 'r-1', notes: { refund_id: 'r-1', attempt: '2' } });
+  });
+  it('the idempotency key is per attempt: a retry after a definite failure is a new Razorpay request', () => {
+    expect(refundIdempotencyKey('r-1', 1)).toBe('r-1-1');
+    expect(refundIdempotencyKey('r-1', 2)).toBe('r-1-2');
+    expect(refundIdempotencyKey('r-1', 2)).toBe(refundIdempotencyKey('r-1', 2)); // a stale claim keeps its attempt
   });
   it('only a 4xx answer counts as a definite refusal', () => {
     expect(new RazorpayApiError(400, 'x').definite).toBe(true);

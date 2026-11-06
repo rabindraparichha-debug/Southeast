@@ -3,7 +3,8 @@
 //
 // Wave 3: the refund row is claimed first (claim_refund_for_gateway, as the signed-in owner), so two
 // clicks or two tabs at once produce one gateway refund; the second gets refund_in_progress. Our
-// refund id is Razorpay's idempotency key. A definite refusal from Razorpay releases the claim
+// refund id plus the attempt number is Razorpay's idempotency key (a retry after a timeout reuses it;
+// a retry after a definite failure is a new attempt). A definite refusal from Razorpay releases the claim
 // (refund 'failed', retry or pay in cash); a timeout leaves it claimed until Razorpay's webhook
 // settles it or the claim goes stale after 15 minutes.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
   }
 
   const { refund_id } = await req.json().catch(() => ({}));
-  const { data: r, error } = await rpc<{ refund_id: string; amount_paise: number; razorpay_payment_id: string }>(
+  const { data: r, error } = await rpc<{ refund_id: string; amount_paise: number; razorpay_payment_id: string; attempt?: number }>(
     SUPABASE_URL, ANON_KEY, auth, 'claim_refund_for_gateway', { p_refund: refund_id });
   if (error || !r) {
     const code = error?.message ?? 'failed';
@@ -42,7 +43,7 @@ Deno.serve(async (req) => {
 
   let refund: { id: string };
   try {
-    refund = await createRefund(cfg, r.razorpay_payment_id, r.amount_paise, r.refund_id);
+    refund = await createRefund(cfg, r.razorpay_payment_id, r.amount_paise, r.refund_id, r.attempt ?? 1);
   } catch (e) {
     console.error('refund failed', e);
     await reportError(monitor, e, { fn: 'razorpay-refund' });
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
   if (cfg.mode === 'mock') {
     // Simulate Razorpay confirming the refund through the real webhook path.
     await deliverMockEvent(`${SUPABASE_URL}/functions/v1/razorpay-webhook`, cfg.webhookSecret,
-      mockEvent('refund.processed', { refund: { id: refund.id, amount: r.amount_paise, payment_id: r.razorpay_payment_id, notes: { refund_id: r.refund_id } } }));
+      mockEvent('refund.processed', { refund: { id: refund.id, amount: r.amount_paise, payment_id: r.razorpay_payment_id, notes: { refund_id: r.refund_id, attempt: String(r.attempt ?? 1) } } }));
   }
   return json({ refund_id: r.refund_id, razorpay_refund_id: refund.id, mode: cfg.mode });
 });
