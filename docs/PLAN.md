@@ -346,8 +346,8 @@ Still to build on screens (apps): an Undo list on the customer page (web and mob
 
 ## Held-back apps track (2026-11-06)
 
-From docs/VENDOR_FIRST_AUDIT.md items 24 (rest) and 35. Decisions D-126 – D-128. Migration `20261116000100_rider_sync_rejects.sql`;
-pgTAP `15_rider_sync_rejects.test.sql` (64 checks); Vitest `rider-reject.test.ts`, `i18n-drafts.test.ts`, `held-apps.test.ts`.
+From docs/VENDOR_FIRST_AUDIT.md items 24 (rest) and 35. Decisions D-126 – D-128. Migrations `20261116000100_rider_sync_rejects.sql`, `20261116000200_rider_sync_rejects_fixes.sql` (review fixes);
+pgTAP `15_rider_sync_rejects.test.sql` (78 checks); Vitest `rider-reject.test.ts`, `i18n-drafts.test.ts`, `held-apps.test.ts`.
 
 | Item | Scope | Status | Where |
 |---|---|---|---|
@@ -359,7 +359,9 @@ pgTAP `15_rider_sync_rejects.test.sql` (64 checks); Vitest `rider-reject.test.ts
 Known gaps:
 - **The two native modules need the next APK/TestFlight build.** `app.json` version is now 1.1.0, so the runtime version changes and no over-the-air update built from this code can reach a 1.0.0 install that lacks the modules.
 - **Translations are drafts**: written without a native speaker. A reviewer must check the ~470 mobile strings (rider, Today and phone desk first) before any pilot vendor sees them; the rest of the web app is still English.
-- Rider sync reports are best effort: a report still waiting when the rider logs out is dropped (the refused action itself still blocks log-out until it is retried or discarded).
+- Rider sync reports are best effort, but log-out now sends waiting reports first and is refused while any are left (both apps), so a discarded refused action's report is not wiped with the phone.
+- Review fixes (2026-11-06): a report naming the old run of a stop the owner moved (`move_stop`) is accepted (it used to be refused and dropped); a report that arrives after the same action synced is stored closed and never reopens; reports keep `customer_id`.
+- On merge: wave3/ops erasure must also blank `summary.note` / `summary.stop_label` of the erased customer's `rider_sync_rejects` rows (match on `customer_id`) and add the table to its audit scrub; wave2 managers: gate the mobile Today card with `isLead(kitchen.role)`; renumber D-126 – D-128 into the global sequence (the migration headers cite the decision by title, not number).
 
 ## Things to start outside code now
 These have external lead times:

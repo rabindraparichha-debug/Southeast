@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MemberRole } from '@tiffin/db';
-import { loadRider, resetRider, riderPendingCount, syncQueue } from './rider-store';
+import { withTimeout } from './rider-queue';
+import { flushReports, loadRider, pendingReportCount, resetRider, riderPendingCount, syncQueue } from './rider-store';
 import { loadServerOverride, readStoredSession, supabase } from './supabase';
 
 export type Membership = { kitchenId: string; kitchenName: string; role: MemberRole };
@@ -132,6 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (riderPendingCount() > 0) {
           await syncQueue({ force: true });
           if (riderPendingCount() > 0) return false;
+        }
+        // Reports of refused actions (the owner's copy) go out first; wiping them would lose it.
+        if ((await pendingReportCount()) > 0) {
+          await withTimeout(flushReports(), 15_000).catch(() => undefined);
+          if ((await pendingReportCount()) > 0) return false;
         }
         await supabase.auth.signOut();
         await AsyncStorage.multiRemove([KITCHEN_KEY, MEMBERSHIPS_KEY]);

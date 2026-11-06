@@ -78,6 +78,7 @@ const MESSAGES: Record<string, string> = {
   photo_failed: 'This photo could not be read. Take it again.',
   call_offline: 'Calling needs network. Try again when you are online.',
   queued_logout: 'Some deliveries are saved only on this phone. Go online and let them sync (and deal with any that need attention in rider mode) before you log out.',
+  reports_logout: 'A report of a delivery the server refused has not reached the owner yet. Go online and try again before you log out.',
   pick_item: 'Choose an item first.',
   invalid_bill_amount: 'Enter the bill amount in rupees.',
   qty_invalid_count: 'Enter the counted quantity as a number (0 is fine).',

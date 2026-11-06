@@ -328,6 +328,18 @@ export function flushReports(): Promise<void> {
   return flushing;
 }
 
+/**
+ * Reports still waiting on this device (none older than a week). Log-out sends them first and is
+ * refused while any are left: the owner's copy of a refused action must not be wiped with the phone.
+ */
+export async function pendingReportCount(): Promise<number> {
+  try {
+    return trimReports(await loadReports(), Date.now()).length;
+  } catch {
+    return 0;
+  }
+}
+
 function clearQueuedFlag(stopId?: string) {
   if (!stopId || state.queue.some((x) => x.stopId === stopId)) return;
   set({ runs: state.runs.map((r) => ({ ...r, stops: r.stops.map((s) => (s.id === stopId ? { ...s, queued: false } : s)) })) });

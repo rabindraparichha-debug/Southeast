@@ -312,6 +312,7 @@ export const en = {
   'legal.terms': 'Terms',
   'account.unsynced': '{n} delivery action(s) are still only on this phone. Open My stops and let them sync (and deal with any that need attention) before logging out.',
   'account.logoutBlocked': 'Not logged out: deliveries are still on this phone.',
+  'account.logoutReports': 'Not logged out: a report of a refused delivery has not reached the owner yet. Go online and try again.',
   'role.owner': 'Owner',
   'role.staff': 'Staff',
   'role.rider': 'Rider',

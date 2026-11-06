@@ -3,11 +3,12 @@
 import { useRef, useState } from 'react';
 import { signOut } from '@/app/actions';
 import { friendlyError } from '@/lib/errors';
-import { queuedCount, resetRider, syncQueue } from '@/lib/rider-store';
+import { withTimeout } from '@/lib/rider-queue';
+import { flushReports, pendingReportCount, queuedCount, resetRider, syncQueue } from '@/lib/rider-store';
 import { clearOfflinePages } from './pwa';
 
 /**
- * Log out, but never while rider actions are still queued on this device (they would be lost).
+ * Log out, but never while rider actions (or reports of refused ones) are still on this device (they would be lost).
  * Clears the offline cache so the next person on a shared phone starts clean.
  */
 export function SignOutButton({ className, formClassName }: { className?: string; formClassName?: string }) {
@@ -23,6 +24,14 @@ export function SignOutButton({ className, formClassName }: { className?: string
         await syncQueue({ force: true }); // one last try
         if ((await queuedCount()) > 0) {
           setError(friendlyError({ message: 'queued_logout' }));
+          return;
+        }
+      }
+      // Reports of refused actions (the owner's copy) go out first; wiping them would lose it.
+      if ((await pendingReportCount()) > 0) {
+        await withTimeout(flushReports(), 15_000).catch(() => undefined);
+        if ((await pendingReportCount()) > 0) {
+          setError(friendlyError({ message: 'reports_logout' }));
           return;
         }
       }

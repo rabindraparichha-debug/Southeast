@@ -3261,6 +3261,7 @@ export type Database = {
           action: string;
           cash_paise: number;
           client_op: string;
+          customer_id: string | null;
           error_code: string;
           had_photo: boolean;
           id: string;
@@ -3282,6 +3283,7 @@ export type Database = {
           action: string;
           cash_paise?: number;
           client_op: string;
+          customer_id?: string | null;
           error_code: string;
           had_photo?: boolean;
           id?: string;
@@ -3302,6 +3304,7 @@ export type Database = {
           action?: string;
           cash_paise?: number;
           client_op?: string;
+          customer_id?: string | null;
           error_code?: string;
           had_photo?: boolean;
           id?: string;
@@ -3318,6 +3321,20 @@ export type Database = {
           summary?: NonNullable<Json>;
         };
         Relationships: [
+          {
+            foreignKeyName: 'rider_sync_rejects_customer_fk';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
+          {
+            foreignKeyName: 'rider_sync_rejects_customer_fk';
+            columns: ['customer_id', 'kitchen_id'];
+            isOneToOne: false;
+            referencedRelation: 'customers_v';
+            referencedColumns: ['id', 'kitchen_id'];
+          },
           {
             foreignKeyName: 'rider_sync_rejects_kitchen_id_fkey';
             columns: ['kitchen_id'];

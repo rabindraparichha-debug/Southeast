@@ -1,4 +1,4 @@
--- Held-back apps track, item 1 (D-126): the server's record of rider actions it refused.
+-- Held-back apps track, item 1 (D-126; renumbered on merge): the server's record of rider actions it refused.
 -- Riders (and owners who deliver) report; riders read only their own reports; owners read and
 -- resolve their kitchen's; admins read and resolve all; staff, another kitchen and anon get nothing.
 -- Idempotent per client op; a newer refusal reopens; a later successful sync closes it by itself;
@@ -60,6 +60,26 @@ begin
   values ('85500000-0000-4000-f000-000000000001', v_run, v_c2, (select id from public.addresses where customer_id = v_c2), 2, 1)
   returning id into v_s;
   insert into ids values ('s2', v_s);
+  -- Review fixes: a stop the owner moves to Rider Two's run (s3), and one that syncs before its report (s4).
+  v_c := private.insert_customer('85500000-0000-4000-f000-000000000001', 'Moved Customer', '+919777100004', 'veg', 'en', null,
+    jsonb_build_object('line1', 'Flat 4', 'area', 'Patia', 'lat', 20.359, 'lng', 85.82), 'vendor', 'vendor');
+  insert into ids values ('c3', v_c);
+  insert into public.delivery_stops (kitchen_id, run_id, customer_id, address_id, seq, meal_count)
+  values ('85500000-0000-4000-f000-000000000001', v_run, v_c, (select id from public.addresses where customer_id = v_c), 3, 1)
+  returning id into v_s;
+  insert into ids values ('s3', v_s);
+  v_c := private.insert_customer('85500000-0000-4000-f000-000000000001', 'Fast Customer', '+919777100005', 'veg', 'en', null,
+    jsonb_build_object('line1', 'Flat 5', 'area', 'Patia', 'lat', 20.36, 'lng', 85.82), 'vendor', 'vendor');
+  insert into public.delivery_stops (kitchen_id, run_id, customer_id, address_id, seq, meal_count)
+  values ('85500000-0000-4000-f000-000000000001', v_run, v_c, (select id from public.addresses where customer_id = v_c), 4, 1)
+  returning id into v_s;
+  insert into ids values ('s4', v_s);
+  insert into public.delivery_routes (kitchen_id, slot, name, rider_id)
+  values ('85500000-0000-4000-f000-000000000001', 'lunch', 'Saheed Nagar', 'f5000000-0000-4000-f000-000000000004') returning id into v_t;
+  insert into public.delivery_runs (kitchen_id, route_id, service_date, slot, rider_id, status)
+  values ('85500000-0000-4000-f000-000000000001', v_t, '2026-11-16', 'lunch', 'f5000000-0000-4000-f000-000000000004', 'out')
+  returning id into v_trun;
+  insert into ids values ('run2', v_trun);
   insert into public.delivery_routes (kitchen_id, slot, name)
   values ('85500000-0000-4000-f000-000000000002', 'lunch', 'Other') returning id into v_t;
   insert into public.delivery_runs (kitchen_id, route_id, service_date, slot, status)
@@ -156,7 +176,7 @@ select throws_ok($$ select public.report_sync_reject(gen_random_uuid(), 'complet
 select throws_ok($$ select public.report_sync_reject(gen_random_uuid(), 'complete', 'x', '85500000-0000-4000-f000-000000000001',
                     null, (select v from ids where k = 'ts')) $$, '42501', 'forbidden', '... or name another kitchen''s stop');
 select throws_ok($$ select public.report_sync_reject(gen_random_uuid(), 'complete', 'x', null, (select v from ids where k = 'trun'),
-                    (select v from ids where k = 's1')) $$, '42501', 'forbidden', 'a stop must belong to the run named');
+                    (select v from ids where k = 's1')) $$, '42501', 'forbidden', 'naming another kitchen''s run with this kitchen''s stop is refused');
 select throws_ok($$ select public.report_sync_reject(gen_random_uuid(), 'teleport', 'x', '85500000-0000-4000-f000-000000000001') $$,
   '22023', 'invalid_kind', 'unknown action kinds are refused');
 select throws_ok($$ select public.report_sync_reject(gen_random_uuid(), 'complete', 'x', '85500000-0000-4000-f000-000000000001',
@@ -249,18 +269,78 @@ select ok((select resolved_at is not null and resolved_by is null and resolution
 select ok((select resolved_at is null from public.rider_sync_rejects where id = (select v from ids where k = 'r6')),
   'other reports for the same stop stay open');
 
+-- A report that arrives after the same action synced is overtaken: it never reopens (review fix).
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select is(public.report_sync_reject('a1000000-0000-4000-a000-000000000007', 'complete', 'http_503', null,
+            (select v from ids where k = 'run'), (select v from ids where k = 's2'), '{}', 5000, false, null,
+            '2026-11-16 12:45:00+05:30'),
+  (select v from ids where k = 'r7'), 'a delayed newer refusal of an action that already synced: same row');
+reset role;
+select ok((select resolved_at is not null and reports = 1 and cash_paise = 0
+           from public.rider_sync_rejects where id = (select v from ids where k = 'r7')), '... stays closed and unchanged');
+-- The rider tried again and it synced before the first report got through: stored already closed.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select lives_ok($$ select public.complete_stop((select v from ids where k = 's4'), 'none', p_client_op => 'a1000000-0000-4000-a000-000000000010',
+                   p_at => '2026-11-16 12:29:00+05:30') $$, 'an action syncs first');
+select lives_ok($$ insert into ids select 'r10', public.report_sync_reject('a1000000-0000-4000-a000-000000000010', 'complete', 'http_503',
+                   null, (select v from ids where k = 'run'), (select v from ids where k = 's4'), '{}', 12000, false) $$,
+  '... and its report arrives afterwards');
+reset role;
+select ok((select resolved_at is not null and resolved_by is null and resolution_note = 'Synced later from the phone'
+           from public.rider_sync_rejects where id = (select v from ids where k = 'r10')), '... stored already closed');
+
+-- The owner moves a pending stop to another rider's run while Rider One's delivery is still offline (review fix).
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select lives_ok($$ select public.move_stop((select v from ids where k = 's3'), (select v from ids where k = 'run2')) $$,
+  'the owner moves stop 3 to Rider Two''s run');
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000003","role":"authenticated"}', true);
+select throws_ok($$ select public.complete_stop((select v from ids where k = 's3'), 'none', p_cash_paise => 25000,
+                    p_client_op => 'a1000000-0000-4000-a000-000000000008', p_at => '2026-11-16 12:15:00+05:30') $$,
+  '42501', 'forbidden', 'Rider One''s queued delivery is refused (no longer their run)');
+select lives_ok($$ insert into ids select 'r8', public.report_sync_reject('a1000000-0000-4000-a000-000000000008', 'complete', 'forbidden',
+                   '85500000-0000-4000-f000-000000000001', (select v from ids where k = 'run'), (select v from ids where k = 's3'),
+                   '{"proof": "none", "stop_label": "Moved Customer"}', 25000, false, '2026-11-16 12:15:00+05:30', '2026-11-16 12:31:00+05:30') $$,
+  '... and its report naming the old run is accepted');
+-- The old run was rebuilt away too: still accepted, kitchen from the stop.
+select lives_ok($$ insert into ids select 'r9', public.report_sync_reject('a1000000-0000-4000-a000-000000000009', 'fail', 'forbidden',
+                   null, gen_random_uuid(), (select v from ids where k = 's3'), '{}', 0, false) $$,
+  'a report naming a run that no longer exists, with a live stop, is accepted');
+reset role;
+select ok((select run_id = (select v from ids where k = 'run') and stop_id = (select v from ids where k = 's3')
+                  and customer_id = (select v from ids where k = 'c3') and resolved_at is null
+           from public.rider_sync_rejects where id = (select v from ids where k = 'r8')),
+  '... stored with the run the rider acted on, the stop and its customer, open');
+select ok((select run_id is null and stop_id = (select v from ids where k = 's3') and kitchen_id = '85500000-0000-4000-f000-000000000001'
+           from public.rider_sync_rejects where id = (select v from ids where k = 'r9')), '... the missing run is left empty');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select is((select array[rider_name, customer_name, route_name, cash_paise::text]
+           from public.sync_rejects('85500000-0000-4000-f000-000000000001') where id = (select v from ids where k = 'r8')),
+  array['Rider One', 'Moved Customer', 'Patia', '25000'], 'the owner sees the refused Rs 250 with the old route and the customer');
+reset role;
+
 -- Rebuilding a run never fails because of a report (the link is cleared).
 delete from public.delivery_stops where id = (select v from ids where k = 's1');
 select is((select stop_id from public.rider_sync_rejects where id = (select v from ids where k = 'r1')), null::uuid,
   'deleting a stop clears the link and keeps the report');
+select is((select customer_id from public.rider_sync_rejects where id = (select v from ids where k = 'r1')), (select v from ids where k = 'c1'),
+  '... and the customer stays known (for erasure)');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000001","role":"authenticated"}', true);
+select is((select customer_name from public.sync_rejects('85500000-0000-4000-f000-000000000001', true)
+           where id = (select v from ids where k = 'r1')), 'Sync Customer', '... and still named on the owner''s list');
+reset role;
 
 -- ===========================================================================
 -- Admin: reads and resolves everywhere
 -- ===========================================================================
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"f5000000-0000-4000-f000-000000000006","role":"authenticated"}', true);
-select is((select count(*)::int from public.rider_sync_rejects), 7, 'the admin reads every report');
-select is((select count(*)::int from public.sync_rejects(null, true)), 7, 'the admin lists every kitchen');
+select is((select count(*)::int from public.rider_sync_rejects), 10, 'the admin reads every report');
+select is((select count(*)::int from public.sync_rejects(null, true)), 10, 'the admin lists every kitchen');
 select lives_ok($$ select public.resolve_sync_reject((select v from ids where k = 'r1'), 'Cash checked') $$, 'the admin resolves');
 select is((select resolved_by from public.rider_sync_rejects where id = (select v from ids where k = 'r1')),
   'f5000000-0000-4000-f000-000000000006'::uuid, '... recorded as the admin');

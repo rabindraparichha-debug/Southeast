@@ -15,7 +15,7 @@
 -- own rows; owners read and resolve their kitchen's; platform admins read and resolve all. Staff
 -- get nothing (cash is money). A later successful sync of the same action (same client op on
 -- delivery_stops) closes the report by itself.
--- Decision: docs/DECISIONS.md D-126.
+-- Decision: docs/DECISIONS.md, held-back apps track ("The server keeps a record of rider actions it refused").
 
 create table public.rider_sync_rejects (
   id uuid primary key default gen_random_uuid(),
