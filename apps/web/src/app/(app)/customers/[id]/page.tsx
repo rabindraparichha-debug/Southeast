@@ -249,7 +249,14 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
                     </div>
                   )}
                   {s.status === 'cancelled' && (
-                    <div className="w-full"><ReactivateSubscription subscriptionId={s.id} today={today} /></div>
+                    <div className="w-full">
+                      <ReactivateSubscription
+                        subscriptionId={s.id}
+                        today={today}
+                        plan={{ planName: s.plan?.name ?? 'Plan', qty: s.qty }}
+                        live={(subscriptions ?? []).filter((x) => x.status !== 'cancelled').map((x) => ({ planName: x.plan?.name ?? 'Plan', qty: x.qty }))}
+                      />
+                    </div>
                   )}
                 </li>
               ))}

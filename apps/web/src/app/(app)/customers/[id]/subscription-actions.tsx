@@ -7,7 +7,7 @@ import type { ChangeResult, ChangeType, MealSlot } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Button, Field, Input, Select } from '@/components/ui';
-import { ChangePreview, savedMessage } from '@/components/change-preview';
+import { ChangePreview, savedMessage, useScheduleSaved } from '@/components/change-preview';
 
 type Props = {
   subscriptionId: string;
@@ -40,6 +40,7 @@ export function SubscriptionActions({ subscriptionId, slots, addresses, nextMeal
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
   const [busy, setBusy] = useState(false);
+  const announceSaved = useScheduleSaved(setDone);
 
   function open(t: ChangeType) {
     setType(t);
@@ -80,6 +81,7 @@ export function SubscriptionActions({ subscriptionId, slots, addresses, nextMeal
     const res = data as unknown as ChangeResult;
     if (dryRun) return setPreview(res);
     setDone(savedMessage(ACTIONS.find((a) => a.type === type)?.label ?? 'Change', type, res));
+    announceSaved();
     setType(null);
     setPreview(null);
     router.refresh();

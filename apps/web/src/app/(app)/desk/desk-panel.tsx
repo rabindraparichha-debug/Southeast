@@ -7,24 +7,14 @@ import { SLOT_LABEL, addDays, formatServiceDate } from '@tiffin/core';
 import type { ChangeResult, ChangeType, MealSlot, SubscriptionStatus } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { cellActions, type CellFacts, type CellState, type DeskActionKind } from '@/lib/desk-rules';
 import { Alert, Badge, Button, Card, Field, Input, STATUS_LABEL, STATUS_TONE } from '@/components/ui';
-import { ChangePreview, savedMessage } from '@/components/change-preview';
+import { ChangePreview, savedMessage, useScheduleSaved } from '@/components/change-preview';
 import { HoldsList, holdDates, type Hold } from '@/components/holds-list';
 
-export type CellState =
-  | 'open' | 'locked' | 'on_way' | 'delivered' | 'failed'
-  | 'skipped' | 'paused' | 'late_charged' | 'late_waived'
-  | 'closed' | 'weekly_off' | 'none';
-
-export type DeskCell = {
+export type DeskCell = CellFacts & {
   slot: MealSlot;
-  state: CellState;
-  orderId?: string;
   qty: number;
-  /** The skip or pause behind a skipped meal (Undo). */
-  holdId: string | null;
-  /** Past its cutoff or locked: a skipped meal can no longer come back. */
-  frozen: boolean;
   /** Open meals: when changes close (IST). */
   until: string | null;
 };
@@ -53,10 +43,9 @@ const CELL: Record<CellState, { label: string; tone: string }> = {
   none: { label: 'No meal', tone: 'bg-white ring-ink-100 text-ink-400' },
 };
 
-type ActionKind = 'skip' | 'skip_day' | 'pause' | 'resume' | 'waive' | 'undo';
-type Action = { kind: ActionKind; subId: string; from: string; slot: MealSlot | null; holdId?: string; label: string };
+type Action = { kind: DeskActionKind; subId: string; from: string; slot: MealSlot | null; holdId?: string; label: string };
 
-const changeType = (k: ActionKind): ChangeType | 'revoke' =>
+const changeType = (k: DeskActionKind): ChangeType | 'revoke' =>
   k === 'undo' ? 'revoke' : k === 'skip_day' || k === 'waive' ? 'skip' : k;
 
 export function DeskPanel({ customer, subs, holds, today, cancelled }: {
@@ -75,13 +64,20 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
-  // On a phone the action box sits under the week: bring it into view when a meal or action is picked.
+  const announceSaved = useScheduleSaved(setDone);
+  // Previews can overlap (each Until date or "Don't charge" re-runs one): only the latest request
+  // is shown, so the preview always matches what Confirm sends.
+  const seq = useRef(0);
+  const saving = useRef(false);
+  // On a phone the action box sits under the week: bring it (and any error in it) into view.
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [selected, action]);
+  useEffect(() => { box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [selected, action, error]);
 
   async function run(a: Action, dryRun: boolean, opts: { waive?: boolean; to?: string } = {}) {
     const w = opts.waive ?? waive;
     const to = opts.to ?? pauseTo;
+    const mine = ++seq.current;
+    if (!dryRun) saving.current = true;
     setBusy(true);
     setError('');
     const supabase = supabaseBrowser();
@@ -96,15 +92,24 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
           p_waive_late: a.kind === 'waive' ? true : a.kind === 'skip' || a.kind === 'skip_day' || a.kind === 'pause' ? w : false,
           p_dry_run: dryRun,
         });
+    if (!dryRun) saving.current = false;
+    else if (mine !== seq.current) return; // a newer preview replaced this one, or the owner moved on
     setBusy(false);
     if (error) return setError(friendlyError(error));
     const res = data as unknown as ChangeResult;
     if (dryRun) return setPreview(res);
     setDone(savedMessage(a.label, changeType(a.kind), res));
+    announceSaved();
     setAction(null);
     setPreview(null);
     setSelected(null);
     router.refresh();
+  }
+
+  /** Forget a preview still on its way (the owner picked something else). A save is never dropped. */
+  function dropPending() {
+    seq.current += 1;
+    if (!saving.current) setBusy(false);
   }
 
   /** Pick an action: the preview runs by itself (as on mobile), then one Confirm. */
@@ -119,6 +124,7 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
 
   function pick(subId: string, date: string, slot: MealSlot) {
     const same = selected?.subId === subId && selected.date === date && selected.slot === slot;
+    dropPending();
     setSelected(same ? null : { subId, date, slot });
     setAction(null);
     setPreview(null);
@@ -126,6 +132,8 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
   }
 
   const tomorrow = addDays(today, 1);
+  // Errors show where the owner is looking: in the open confirm or action box, else under the name.
+  const errorAlert = error ? <div data-testid="desk-error"><Alert>{error}</Alert></div> : null;
 
   return (
     <div className="space-y-4" data-testid="desk-panel">
@@ -142,6 +150,7 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
           </Link>
         </div>
         {done && <div className="mt-3"><Alert tone="green">{done}</Alert></div>}
+        {!action && !selected && errorAlert && <div className="mt-3">{errorAlert}</div>}
       </Card>
 
       {subs.length === 0 && (
@@ -196,6 +205,7 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
               <div ref={box} className="mt-3 space-y-2 rounded-lg bg-ink-50 p-3 text-sm ring-1 ring-ink-200" data-testid="desk-actions">
                 <p className="font-medium">{formatServiceDate(sel.date)} · {SLOT_LABEL[sel.slot]}: {CELL[cell.state].label}</p>
                 <CellActions cell={cell} sub={s} date={sel.date} two={two} holds={holds} today={today} busy={busy} onChoose={choose} />
+                {errorAlert}
               </div>
             )}
 
@@ -220,11 +230,12 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
                   <ChangePreview preview={preview} type={changeType(action.kind)} waive={waive} disabled={busy}
                     onWaive={action.kind === 'waive' || action.kind === 'undo' ? undefined : (w) => { setWaive(w); void run(action, true, { waive: w }); }} />
                 )}
+                {errorAlert}
                 <div className="flex gap-2">
                   <Button onClick={() => run(action, false)} disabled={busy || !preview} data-testid="desk-confirm-button">
                     {busy && preview ? 'Saving…' : 'Confirm'}
                   </Button>
-                  <Button variant="ghost" onClick={() => { setAction(null); setPreview(null); }}>Back</Button>
+                  <Button variant="ghost" onClick={() => { dropPending(); setAction(null); setPreview(null); setError(''); }}>Back</Button>
                 </div>
               </div>
             )}
@@ -235,7 +246,6 @@ export function DeskPanel({ customer, subs, holds, today, cancelled }: {
       <Card title="Upcoming skips and pauses">
         <HoldsList holds={holds} canUndo compact />
       </Card>
-      <div><Alert>{error}</Alert></div>
     </div>
   );
 }
@@ -273,38 +283,39 @@ function DayRow({ date, today, cells, selected, onPick }: {
   );
 }
 
+const ACTION_LABEL: Record<Exclude<DeskActionKind, 'undo'>, string> = {
+  skip: 'Skip this meal',
+  skip_day: 'Skip the whole day',
+  pause: 'Pause from here',
+  resume: 'Resume',
+  waive: 'Don’t charge this meal',
+};
+
 function CellActions({ cell, sub, date, two, holds, today, busy, onChoose }: {
   cell: DeskCell; sub: DeskSub; date: string; two: boolean; holds: Hold[]; today: string; busy: boolean;
   onChoose: (a: Action) => void;
 }) {
-  const btn = (a: Action, testId: string, variant: 'primary' | 'secondary' = 'secondary') => (
-    <Button key={testId} variant={variant} className="px-3 py-1" disabled={busy} onClick={() => onChoose(a)} data-testid={testId}>{a.label}</Button>
-  );
-  const hold = cell.holdId ? holds.find((h) => h.change_id === cell.holdId) : undefined;
-  const actions: ReactNode[] = [];
-  switch (cell.state) {
-    case 'open':
-    case 'locked':
-      actions.push(btn({ kind: 'skip', subId: sub.id, from: date, slot: cell.slot, label: 'Skip this meal' }, 'act-skip', 'primary'));
-      if (two) actions.push(btn({ kind: 'skip_day', subId: sub.id, from: date, slot: null, label: 'Skip the whole day' }, 'act-skip-day'));
-      actions.push(btn({ kind: 'pause', subId: sub.id, from: date, slot: null, label: 'Pause from here' }, 'act-pause'));
-      break;
-    case 'late_charged':
-      actions.push(btn({ kind: 'waive', subId: sub.id, from: date, slot: cell.slot, label: 'Don’t charge this meal' }, 'act-waive', 'primary'));
-      break;
-    case 'skipped':
-    case 'paused':
-      if (hold && !cell.frozen) {
-        actions.push(btn({ kind: 'undo', subId: sub.id, from: date, slot: cell.slot, holdId: hold.change_id,
-          label: `Undo ${hold.type === 'pause' ? 'pause' : 'skip'} ${holdDates(hold)}` }, 'act-undo', 'primary'));
-      }
-      if (cell.state === 'paused' && sub.status === 'paused' && !cell.frozen) {
-        actions.push(btn({ kind: 'resume', subId: sub.id, from: date < today ? today : date, slot: null, label: 'Resume' }, 'act-resume'));
-      }
-      break;
-    default:
-      break;
-  }
+  const offered = cellActions(cell, { twoMeals: two, subscriptionPaused: sub.status === 'paused' });
+  const actions: ReactNode[] = offered.map(({ kind, holdId }, i) => {
+    const hold = holdId ? holds.find((h) => h.change_id === holdId) : undefined;
+    const a: Action = {
+      kind,
+      subId: sub.id,
+      from: kind === 'resume' && date < today ? today : date,
+      slot: kind === 'skip' || kind === 'waive' || kind === 'undo' ? cell.slot : null,
+      holdId,
+      label: kind === 'undo'
+        ? hold ? `Undo ${hold.type === 'pause' ? 'pause' : 'skip'} ${holdDates(hold)}${hold.slot ? ` · ${SLOT_LABEL[hold.slot]} only` : ''}` : 'Undo'
+        : ACTION_LABEL[kind],
+    };
+    const testId = kind === 'undo' ? (i === 0 ? 'act-undo' : `act-undo-${i + 1}`) : `act-${kind.replace('_', '-')}`;
+    return (
+      <Button key={testId} variant={i === 0 ? 'primary' : 'secondary'} className="px-3 py-1" disabled={busy}
+        onClick={() => onChoose(a)} data-testid={testId}>
+        {a.label}
+      </Button>
+    );
+  });
   if (actions.length === 0) {
     const why: Partial<Record<CellState, string>> = {
       on_way: 'Already with the rider: nothing to change.',
@@ -319,5 +330,16 @@ function CellActions({ cell, sub, date, two, holds, today, busy, onChoose }: {
     };
     return <p className="text-ink-600">{why[cell.state] ?? 'Nothing to change.'}</p>;
   }
-  return <div className="flex flex-wrap gap-1.5">{actions}</div>;
+  const holdsHere = offered.filter((o) => o.kind === 'undo').length;
+  const note = cell.state === 'on_way'
+    ? 'With the rider now: a skip still counts this meal (charged unless you tick “Don’t charge”), and the rider’s list updates.'
+    : holdsHere > 1
+      ? `${holdsHere} skips or pauses cover this meal: it comes back only once each of them is undone.`
+      : null;
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">{actions}</div>
+      {note && <p className="text-xs text-ink-600" data-testid="desk-cell-note">{note}</p>}
+    </>
+  );
 }

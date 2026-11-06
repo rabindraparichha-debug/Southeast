@@ -60,7 +60,7 @@ export default async function CustomersPage({ searchParams }: PageProps<'/custom
           name="q"
           defaultValue={q}
           type="search"
-          placeholder={isOwner ? 'Name, flat, area, landmark, full phone or last digits' : 'Name, flat, area, landmark or last 4 digits'}
+          placeholder={isOwner ? 'Name, flat, area, landmark, full phone or last 4 digits' : 'Name, flat, area, landmark or last 4 digits'}
           className="w-full max-w-md rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-ink-200 focus:ring-2 focus:ring-brand-500"
         />
         {status !== 'all' && <input type="hidden" name="status" value={status} />}

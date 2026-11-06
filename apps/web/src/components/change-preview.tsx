@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef } from 'react';
 import { SLOT_LABEL, formatServiceDate } from '@tiffin/core';
 import type { ChangeResult, ChangeType } from '@tiffin/db';
 import { Alert, Badge } from './ui';
@@ -7,6 +8,28 @@ import { Alert, Badge } from './ui';
 // The preview of a schedule change (request_schedule_change or revoke_schedule_change with
 // p_dry_run), shared by the customer page and the phone desk. A skip or pause past the cutoff is
 // charged (the count is frozen) unless the owner ticks "Don't charge" (D-116 / D-120).
+
+const SCHEDULE_SAVED = 'tiffin:schedule-saved';
+
+/**
+ * Several forms on one page change the same schedule (skip/pause, Undo, the phone desk). A
+ * router.refresh() keeps each form's "saved" note, so a form's note would outlive a later change
+ * made elsewhere ("Pause saved" next to a pause that was just undone). Each form calls the
+ * returned function after saving; every other form's `clear` then runs (pass a state setter).
+ */
+export function useScheduleSaved(clear: (message: string) => void): () => void {
+  const me = useRef({});
+  useEffect(() => {
+    const onSaved = (e: Event) => {
+      if ((e as CustomEvent<object>).detail !== me.current) clear('');
+    };
+    window.addEventListener(SCHEDULE_SAVED, onSaved);
+    return () => window.removeEventListener(SCHEDULE_SAVED, onSaved);
+  }, [clear]);
+  return useCallback(() => {
+    window.dispatchEvent(new CustomEvent(SCHEDULE_SAVED, { detail: me.current }));
+  }, []);
+}
 
 type Affected = ChangeResult['affected'][number];
 
@@ -43,7 +66,7 @@ export function ChangePreview({ preview, type, waive, onWaive, disabled }: {
       {affected.length === 0 ? (
         <p>
           {type === 'revoke'
-            ? 'No meals come back: they are past the cutoff, or outside the next 7 days (those follow automatically).'
+            ? 'No meals come back now: they are past the cutoff, another skip or pause still covers them, or they are beyond the next 7 days (those follow automatically).'
             : 'No generated meals are affected yet (meals beyond the next 7 days follow this change automatically).'}
         </p>
       ) : (
@@ -87,7 +110,7 @@ export function ChangePreview({ preview, type, waive, onWaive, disabled }: {
 /** What to tell the owner after a confirmed change, from the RPC's result. */
 export function savedMessage(label: string, type: ChangeType | 'revoke', res: ChangeResult): string {
   const n = res.affected.length;
-  if (type === 'revoke') return n ? `${label} saved. ${plural(n, 'meal')} back on: ${res.affected.slice(0, 4).map(mealName).join(', ')}${n > 4 ? '…' : ''}.` : `${label} saved.`;
+  if (type === 'revoke') return n ? `${label} saved. ${plural(n, 'meal')} back on: ${res.affected.slice(0, 4).map(mealName).join(', ')}${n > 4 ? '…' : '.'}` : `${label} saved.`;
   if (!isHold(type)) return `${label} saved.`;
   const charged = res.affected.filter((a) => a.charged).length;
   const credited = res.affected.filter((a) => a.credited).length;

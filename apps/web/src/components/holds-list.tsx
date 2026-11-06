@@ -7,7 +7,7 @@ import type { ChangeResult, MealSlot, SubscriptionHold } from '@tiffin/db';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { Alert, Badge, Button } from './ui';
-import { ChangePreview, savedMessage } from './change-preview';
+import { ChangePreview, savedMessage, useScheduleSaved } from './change-preview';
 
 // Upcoming skips and pauses of a customer (subscription_holds) with Undo for the owner
 // (revoke_schedule_change: preview first, then confirm). Used on the customer page and the phone desk.
@@ -44,6 +44,7 @@ export function HoldsList({ holds, canUndo, onChanged, compact }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
+  const announceSaved = useScheduleSaved(setDone);
 
   async function undo(changeId: string, dryRun: boolean) {
     setBusy(true);
@@ -62,6 +63,7 @@ export function HoldsList({ holds, canUndo, onChanged, compact }: {
     setOpen(null);
     setPreview(null);
     setDone(msg);
+    announceSaved();
     if (onChanged) onChanged(msg);
     else router.refresh();
   }

@@ -6,8 +6,8 @@ import { requireKitchen } from '@/lib/session';
 import { createClient } from '@/lib/supabase/server';
 import { findCustomers } from '@/lib/customer-search';
 import { loadHolds } from '@/lib/holds';
+import { coveringHolds, opensSingleMatch } from '@/lib/desk-rules';
 import { Card, PageHeader } from '@/components/ui';
-import type { Hold } from '@/components/holds-list';
 import { DeskPanel, type DeskCell, type DeskSub } from './desk-panel';
 
 // Phone desk (audit item 28): the owner on the phone with a customer. One search box, the caller's
@@ -18,41 +18,34 @@ const DAYS = 7;
 
 type Meal = {
   id: string; subscription_id: string; service_date: string; slot: MealSlot; qty: number; status: string;
-  charged: boolean; charge_waived: boolean; skip_reason: string | null; locked_at: string | null; change_id: string | null;
+  charged: boolean; charge_waived: boolean; skip_reason: string | null; locked_at: string | null; stop_id: string | null;
 };
 type KitchenRules = {
   cutoff_lunch: string; cutoff_lunch_prev_day: boolean; cutoff_dinner: string; cutoff_dinner_prev_day: boolean;
   weekly_off: number[]; weekly_off_lunch: number[]; weekly_off_dinner: number[];
 };
 
-/** The hold (skip or pause) that covers a meal: the latest one requested, like private.active_hold. */
-function holdFor(holds: Hold[], subId: string, date: string, slot: MealSlot, changeId: string | null) {
-  const direct = changeId ? holds.find((h) => h.change_id === changeId) : undefined;
-  if (direct) return direct.change_id;
-  return holds
-    .filter((h) => h.subscription_id === subId && h.from_date <= date && (!h.to_date || h.to_date >= date)
-      && (!h.slot || h.slot === slot) && (!h.resumed_from || date < h.resumed_from))
-    .sort((a, b) => b.requested_at.localeCompare(a.requested_at))[0]?.change_id ?? null;
-}
-
-function cellFor(meal: Meal | undefined, opts: { closed: boolean; weeklyOff: boolean; cutoff: Date; now: Date; holdId: string | null }): Omit<DeskCell, 'slot'> {
+function cellFor(meal: Meal | undefined, opts: {
+  closed: boolean; weeklyOff: boolean; cutoff: Date; now: Date; holdIds: string[]; stopPending: boolean;
+}): Omit<DeskCell, 'slot'> {
   const passed = opts.now >= opts.cutoff;
-  const base = { orderId: meal?.id, qty: meal?.qty ?? 0, holdId: null as string | null, until: null as string | null,
-    frozen: Boolean(meal?.locked_at) || passed };
+  const base = { qty: meal?.qty ?? 0, holdIds: [] as string[], until: null as string | null,
+    frozen: Boolean(meal?.locked_at) || passed, changeable: false };
   if (!meal) {
     if (opts.closed) return { ...base, state: 'closed' };
     if (opts.weeklyOff) return { ...base, state: 'weekly_off' };
     return { ...base, state: 'none' };
   }
   if (meal.status === 'skipped') {
-    if (meal.charged) return { ...base, state: meal.charge_waived ? 'late_waived' : 'late_charged', holdId: opts.holdId };
-    return { ...base, state: meal.skip_reason === 'pause' ? 'paused' : 'skipped', holdId: opts.holdId };
+    if (meal.charged) return { ...base, state: meal.charge_waived ? 'late_waived' : 'late_charged' };
+    return { ...base, state: meal.skip_reason === 'pause' ? 'paused' : 'skipped', holdIds: opts.holdIds };
   }
-  if (meal.status === 'out') return { ...base, state: 'on_way' };
+  // Out with the rider: a skip still reaches it while the stop is pending (D-121, like the customer page).
+  if (meal.status === 'out') return { ...base, state: 'on_way', changeable: opts.stopPending };
   if (meal.status === 'delivered') return { ...base, state: 'delivered' };
   if (meal.status === 'failed') return { ...base, state: 'failed' };
-  if (meal.locked_at || passed || meal.status !== 'scheduled') return { ...base, state: 'locked' };
-  return { ...base, state: 'open', until: formatIstShort(opts.cutoff) };
+  if (meal.locked_at || passed || meal.status !== 'scheduled') return { ...base, state: 'locked', changeable: true };
+  return { ...base, state: 'open', changeable: true, until: formatIstShort(opts.cutoff) };
 }
 
 export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
@@ -64,7 +57,9 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
   const found = q
     ? await findCustomers(supabase, { kitchenId: kitchen.kitchenId, q, isOwner: true, status: 'all', page: 1, pageSize: 20 })
     : { rows: [], total: 0, page: 1, error: null };
-  const selectedId = typeof sp.c === 'string' ? sp.c : found.rows.length === 1 ? found.rows[0]!.id : null;
+  // A lone match opens by itself only for a name/address or a full number: bare digits may be a flat
+  // or a phone ending, so the owner picks from the list.
+  const selectedId = typeof sp.c === 'string' ? sp.c : found.rows.length === 1 && opensSingleMatch(q) ? found.rows[0]!.id : null;
 
   let panel: ReactNode = null;
   if (selectedId) {
@@ -76,7 +71,7 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
       supabase.from('subscriptions').select('id, status, qty, start_date, end_date, plan:plans(name, slots)')
         .eq('customer_id', selectedId).order('created_at'),
       supabase.from('meal_orders')
-        .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at, change_id')
+        .select('id, subscription_id, service_date, slot, qty, status, charged, charge_waived, skip_reason, locked_at, stop_id')
         .eq('customer_id', selectedId).gte('service_date', today).lte('service_date', last),
       supabase.from('kitchens')
         .select('cutoff_lunch, cutoff_lunch_prev_day, cutoff_dinner, cutoff_dinner_prev_day, weekly_off, weekly_off_lunch, weekly_off_dinner')
@@ -85,6 +80,12 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
         .gte('closed_on', today).lte('closed_on', last),
       loadHolds(supabase, selectedId, true),
     ]);
+    // Meals out with the rider can still be skipped while their stop is pending.
+    const outStops = ((meals ?? []) as Meal[]).filter((m) => m.status === 'out' && m.stop_id).map((m) => m.stop_id!);
+    const { data: stops } = outStops.length
+      ? await supabase.from('delivery_stops').select('id, status').in('id', outStops)
+      : { data: [] as { id: string; status: string }[] };
+    const pendingStops = new Set((stops ?? []).filter((x) => x.status === 'pending').map((x) => x.id));
     if (c) {
       const rules = k as KitchenRules | null;
       const now = new Date();
@@ -115,7 +116,8 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
                     weeklyOff: Boolean(rules && (rules.weekly_off.includes(dow) || (slot === 'lunch' ? rules.weekly_off_lunch : rules.weekly_off_dinner).includes(dow))),
                     cutoff,
                     now,
-                    holdId: meal?.status === 'skipped' ? holdFor(holds, s.id, date, slot, meal.change_id) : null,
+                    holdIds: meal?.status === 'skipped' ? coveringHolds(holds, s.id, date, slot).map((h) => h.change_id) : [],
+                    stopPending: Boolean(meal?.stop_id && pendingStops.has(meal.stop_id)),
                   }),
                 };
               }),
@@ -151,7 +153,7 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
           defaultValue={q}
           type="search"
           autoFocus={!selectedId}
-          placeholder="Name, flat, area, landmark or last digits of the phone"
+          placeholder="Name, flat, area, landmark, full phone or last 4 digits"
           aria-label="Search customers"
           className="w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-ink-200 focus:ring-2 focus:ring-brand-500"
         />
@@ -190,7 +192,7 @@ export default async function DeskPage({ searchParams }: PageProps<'/desk'>) {
             !q && (
               <Card>
                 <p className="text-sm text-ink-600">
-                  Type the caller’s name, flat, area or landmark, or the last digits of their number (the full number works too).
+                  Type the caller’s name, flat, area or landmark, or the last 4 digits of their number (the full number works too).
                   Their next {DAYS} days appear here: tap a meal to skip it, pause from it, undo a skip or resume.
                 </p>
               </Card>

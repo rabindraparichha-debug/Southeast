@@ -1,12 +1,14 @@
 import 'server-only';
 import type { DietType, LanguageCode, SubscriptionStatus } from '@tiffin/db';
 import type { createClient } from './supabase/server';
+import { queryKind, searchOrFilter } from './desk-rules';
 
 // Customer search with paging, the real total and status filters, shared by the customer list and
 // the phone desk. Reads customers_v (security_invoker: RLS and the phone masking apply as usual).
-// * text: name, flat (line1), area or landmark of the default address;
-// * 1-4 digits: the end of the phone number (phone_last4);
+// * text or digits: name, flat (line1), area or landmark of the default address; exactly 4 digits
+//   also match the last 4 digits of the phone (phone_last4), as search_customers did;
 // * a full phone number: search_customers (phone hash; owners only, as before).
+// The query rules live in desk-rules.ts (unit-tested).
 // Status filters need subscriptions, which only owners can read (RLS), so staff get none.
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -44,12 +46,6 @@ export type CustomerRow = {
 export type CustomerPage = { rows: CustomerRow[]; total: number; page: number; error: string | null };
 
 const COLUMNS = 'id, name, phone, phone_last4, platform_sourced, line1, landmark, area, diet, preferred_language';
-const SEARCH_CLEAN = /[,()*%"\\:]/g;
-
-const isFullPhone = (q: string) => {
-  const digits = q.replace(/\D/g, '');
-  return digits.length >= 10 && digits === q.replace(/[\s+\-]/g, '');
-};
 
 type Raw = Omit<CustomerRow, 'statuses'> & { subs?: { status: SubscriptionStatus }[] };
 
@@ -73,7 +69,7 @@ export async function findCustomers(supabase: Client, opts: {
   const from = Math.max(0, opts.page - 1) * opts.pageSize;
 
   // Full phone number: only the hash lookup can find it (owners; nobody else may search by number).
-  if (q && isFullPhone(q)) {
+  if (queryKind(q) === 'phone') {
     if (!opts.isOwner) return { rows: [], total: 0, page: 1, error: null };
     const { data, error } = await supabase.rpc('search_customers', { p_kitchen: opts.kitchenId, p_q: q, p_limit: 200 });
     if (error) return { rows: [], total: 0, page: 1, error: error.message };
@@ -95,12 +91,8 @@ export async function findCustomers(supabase: Client, opts: {
   else if (status !== 'all') select += ', f:subscriptions!inner(status)';
 
   let query = supabase.from('customers_v').select(select as '*', { count: 'exact' }).eq('kitchen_id', opts.kitchenId);
-  if (/^\d{1,4}$/.test(q)) {
-    query = query.like('phone_last4', `%${q}`);
-  } else if (q) {
-    const term = q.replace(SEARCH_CLEAN, ' ').replace(/\s+/g, ' ').trim();
-    if (term) query = query.or(['name', 'line1', 'area', 'landmark'].map((c) => `${c}.ilike.*${term}*`).join(','));
-  }
+  const textFilter = searchOrFilter(q);
+  if (textFilter) query = query.or(textFilter);
   if (status === 'no_plan') query = query.filter('live.status', 'neq', 'cancelled').filter('live', 'is', null);
   else if (status !== 'all') query = query.filter('f.status', 'eq', status);
 
