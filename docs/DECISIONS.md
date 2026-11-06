@@ -7,7 +7,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-001 | Greenfield build | Assumed | — |
 | D-002 | Billing model: prepaid meal balance | ⏳ PENDING | M2, M3 |
 | D-003 | Razorpay Route, confirm merchant-of-record | ⏳ PENDING | M3 |
-| D-004 | OTP delivery channel | ⏳ PENDING | Pilot |
+| D-004 | OTP delivery channel | Resolved by D-126 (owner, 2026-11-06) | Pilot |
 | D-005 | FSSAI gates public listing, not OS use | ⏳ PENDING | M1, M7 |
 | D-006 | Vendor app languages | ⏳ PENDING | M1+ |
 | D-007 | Slots: lunch and dinner only | ⏳ PENDING | M2 |
@@ -46,6 +46,7 @@ Defaults chosen during the build, and questions still open for the product owner
 | D-106 | Kitchen switching: platform customers only, admin approves, flag off | ⏳ PENDING | P6 |
 | D-096 – D-098, D-100, D-102 – D-104, D-107 – D-112 | P5/P6 defaults | Decided | P5, P6 |
 | D-119 – D-125 | Vendor-first wave 1 defaults (safe defaults, don't-charge credit, changes after lock, undo, lock job, addresses, closures) | Decided | Wave 1 |
+| D-126 | Login codes: WhatsApp through Twilio first, SMS after DLT; Telnyx via the Send SMS hook | Decided (owner) | Wave 2 |
 
 ---
 
@@ -68,7 +69,7 @@ The folder and repo were empty at audit time (see `docs/AUDIT.md`). You said "st
 - Before M3, get written confirmation from Razorpay on two points: who is merchant of record, and whether Subscriptions (UPI Autopay) work with Route transfers.
 - `kitchen_payout_accounts` holds one linked account per kitchen. Only platform/service code can write to it.
 
-### D-004 OTP delivery ⏳ PENDING (before pilot)
+### D-004 OTP delivery (resolved by D-126)
 - **Local development:** fixed test OTP `123456` for seed numbers (`supabase/config.toml [auth.sms.test_otp]`). No SMS is sent.
 - **Production proposal:**
   - WhatsApp OTP through Supabase's Send SMS hook (needs a Meta authentication template).
@@ -729,3 +730,24 @@ Implementation choices for the audit's work-order items 2, 7, 8, 11, 12 and 14�
 - Weekly off for one meal: `kitchens.weekly_off_lunch` / `weekly_off_dinner` (ISO days), on top of the whole-day `weekly_off`.
 - Customers are not told automatically (Phase 1 has no customer channel); the owner tells them.
 
+## Login codes (wave 2, 2026-11-06)
+
+### D-126 Login codes: WhatsApp through Twilio first, SMS after DLT (owner, 2026-11-06; resolves D-004)
+- **Owner:** "sms login we can go with twilio, whatsapp as well … also telnyx". Twilio sends WhatsApp codes now, because a WhatsApp authentication template needs no TRAI DLT. SMS (Twilio, or Telnyx) is the fallback once DLT is approved.
+- **Default path: Supabase's built-in Twilio provider.** No code runs in the login path.
+  - The apps send `options.channel` `whatsapp` or `sms`.
+  - Twilio sends WhatsApp with the approved authentication template (dashboard "Twilio Content SID") and SMS from the same Messaging Service.
+  - Until DLT is approved the apps offer WhatsApp only.
+- **Alternative: the Send SMS hook → `auth-send-sms`** (built, off by default). Use it for Telnyx SMS, for automatic fallback across providers within Supabase's 5 s hook budget, or for a server-side +91-only rule.
+  - Supabase does not pass the requested channel to hooks. The function therefore follows `AUTH_SMS_ROUTES` (default `whatsapp,sms`), and a code asked for again within 10 minutes starts at the next route.
+  - Mock mode runs only on a local stack (the `PLATFORM_ENV` rule), and the published local hook secret is refused elsewhere.
+  - It never logs the code or a full number.
+- **Apps:**
+  - `NEXT_PUBLIC_LOGIN_CHANNELS` / `EXPO_PUBLIC_LOGIN_CHANNELS` (default `sms`) decide which channels are offered.
+  - "Get code on WhatsApp" is the default, with "Send code by SMS instead" after a 30 s countdown (or at once if sending failed).
+  - Both channels verify as type `sms`.
+- **Hosted auth settings:** "Confirm phone" on (with it off, a phone + password signup is confirmed without a code, and the SMS rate limit is skipped).
+  - Signups stay open, so invited staff and riders can create their accounts; a `before_user_created` allowlist is a follow-up.
+  - Geo permissions are set to India only.
+  - Test numbers are removed at launch, except D-114's.
+- Setup steps for Twilio WhatsApp, Twilio SMS + DLT and Telnyx are in docs/LOGIN.md.
