@@ -4,7 +4,8 @@
 // P6: for platform-sourced customers the Route transfer is the amount minus the platform commission.
 import { corsHeaders, json, rpc } from '../_shared/http.ts';
 import { loadMonitorConfig, reportError } from '../_shared/monitor.ts';
-import { createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
+import { cancelPaymentLink, createPaymentLink, loadConfig } from '../_shared/razorpay.ts';
+import { createLinkOrCancel } from '../_shared/payment-link.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const monitor = loadMonitorConfig((k) => Deno.env.get(k));
@@ -44,16 +45,26 @@ Deno.serve(async (req) => {
         { p_customer: customer_id, p_meals: meals, p_description: description ?? null });
   if (error || !rec) return json({ error: error?.message ?? 'failed' }, 400);
 
-  // Step 2: Razorpay (or mock). Step 3, as the service role: attach the link to our row.
+  // Step 2: Razorpay (or mock). Step 3, as the service role: attach the link to our row. If Razorpay
+  // fails, the row is cancelled; if only attaching fails, the link is cancelled at Razorpay first (D-149, D-155).
   try {
-    const link = await createPaymentLink(cfg, {
-      paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description ?? `${rec.meals} meals`,
-      customerName: rec.customer_name, customerPhone: rec.customer_phone, linkedAccountId: rec.linked_account_id,
-      kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
-    });
-    const attach = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'attach_payment_link',
-      { p_payment: rec.payment_id, p_link_id: link.id, p_short_url: link.shortUrl, p_expires_at: link.expiresAt });
-    if (attach.error) throw new Error(attach.error.message);
+    const link = await createLinkOrCancel(rec.payment_id, {
+      create: () => createPaymentLink(cfg, {
+        paymentId: rec.payment_id, amountPaise: rec.amount_paise, description: description ?? `${rec.meals} meals`,
+        customerName: rec.customer_name, customerPhone: rec.customer_phone, linkedAccountId: rec.linked_account_id,
+        kitchenName: rec.kitchen_name, transferPaise: rec.transfer_paise ?? null,
+      }),
+      attach: async (created) => {
+        const attach = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'attach_payment_link',
+          { p_payment: rec.payment_id, p_link_id: created.id, p_short_url: created.shortUrl, p_expires_at: created.expiresAt });
+        if (attach.error) throw new Error(attach.error.message);
+      },
+      cancelGateway: (created) => cancelPaymentLink(cfg, created.id),
+    }, async (paymentId, reason) => {
+      const res = await rpc(SUPABASE_URL, SERVICE_ROLE_KEY, `Bearer ${SERVICE_ROLE_KEY}`, 'cancel_payment_link_record',
+        { p_payment: paymentId, p_error: reason });
+      if (res.error) throw new Error(res.error.message);
+    }, (e) => void reportError(monitor, e, { fn: 'razorpay-payment-link', tags: { step: 'cancel' } }));
     return json({ payment_id: rec.payment_id, amount_paise: rec.amount_paise, meals: rec.meals, short_url: link.shortUrl, mode: cfg.mode,
       commission_paise: rec.commission_paise ?? 0 });
   } catch (e) {

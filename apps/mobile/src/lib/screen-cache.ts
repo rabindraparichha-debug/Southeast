@@ -48,7 +48,7 @@ export function stripPhones<T>(value: T): T {
   return value;
 }
 
-/** Owners and managers see full numbers (D-146); everyone else's copy never holds one. */
+/** Owners and managers see full numbers (D-156); everyone else's copy never holds one. */
 const keepsPhones = (role: string) => role === 'owner' || role === 'manager';
 
 /** What is saved: only the owner's and manager's copies keep phone numbers. */

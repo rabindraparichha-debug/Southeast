@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   // Riders only use rider mode (phone-first, works offline).
   if (role === 'rider') redirect('/rider');
 
-  // D-117/D-146: managers get every owner page except the owner-only ones (inbox, settings, team);
+  // D-117/D-156: managers get every owner page except the owner-only ones (inbox, settings, team);
   // accountants get the money pages, read-only.
   const lead = isLead(role);
   const supabase = await createClient();

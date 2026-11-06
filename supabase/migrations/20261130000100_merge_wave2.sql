@@ -1,4 +1,4 @@
--- Merge of vendor-first wave 2 (wave2/integrated, migrations 20261108000100 – 0900, decision D-146)
+-- Merge of vendor-first wave 2 (wave2/integrated, migrations 20261108000100 – 0900, decision D-156)
 -- into m9-p5-p6 (wave 1, login, screens, held-back apps 20261116*, wave 4 20261113*).
 --
 -- Migration timestamps decide which `create or replace` wins. A scan of every function, policy,
@@ -15,13 +15,13 @@
 --
 -- What this migration adds: places where a later wave, written without wave 2's roles or columns, needs
 -- them (both behaviours kept):
---   1. plan_prices_select (wave 4, 20261113000400): accountants read plans and money (D-146), so they
+--   1. plan_prices_select (wave 4, 20261113000400): accountants read plans and money (D-156), so they
 --      read dated prices too ('{owner,accountant}'; owner includes managers).
 --   2. public.export_kitchen (wave 4, last body 20261113000700): the customers part also exports wave 2's
 --      billing_mode (payments and balance entries already export every column, voids included).
 --      Still exact owner (D-142): managers and accountants never export.
 --   3. public.report_sync_reject (held-back apps, last body 20261116000200): when the phone names no
---      kitchen, a manager's membership counts like an owner's (managers deliver too, D-146); the
+--      kitchen, a manager's membership counts like an owner's (managers deliver too, D-156); the
 --      require_role('{owner,rider}') check below already expands to managers. Wave 2's queued rider change
 --      requests (queue kind 'request') that the server refuses are reported too (action 'request'), so the
 --      owner sees them like any other refused rider action.

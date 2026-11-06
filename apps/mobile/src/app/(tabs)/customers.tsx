@@ -80,7 +80,7 @@ export default function Customers() {
             <Pressable style={styles.item}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.name}{item.platform_sourced ? <Text style={styles.platform}>  {t('customers.platform')}</Text> : null}</Text>
-                {/* Accountants see no addresses (D-146; the server sends none either). */}
+                {/* Accountants see no addresses (D-156; the server sends none either). */}
                 {kitchen.role !== 'accountant' && (
                   <Text style={styles.sub} numberOfLines={1}>
                     {[item.landmark, item.area].filter(Boolean).join(', ') || '—'}

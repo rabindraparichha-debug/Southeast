@@ -10,7 +10,7 @@ import type { LeadSource } from '@/lib/public';
 import { Alert, Button, Field, Input } from '@/components/ui';
 
 export function VendorForm({ areas, source, campaign }: { areas: string[]; source: LeadSource; campaign: string | null }) {
-  const [f, setF] = useState({ name: '', phone: '', kitchen: '', area: '', subscribers: '', fssai: '', consent: false, whatsapp: true });
+  const [f, setF] = useState({ name: '', phone: '', kitchen: '', area: '', subscribers: '', fssai: '', consent: false, whatsapp: false }); // unticked (D-153)
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);

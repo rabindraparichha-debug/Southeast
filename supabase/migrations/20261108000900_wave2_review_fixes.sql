@@ -1,5 +1,5 @@
 -- Vendor-first wave 2: fixes from the integration review (after merging wave 1, login and screens).
--- Every function redefined here is listed in docs/DECISIONS.md D-146 ("Review fixes").
+-- Every function redefined here is listed in docs/DECISIONS.md D-156 ("Review fixes").
 --
 --  1. Owed meals are valued as the newest debt rows at their own price, and any meals owed beyond
 --     them at the price per meal (private.recent_meals_value). A meal debt from an opening balance,
@@ -898,7 +898,7 @@ declare
 begin
   perform private.require_role(p_kitchen, '{owner,staff,accountant}');
   p_limit := least(greatest(coalesce(p_limit, 50), 1), 200);
-  -- Accountants see no addresses (D-146). This function runs as its owner, so the addresses RLS
+  -- Accountants see no addresses (D-156). This function runs as its owner, so the addresses RLS
   -- does not hide them here: null them, and never search by them.
   v_addr := private.has_role(p_kitchen, '{owner,staff}');
   if not v_addr then
@@ -954,7 +954,7 @@ declare
   v_addr boolean;
 begin
   perform private.require_role(p_kitchen, '{owner,accountant}');
-  v_addr := private.has_role(p_kitchen, '{owner}');  -- accountants see no addresses (D-146)
+  v_addr := private.has_role(p_kitchen, '{owner}');  -- accountants see no addresses (D-156)
   if p_start is null then
     raise exception 'date_required' using errcode = '22023';
   end if;

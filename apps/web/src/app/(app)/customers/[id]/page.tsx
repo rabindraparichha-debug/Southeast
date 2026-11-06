@@ -30,7 +30,7 @@ export default async function CustomerPage({ params }: PageProps<'/customers/[id
   const supabase = await createClient();
   const { data: c } = await supabase.from('customers_v').select('*').eq('id', id).eq('kitchen_id', kitchen.kitchenId).maybeSingle();
   if (!c) notFound();
-  // Owner and manager: everything (the manager is the owner's deputy, D-146). Accountant: money,
+  // Owner and manager: everything (the manager is the owner's deputy, D-156). Accountant: money,
   // read-only, with a masked phone and no addresses or meals. Staff: packing details only.
   const isOwner = isLead(kitchen.role);
   const money = canReadMoney(kitchen.role);

@@ -1,6 +1,6 @@
 import type { MemberRole } from '@tiffin/db';
 
-// Who sees what in the app (D-117, D-146). The database is the real gate (RLS and
+// Who sees what in the app (D-117, D-156). The database is the real gate (RLS and
 // private.require_role); these helpers only decide which screens and buttons are shown.
 // Same lists as apps/web/src/lib/roles.ts.
 //

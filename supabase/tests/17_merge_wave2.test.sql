@@ -1,4 +1,4 @@
--- Merge of vendor-first wave 2 (D-146) into m9-p5-p6 (wave 1, held-back apps, wave 4):
+-- Merge of vendor-first wave 2 (D-156) into m9-p5-p6 (wave 1, held-back apps, wave 4):
 -- 20261130000100_merge_wave2.sql and the cross-wave behaviour it must keep.
 --   * wave 1 + wave 2: private.nightly keeps wave 1's error isolation and wave 2's prepaid-only auto-cancel;
 --   * wave 4 + wave 2: dues after a dated price change keep each meal's own price (D-144) for prepaid and

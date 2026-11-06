@@ -116,8 +116,13 @@ export function ruleBasedAi(text: string, ctx: Ctx): AiResult {
   return { reply: '', intent: 'other', handoff: true };
 }
 
-export async function askAi(text: string, ctx: Ctx, lang: Lang, complete?: Complete): Promise<AiResult> {
+/**
+ * budget(): asked before every model call (wa_ai_take: per-conversation and per-day caps, D-148).
+ * When it says no, or cannot be asked, the free rule-based answers are used instead.
+ */
+export async function askAi(text: string, ctx: Ctx, lang: Lang, complete?: Complete, budget?: () => Promise<boolean>): Promise<AiResult> {
   if (!complete) return guardReply(ruleBasedAi(text, ctx), ctx);
+  if (budget && !(await budget().catch(() => false))) return guardReply(ruleBasedAi(text, ctx), ctx);
   try {
     const res = await complete(systemPrompt(lang), userPrompt(ctx, text));
     if (!res) return { reply: '', intent: 'other', handoff: true }; // refusal or unparsable

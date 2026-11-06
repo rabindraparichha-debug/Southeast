@@ -122,7 +122,7 @@ const MESSAGES: Record<string, string> = {
   plan_inactive: 'This plan is switched off. Switch it on in Plans first, or add a new subscription.',
   // Wave 4: onboarding and founder support
   not_approved: 'Ask the Tiffin team to approve your number. New kitchens start after a short call with us.',
-  invalid_name: 'Enter a kitchen name of 2 to 80 letters.',
+  invalid_name: 'Enter a name of 2 to 80 letters.',
   invalid_slug: 'Use English letters or numbers for the web address.',
   invalid_location: 'That map location is not valid. Pick it again.',
   application_rejected: 'This application was rejected. Change its status first.',
@@ -152,6 +152,14 @@ const MESSAGES: Record<string, string> = {
   dues_need_monthly: 'Only monthly (pay later) customers can start with dues in rupees. Give prepaid customers an opening balance in meals.',
   balance_needs_plan: 'Opening meals for a monthly (pay later) customer need a plan, so they can be priced. Add the plan, or put the amount in the dues column (minus for an advance).',
   billing_mode_changed: 'This customer’s billing changed after the payment, so it cannot be voided. Record a correction (adjustment) instead.',
+  // Phase 2 hardening (D-146..D-152)
+  referral_other_kitchen: 'This code belongs to another kitchen. Ask your friend for their link to this kitchen.',
+  invalid_date: 'Choose a start date within the next 30 days.',
+  invalid_admin: 'Choose a member of the platform team.',
+  note_too_long: 'Keep the note under 1,000 characters.',
+  invalid_input: 'That choice is not valid.',
+  key_in_url: 'Send the lead key in the X-Lead-Key header, not in the link.',
+  intake_not_configured: 'Lead intake is not set up on this project yet.',
 };
 
 // Check constraints whose violation needs a specific explanation (matched on the constraint name).
@@ -178,6 +186,10 @@ const CONTEXT_MESSAGES: Record<string, Record<string, string>> = {
   // Public website forms (customers and kitchen owners, not logged in).
   public: {
     consent_required: 'Please tick the box to agree to be contacted.',
+    invalid_address: 'Enter your delivery address (house, street, area).',
+    invalid_referral_code: 'This invite code is not valid for this kitchen. Ask your friend to share their link again.',
+    too_many_requests: 'This invite has been used a lot today. Please try again tomorrow, or call the kitchen.',
+    not_found: 'This kitchen is not taking new customers through invites right now.',
     invalid_link: 'Your search has expired. Please fill in the form again.',
     already_converted: 'You have already picked a kitchen. Check WhatsApp for your customer page link.',
     already_customer: 'You are already a customer of this kitchen. Message them on WhatsApp to restart.',

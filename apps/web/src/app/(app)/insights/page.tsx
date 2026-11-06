@@ -29,7 +29,7 @@ export default async function InsightsPage() {
     supabase.rpc('vendor_complaint_score', { p_kitchen: kitchen.kitchenId, p_days: 30 }),
     supabase.rpc('referrals_list', { p_kitchen: kitchen.kitchenId }),
     supabase.rpc('weather_alerts_list', { p_kitchen: kitchen.kitchenId, p_days: 14 }),
-    // The commission statement is owner-only (D-146); managers see the rest.
+    // The commission statement is owner-only (D-156); managers see the rest.
     kitchen.role === 'owner'
       ? supabase.rpc('commission_statement', { p_kitchen: kitchen.kitchenId, p_from: monthStart, p_to: today })
       : Promise.resolve({ data: null }),

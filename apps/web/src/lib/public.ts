@@ -56,6 +56,15 @@ export type KitchenProfile = {
   reviews: { rating: number; comment: string | null; name: string; date: string }[];
 };
 
+/** The kitchen-scoped referral join page (referral_invite, D-147). */
+export type ReferralInvite = {
+  code_status: 'ok' | 'other_kitchen' | 'invalid';
+  code: string | null;
+  kitchen: { name: string; slug: string; area: string | null; fssai_no: string | null; trial_meals: number; weekly_off: number[] };
+  reward_meals: number;
+  plans: { id: string; name: string; slots: ('lunch' | 'dinner')[]; diet: Enums<'diet_type'>; days_of_week: number[]; price_per_meal_paise: number; description: string | null }[];
+};
+
 export type DirectoryKitchen = {
   name: string;
   slug: string;

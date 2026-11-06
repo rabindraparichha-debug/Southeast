@@ -27,7 +27,7 @@ type Sibling = { id: string; name: string };
 export default function CustomerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const kitchen = useKitchen();
-  const isOwner = isLead(kitchen.role); // owner or manager (D-146): customer changes, money, full phones
+  const isOwner = isLead(kitchen.role); // owner or manager (D-156): customer changes, money, full phones
   const accountant = kitchen.role === 'accountant'; // money only: no meals, addresses or notes
   const [c, setC] = useState<DbView<'customers_v'> | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);

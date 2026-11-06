@@ -80,7 +80,7 @@ function LeadForm({ areas, source, campaign, initialArea, kitchenSlug, gclid }: 
   const knownArea = areas.find((a) => a.toLowerCase() === initialArea.toLowerCase()) ?? '';
   const [f, setF] = useState({
     name: '', phone: '', area: knownArea, meals: 'lunch', diet: 'veg' as DietType, budget: '', start: tomorrow,
-    consent: false, whatsapp: true,
+    consent: false, whatsapp: false, // unticked: opting in must be a choice (D-153)
   });
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [locating, setLocating] = useState(false);

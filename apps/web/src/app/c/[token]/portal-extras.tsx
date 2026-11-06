@@ -169,7 +169,8 @@ export function SpecialsCard({ specials, festivals, t }: { specials: PortalSpeci
 export function ReferralCardPortal({ token, referral, kitchenName, t }: { token: string; referral: ReferralInfo; kitchenName: string; t: T }) {
   const { busy, call, note } = useCall();
   const [code, setCode] = useState('');
-  if (!referral.code) return null;
+  // No card while the kitchen gives no reward (the server leaves it out then too, D-147).
+  if (!referral.code || !(referral.reward_meals > 0)) return null;
   const share = `https://wa.me/?text=${encodeURIComponent(t('refer_message', { kitchen: kitchenName, code: referral.code, url: referral.url }))}`;
   return (
     <section className={card} data-testid="referral">
