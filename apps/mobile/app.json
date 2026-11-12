@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tiffin OS",
     "slug": "tiffin-os",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tiffinos",
@@ -79,7 +79,11 @@
           "color": "#EA580C",
           "defaultChannel": "alerts"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

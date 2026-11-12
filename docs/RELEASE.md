@@ -182,11 +182,12 @@ minutes to half an hour, no guarantee).
 "iOS simulator smoke test" workflow builds a Release app for the simulator, opens it for 25 seconds and
 keeps the crash report, device log and a screenshot as an artifact (about 30 minutes on a macOS runner).
 
-**Expo core version pin:** EAS links some Expo modules as prebuilt frameworks compiled against the
-newest `expo-modules-core` of the SDK line. An older core in the lockfile makes the app close right
-after the splash screen (`Symbol not found … ExpoModulesCore`, first seen with ExpoCamera). The root
-`package.json` therefore pins `pnpm.overrides.expo-modules-core`; when you upgrade `expo`, move the
-pin to the core version that `expo` asks for, then rerun the simulator smoke test.
+**Keep Expo packages on one set:** iOS builds link Expo modules and React Native as prebuilt
+frameworks, each compiled against the versions current when it was published. Mixed patch versions
+make the app close right after the splash screen (`Symbol not found …` in the crash report; seen with
+ExpoCamera vs `expo-modules-core`, then `expo-modules-core` vs React Native 0.88.0). After changing
+any Expo or React Native version, run `EXPO_OFFLINE=1 npx expo install --fix` in `apps/mobile`, bump
+`expo.version` in `app.json`, and rerun the simulator smoke test before a TestFlight build.
 
 ### Testers
 

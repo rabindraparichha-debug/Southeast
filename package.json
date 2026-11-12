@@ -35,9 +35,6 @@
       "esbuild",
       "sharp",
       "unrs-resolver"
-    ],
-    "overrides": {
-      "expo-modules-core": "58.0.30"
-    }
+    ]
   }
 }
