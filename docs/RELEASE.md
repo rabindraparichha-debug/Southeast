@@ -178,6 +178,16 @@ once the workflow is on the default branch). The workflow builds on EAS (20–40
 free queue) and uploads to App Store Connect with the API key. Apple then processes the build (usually
 minutes to half an hour, no guarantee).
 
+**Check it opens first (no Apple account needed):** push a branch named `ios-sim/<anything>`. The
+"iOS simulator smoke test" workflow builds a Release app for the simulator, opens it for 25 seconds and
+keeps the crash report, device log and a screenshot as an artifact (about 30 minutes on a macOS runner).
+
+**Expo core version pin:** EAS links some Expo modules as prebuilt frameworks compiled against the
+newest `expo-modules-core` of the SDK line. An older core in the lockfile makes the app close right
+after the splash screen (`Symbol not found … ExpoModulesCore`, first seen with ExpoCamera). The root
+`package.json` therefore pins `pnpm.overrides.expo-modules-core`; when you upgrade `expo`, move the
+pin to the core version that `expo` asks for, then rerun the simulator smoke test.
+
 ### Testers
 
 - **Internal (no review, up to 100):** on the first upload EAS creates an internal TestFlight group
