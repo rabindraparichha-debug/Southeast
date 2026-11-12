@@ -1,0 +1,83 @@
+# Builds the iOS app for the simulator in Release mode (no Apple account or signing needed), launches
+# it and keeps the device log, any crash report and a screenshot as artifacts. Use it to see why the
+# app closes at launch without a phone. Push a branch named ios-sim/<anything>, or run it by hand.
+name: iOS simulator smoke test
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ios-sim/**']
+jobs:
+  smoke:
+    runs-on: macos-26
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+    env:
+      # Same shape as a store build without real server values (the app must still open).
+      EXPO_PUBLIC_SUPABASE_URL: https://example-project.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Xcode and simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep -E 'iPhone' | head -5
+      - name: Generate the native project
+        run: npx expo prebuild -p ios --clean
+      - name: Build (Release, simulator)
+        run: |
+          set -o pipefail
+          WS=$(ls -d ios/*.xcworkspace | head -1)
+          SCHEME=$(basename "$WS" .xcworkspace)
+          echo "workspace $WS scheme $SCHEME"
+          xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO | tail -40
+      - name: Launch and record
+        run: |
+          mkdir -p out
+          APP=$(ls -d build/Build/Products/Release-iphonesimulator/*.app | head -1)
+          BUNDLE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          EXE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Info.plist")
+          DEVICE=$(xcrun simctl list devices available -j | node -e '
+            const d=JSON.parse(require("fs").readFileSync(0,"utf8")).devices;
+            const all=Object.entries(d).filter(([k])=>k.includes("iOS")).sort().reverse().flatMap(([,v])=>v);
+            const p=all.find(x=>/^iPhone \d+$/.test(x.name))||all.find(x=>x.name.startsWith("iPhone"));
+            process.stdout.write(p.udid)')
+          echo "device $DEVICE app $APP bundle $BUNDLE exe $EXE"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl spawn "$DEVICE" log stream --level debug --style compact \
+            --predicate "process == \"$EXE\"" > out/device.log 2>&1 &
+          LOGPID=$!
+          sleep 3
+          xcrun simctl launch "$DEVICE" "$BUNDLE" || true
+          sleep 25
+          xcrun simctl io "$DEVICE" screenshot out/after-25s.png || true
+          if xcrun simctl spawn "$DEVICE" launchctl list | grep -q "$BUNDLE"; then
+            echo "RESULT: app still running after 25 s" | tee out/result.txt
+          else
+            echo "RESULT: app is NOT running (crashed or closed)" | tee out/result.txt
+          fi
+          kill $LOGPID || true
+          cp ~/Library/Logs/DiagnosticReports/*"$EXE"* out/ 2>/dev/null || true
+          ls -la out
+          echo "----- crash reports -----"
+          for f in out/*.ips; do [ -f "$f" ] && head -c 6000 "$f"; done
+          echo "----- errors in the device log -----"
+          grep -iE 'fatal|exception|error|terminat|abort|RCTFatal|Unhandled' out/device.log | head -80 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-simulator-smoke
+          path: apps/mobile/out
